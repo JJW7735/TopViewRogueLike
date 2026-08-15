@@ -1,4 +1,5 @@
 #include "RLPlayerController.h"
+#include "RLCharacter.h"
 #include "EnhancedInputComponent.h"
 #include "EnhancedInputSubsystems.h"
 #include "Blueprint/AIBlueprintHelperLibrary.h"
@@ -31,6 +32,16 @@ void ARLPlayerController::SetupInputComponent()
     {
         EnhancedInputComponent->BindAction(RightClickMoveAction, ETriggerEvent::Started, this, &ARLPlayerController::OnMoveStarted);
         EnhancedInputComponent->BindAction(RightClickMoveAction, ETriggerEvent::Triggered, this, &ARLPlayerController::OnMoveTriggered);
+        EnhancedInputComponent->BindAction(TestAttackAction, ETriggerEvent::Started, this, &ARLPlayerController::OnTestAttack);
+    }
+}
+
+void ARLPlayerController::OnTestAttack()
+{
+    // 현재 조종 중인 캐릭터를 가져와 TestAttack() 호출
+    if (ARLCharacter* ControlledChar = Cast<ARLCharacter>(GetPawn()))
+    {
+        ControlledChar->TestAttack();
     }
 }
 

@@ -27,10 +27,14 @@ protected:
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
     UInputAction* RightClickMoveAction;
 
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
+    UInputAction* TestAttackAction;
+
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "FX")
     UNiagaraSystem* FXCursor;
 
 private:
     void OnMoveStarted();
     void OnMoveTriggered();
+    void OnTestAttack();
 };
