@@ -9,6 +9,7 @@
 #include "RLHealthComponent.h"
 #include "Kismet/KismetSystemLibrary.h"
 #include "Kismet/GameplayStatics.h"
+#include "RLSkillComponent.h"
 #include "DrawDebugHelpers.h"
 
 // Sets default values
@@ -37,6 +38,7 @@ ARLCharacter::ARLCharacter()
 	bUseControllerRotationYaw = false;
 
 	HealthComp = CreateDefaultSubobject<URLHealthComponent>(TEXT("HealthComp"));
+    SkillComp = CreateDefaultSubobject<URLSkillComponent>(TEXT("SkillComp"));
 }
 
 // Called when the game starts or when spawned

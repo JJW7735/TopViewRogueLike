@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/PlayerController.h"
+#include "RLSkillData.h"
 #include "RLPlayerController.generated.h"
 
 // 전방 선언
@@ -33,8 +34,24 @@ protected:
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "FX")
     UNiagaraSystem* FXCursor;
 
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input|Skills")
+    UInputAction* SkillQ_Action;
+
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input|Skills")
+    UInputAction* SkillW_Action;
+
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input|Skills")
+    UInputAction* SkillE_Action;
+
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input|Skills")
+    UInputAction* SkillR_Action;
+
 private:
     void OnMoveStarted();
     void OnMoveTriggered();
     void OnTestAttack();
+    void OnCastSkillQ();
+    void OnCastSkillW();
+    void OnCastSkillE();
+    void OnCastSkillR();
 };

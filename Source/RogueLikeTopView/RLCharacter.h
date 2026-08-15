@@ -11,6 +11,7 @@
 class USpringArmComponent;
 class UCameraComponent;
 class URLHealthComponent;
+class URLSkillComponent;
 
 UCLASS()
 class ROGUELIKETOPVIEW_API ARLCharacter : public ACharacter
@@ -40,6 +41,9 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Combat")
 	void TestAttack();
 
+	UFUNCTION(BlueprintPure, Category = "Components")
+	URLSkillComponent* GetSkillComponent() const { return SkillComp; }
+
 protected:
 	// Called when the game starts or when spawned
 	virtual void BeginPlay() override;
@@ -53,6 +57,9 @@ protected:
 	// 체력 컴포넌트 변수
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
 	class URLHealthComponent* HealthComp;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
+	URLSkillComponent* SkillComp;
 
 	UFUNCTION()
 	virtual void HandleDeath();
