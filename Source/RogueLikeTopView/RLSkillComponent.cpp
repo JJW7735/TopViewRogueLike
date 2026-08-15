@@ -1,7 +1,9 @@
 ﻿#include "RLSkillComponent.h"
 #include "RLCharacter.h"
+#include "RLProjectile.h"
 #include "GameFramework/PlayerController.h"
 #include "GameFramework/CharacterMovementComponent.h"
+#include "GameFramework/ProjectileMovementComponent.h"
 
 URLSkillComponent::URLSkillComponent()
 {
@@ -117,6 +119,35 @@ bool URLSkillComponent::TryCastSkill(ESkillSlot Slot)
         // 추후 캐스팅 게이지 및 몽타주 루프 연결
         GEngine->AddOnScreenDebugMessage(-1, 2.0f, FColor::Cyan, FString::Printf(TEXT("[%s] 캐스팅/차징 시작! (%.1f초)"), *Skill->SkillName.ToString(), Skill->CastDuration));
         break;
+
+    case ESkillCastType::Projectile:
+    {
+        // 마우스 방향으로 구슬(투사체)을 스폰해서 날려보냄
+        if (OwnerCharacter && Skill->ProjectileClass)
+        {
+            FVector Forward = OwnerCharacter->GetActorForwardVector();
+            FVector SpawnLocation = OwnerCharacter->GetActorLocation()
+                + Forward * Skill->ProjectileSpawnForwardOffset
+                + FVector(0.f, 0.f, 50.f);
+            FRotator SpawnRotation = Forward.Rotation();
+
+            FActorSpawnParameters SpawnParams;
+            SpawnParams.Owner = OwnerCharacter;
+            SpawnParams.Instigator = OwnerCharacter;
+            SpawnParams.SpawnCollisionHandlingOverride =
+                ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+
+            ARLProjectile* Projectile = GetWorld()->SpawnActor<ARLProjectile>(
+                Skill->ProjectileClass, SpawnLocation, SpawnRotation, SpawnParams);
+
+            if (Projectile)
+            {
+                Projectile->DamageData = Skill->DamageData;
+                Projectile->MovementComp->Velocity = SpawnRotation.Vector() * Skill->ProjectileSpeed;
+            }
+        }
+        break;
+    }
 
     default:
         break;

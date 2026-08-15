@@ -10,70 +10,78 @@
 #include "Kismet/KismetSystemLibrary.h"
 #include "Kismet/GameplayStatics.h"
 #include "RLSkillComponent.h"
+#include "RLSkillData.h"
 #include "DrawDebugHelpers.h"
 
 // Sets default values
 ARLCharacter::ARLCharacter()
 {
- 	// Set this character to call Tick() every frame.  You can turn this off to improve performance if you don't need it.
-	PrimaryActorTick.bCanEverTick = true;
+    // Set this character to call Tick() every frame.  You can turn this off to improve performance if you don't need it.
+    PrimaryActorTick.bCanEverTick = true;
 
-	CameraBoom = CreateDefaultSubobject<USpringArmComponent>(TEXT("CameraBoom"));
-	CameraBoom->SetupAttachment(RootComponent);
-	CameraBoom->SetUsingAbsoluteRotation(true); // 캐릭터 회전과 카메라 회전 분리
-	CameraBoom->TargetArmLength = 1300.f;       // 탑뷰 카메라 거리
-	CameraBoom->SetRelativeRotation(FRotator(-60.f, 0.f, 0.f)); // 쿼터뷰 각도
-	CameraBoom->bDoCollisionTest = false;      // 벽 충돌 줌인 방지
+    CameraBoom = CreateDefaultSubobject<USpringArmComponent>(TEXT("CameraBoom"));
+    CameraBoom->SetupAttachment(RootComponent);
+    CameraBoom->SetUsingAbsoluteRotation(true); // 캐릭터 회전과 카메라 회전 분리
+    CameraBoom->TargetArmLength = 1300.f;       // 탑뷰 카메라 거리
+    CameraBoom->SetRelativeRotation(FRotator(-60.f, 0.f, 0.f)); // 쿼터뷰 각도
+    CameraBoom->bDoCollisionTest = false;      // 벽 충돌 줌인 방지
 
-	TopDownCamera = CreateDefaultSubobject<UCameraComponent>(TEXT("TopDownCamera"));
-	TopDownCamera->SetupAttachment(CameraBoom, USpringArmComponent::SocketName);
-	TopDownCamera->bUsePawnControlRotation = false;
+    TopDownCamera = CreateDefaultSubobject<UCameraComponent>(TEXT("TopDownCamera"));
+    TopDownCamera->SetupAttachment(CameraBoom, USpringArmComponent::SocketName);
+    TopDownCamera->bUsePawnControlRotation = false;
 
-	GetCharacterMovement()->bOrientRotationToMovement = true;
-	GetCharacterMovement()->RotationRate = FRotator(0.f, 640.f, 0.f); // 빠른 회전
-	GetCharacterMovement()->bConstrainToPlane = true;
-	GetCharacterMovement()->bRequestedMoveUseAcceleration = true;
-	GetCharacterMovement()->BrakingDecelerationWalking = 1000.f;
+    GetCharacterMovement()->bOrientRotationToMovement = true;
+    GetCharacterMovement()->RotationRate = FRotator(0.f, 640.f, 0.f); // 빠른 회전
+    GetCharacterMovement()->bConstrainToPlane = true;
+    GetCharacterMovement()->bRequestedMoveUseAcceleration = true;
+    GetCharacterMovement()->BrakingDecelerationWalking = 1000.f;
 
-	bUseControllerRotationYaw = false;
+    bUseControllerRotationYaw = false;
 
-	HealthComp = CreateDefaultSubobject<URLHealthComponent>(TEXT("HealthComp"));
+    HealthComp = CreateDefaultSubobject<URLHealthComponent>(TEXT("HealthComp"));
     SkillComp = CreateDefaultSubobject<URLSkillComponent>(TEXT("SkillComp"));
 }
 
 // Called when the game starts or when spawned
 void ARLCharacter::BeginPlay()
 {
-	Super::BeginPlay();
+    Super::BeginPlay();
 
     if (HealthComp)
     {
         HealthComp->OnDeath.AddDynamic(this, &ARLCharacter::HandleDeath);
     }
-	
+
+    if (SkillComp)
+    {
+        if (DefaultSkill_Q) SkillComp->EquipSkill(ESkillSlot::Slot_Q, DefaultSkill_Q);
+        if (DefaultSkill_W) SkillComp->EquipSkill(ESkillSlot::Slot_W, DefaultSkill_W);
+        if (DefaultSkill_E) SkillComp->EquipSkill(ESkillSlot::Slot_E, DefaultSkill_E);
+        if (DefaultSkill_R) SkillComp->EquipSkill(ESkillSlot::Slot_R, DefaultSkill_R);
+    }
 }
 
 void ARLCharacter::ReceiveCustomDamage(const FRLDamageData& DamageData, const FHitResult& HitInfo)
 {
-	// 무적 상태(회피 중)이면서 관통 공격이 아닌 경우 데미지 무시
-	if (bIsInvulnerable && !DamageData.bIgnoreInvincibility)
-	{
-		GEngine->AddOnScreenDebugMessage(-1, 1.5f, FColor::Yellow, TEXT("Dodge / Invulnerable!"));
-		return;
-	}
+    // 무적 상태(회피 중)이면서 관통 공격이 아닌 경우 데미지 무시
+    if (bIsInvulnerable && !DamageData.bIgnoreInvincibility)
+    {
+        GEngine->AddOnScreenDebugMessage(-1, 1.5f, FColor::Yellow, TEXT("Dodge / Invulnerable!"));
+        return;
+    }
 
-	// 데미지 수신 로그 출력 (★ 나중에 팀원의 체력 감소 코드가 들어갈 위치)
-	FString CauserName = DamageData.DamageCauser ? DamageData.DamageCauser->GetName() : TEXT("Environment");
-	FString Msg = FString::Printf(TEXT("💥 [%s] 피격! 데미지: %.1f (공격자: %s)"), *GetName(), DamageData.BaseDamage, *CauserName);
-	GEngine->AddOnScreenDebugMessage(-1, 2.0f, FColor::Red, Msg);
+    // 데미지 수신 로그 출력 (★ 나중에 팀원의 체력 감소 코드가 들어갈 위치)
+    FString CauserName = DamageData.DamageCauser ? DamageData.DamageCauser->GetName() : TEXT("Environment");
+    FString Msg = FString::Printf(TEXT("💥 [%s] 피격! 데미지: %.1f (공격자: %s)"), *GetName(), DamageData.BaseDamage, *CauserName);
+    GEngine->AddOnScreenDebugMessage(-1, 2.0f, FColor::Red, Msg);
 
-	// 넉백 처리 (타격 방향 반대로 캐릭터를 튕겨냄)
-	if (DamageData.KnockbackForce > 0.0f)
-	{
-		FVector KnockbackDir = (GetActorLocation() - HitInfo.ImpactPoint).GetSafeNormal2D();
-		// Z축으로 살짝 띄워주면서 지면 마찰을 무시하고 밀어냄
-		LaunchCharacter(KnockbackDir * DamageData.KnockbackForce + FVector(0.f, 0.f, 150.f), true, true);
-	}
+    // 넉백 처리 (타격 방향 반대로 캐릭터를 튕겨냄)
+    if (DamageData.KnockbackForce > 0.0f)
+    {
+        FVector KnockbackDir = (GetActorLocation() - HitInfo.ImpactPoint).GetSafeNormal2D();
+        // Z축으로 살짝 띄워주면서 지면 마찰을 무시하고 밀어냄
+        LaunchCharacter(KnockbackDir * DamageData.KnockbackForce + FVector(0.f, 0.f, 150.f), true, true);
+    }
 
     AController* InstigatorController = DamageData.DamageCauser ? DamageData.DamageCauser->GetInstigatorController() : nullptr;
     UGameplayStatics::ApplyDamage(this, DamageData.BaseDamage, InstigatorController, DamageData.DamageCauser, UDamageType::StaticClass());
@@ -184,14 +192,13 @@ void ARLCharacter::Dodge(FVector CursorLocation)
 // Called every frame
 void ARLCharacter::Tick(float DeltaTime)
 {
-	Super::Tick(DeltaTime);
+    Super::Tick(DeltaTime);
 
 }
 
 // Called to bind functionality to input
 void ARLCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
 {
-	Super::SetupPlayerInputComponent(PlayerInputComponent);
+    Super::SetupPlayerInputComponent(PlayerInputComponent);
 
 }
-
