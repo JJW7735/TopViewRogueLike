@@ -5,8 +5,10 @@
 #include "GameFramework/SpringArmComponent.h"
 #include "Camera/CameraComponent.h"
 #include "GameFramework/CharacterMovementComponent.h"
+#include "Components/CapsuleComponent.h"
 #include "RLHealthComponent.h"
 #include "Kismet/KismetSystemLibrary.h"
+#include "Kismet/GameplayStatics.h"
 #include "DrawDebugHelpers.h"
 
 // Sets default values
@@ -34,7 +36,6 @@ ARLCharacter::ARLCharacter()
 
 	bUseControllerRotationYaw = false;
 
-	// ������ �� �Ʒ��� ü�� ������Ʈ�� ������ �ݴϴ�.
 	HealthComp = CreateDefaultSubobject<URLHealthComponent>(TEXT("HealthComp"));
 }
 
@@ -42,6 +43,11 @@ ARLCharacter::ARLCharacter()
 void ARLCharacter::BeginPlay()
 {
 	Super::BeginPlay();
+
+    if (HealthComp)
+    {
+        HealthComp->OnDeath.AddDynamic(this, &ARLCharacter::HandleDeath);
+    }
 	
 }
 
@@ -66,6 +72,18 @@ void ARLCharacter::ReceiveCustomDamage(const FRLDamageData& DamageData, const FH
 		// Z축으로 살짝 띄워주면서 지면 마찰을 무시하고 밀어냄
 		LaunchCharacter(KnockbackDir * DamageData.KnockbackForce + FVector(0.f, 0.f, 150.f), true, true);
 	}
+
+    AController* InstigatorController = DamageData.DamageCauser ? DamageData.DamageCauser->GetInstigatorController() : nullptr;
+    UGameplayStatics::ApplyDamage(this, DamageData.BaseDamage, InstigatorController, DamageData.DamageCauser, UDamageType::StaticClass());
+}
+
+void ARLCharacter::HandleDeath()
+{
+    GEngine->AddOnScreenDebugMessage(-1, 3.0f, FColor::Black, FString::Printf(TEXT("💀 [%s] 체력이 0이 되어 사망했습니다!"), *GetName()));
+
+    // 이동 및 충돌 비활성화
+    GetCharacterMovement()->DisableMovement();
+    GetCapsuleComponent()->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 }
 
 void ARLCharacter::CreateBoxHitbox(FVector BoxExtent, float ForwardOffset, const FRLDamageData& DamageData, bool bDrawDebug)
@@ -125,7 +143,7 @@ void ARLCharacter::TestAttack()
 {
     FRLDamageData AttackData;
     AttackData.BaseDamage = 25.0f;
-    AttackData.KnockbackForce = 700.0f; // 시원하게 날아가는 넉백 수치
+    AttackData.KnockbackForce = 0.0f; // 시원하게 날아가는 넉백 수치
 
     // 가로(X)=100, 세로(Y)=80, 높이(Z)=50 크기의 박스를 캐릭터 전방 130cm 앞에 생성
     CreateBoxHitbox(FVector(100.f, 80.f, 50.f), 130.f, AttackData, true);

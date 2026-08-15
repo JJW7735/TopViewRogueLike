@@ -10,6 +10,7 @@
 
 class USpringArmComponent;
 class UCameraComponent;
+class URLHealthComponent;
 
 UCLASS()
 class ROGUELIKETOPVIEW_API ARLCharacter : public ACharacter
@@ -52,6 +53,9 @@ protected:
 	// 체력 컴포넌트 변수
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
 	class URLHealthComponent* HealthComp;
+
+	UFUNCTION()
+	virtual void HandleDeath();
 
 public:	
 	// Called every frame
