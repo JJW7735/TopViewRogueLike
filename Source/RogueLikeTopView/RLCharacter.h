@@ -40,6 +40,10 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Combat")
 	void TestAttack();
 
+	// 블루프린트에서 쉽게 테스트할 수 있도록 노드로 노출합니다.
+	UFUNCTION(BlueprintCallable, Category = "Action")
+	void Dodge(FVector CursorLocation);
+
 protected:
 	// Called when the game starts or when spawned
 	virtual void BeginPlay() override;
