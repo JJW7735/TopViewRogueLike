@@ -71,60 +71,107 @@ void URLSkillComponent::RotateOwnerToMouseCursor()
     }
 }
 
-bool URLSkillComponent::TryCastSkill(ESkillSlot Slot)
-{
-    if (!EquippedSkills.Contains(Slot) || !EquippedSkills[Slot])
-    {
-        GEngine->AddOnScreenDebugMessage(-1, 1.5f, FColor::Yellow, TEXT("슬롯에 등록된 스킬이 없습니다."));
-        return false;
-    }
 
-    if (IsOnCooldown(Slot))
-    {
-        GEngine->AddOnScreenDebugMessage(-1, 1.0f, FColor::Orange, FString::Printf(TEXT("쿨타임 중! 남은 시간: %.1f초"), GetRemainingCooldown(Slot)));
-        return false;
-    }
+
+
+void URLSkillComponent::OnSkillInputStarted(ESkillSlot Slot)
+{
+    if (CurrentSkillState != EPlayerSkillState::Idle) return; // 이미 다른 스킬 사용 중이면 무시
+    if (!EquippedSkills.Contains(Slot) || !EquippedSkills[Slot]) return;
+    if (IsOnCooldown(Slot)) return;
 
     URLSkillData* Skill = EquippedSkills[Slot];
+    CurrentActiveSlot = Slot;
+    CurrentAccumulatedTime = 0.0f; // 게이지 초기화
 
-    // 1. 기존 우클릭 이동 멈춤
     if (OwnerCharacter && OwnerCharacter->GetCharacterMovement())
-    {
         OwnerCharacter->GetCharacterMovement()->StopMovementImmediately();
-    }
 
-    // 2. 마우스 커서 방향으로 즉시 몸 돌리기
     RotateOwnerToMouseCursor();
 
-    // 3. 스킬 시전 처리
     switch (Skill->CastType)
     {
     case ESkillCastType::Instant:
-        // 애니메이션 몽타주가 있다면 재생, 없다면 즉시 히트박스 생성
-        if (Skill->SkillMontage && OwnerCharacter)
-        {
-            OwnerCharacter->PlayAnimMontage(Skill->SkillMontage);
-        }
-        else if (OwnerCharacter)
-        {
-            // 몽타주가 아직 없을 때 기본 박스 히트박스 즉시 발동
-            OwnerCharacter->CreateBoxHitbox(Skill->HitboxExtent, Skill->HitboxForwardOffset, Skill->DamageData, true);
-        }
+        // 즉발 스킬 처리
+        if (Skill->SkillMontage) OwnerCharacter->PlayAnimMontage(Skill->SkillMontage);
+        else OwnerCharacter->CreateBoxHitbox(Skill->HitboxExtent, Skill->HitboxForwardOffset, Skill->DamageData, true);
+
+        CooldownEndTimes.Add(Slot, GetWorld()->GetTimeSeconds() + Skill->Cooldown);
         break;
 
     case ESkillCastType::Cast:
+        CurrentSkillState = EPlayerSkillState::Casting;
+        GEngine->AddOnScreenDebugMessage(-1, 2.0f, FColor::Cyan, TEXT("캐스팅 시작..."));
+        break;
+
     case ESkillCastType::Charge:
-        // 추후 캐스팅 게이지 및 몽타주 루프 연결
-        GEngine->AddOnScreenDebugMessage(-1, 2.0f, FColor::Cyan, FString::Printf(TEXT("[%s] 캐스팅/차징 시작! (%.1f초)"), *Skill->SkillName.ToString(), Skill->CastDuration));
+        CurrentSkillState = EPlayerSkillState::Charging;
+        GEngine->AddOnScreenDebugMessage(-1, 2.0f, FColor::Red, TEXT("기 모으는 중 (차징)..."));
+        break;
+
+    case ESkillCastType::Hold:
+        CurrentSkillState = EPlayerSkillState::Holding;
+        GEngine->AddOnScreenDebugMessage(-1, 2.0f, FColor::Magenta, TEXT("난도질 시작 (홀딩)..."));
         break;
 
     default:
         break;
     }
+}
 
-    // 4. 쿨타임 시작
+void URLSkillComponent::OnSkillInputTriggered(ESkillSlot Slot)
+{
+    if (CurrentSkillState == EPlayerSkillState::Idle || CurrentActiveSlot != Slot) return;
+
+    // 누르고 있는 동안 게이지 누적
+    CurrentAccumulatedTime += GetWorld()->GetDeltaSeconds();
+    URLSkillData* Skill = EquippedSkills[Slot];
+
+    // 홀딩 스킬의 경우 누르고 있는 동안 틱 데미지 발생
+    if (CurrentSkillState == EPlayerSkillState::Holding)
+    {
+        // (여기에 TickDamageInterval 마다 데미지를 주는 로직이 들어갑니다)
+    }
+
+    // 만약 최대 시간(CastDuration)을 초과했다면 강제 완료 처리
+    if (CurrentAccumulatedTime >= Skill->CastDuration)
+    {
+        OnSkillInputCompleted(Slot);
+    }
+}
+
+void URLSkillComponent::OnSkillInputCompleted(ESkillSlot Slot)
+{
+    if (CurrentSkillState == EPlayerSkillState::Idle || CurrentActiveSlot != Slot) return;
+
+    URLSkillData* Skill = EquippedSkills[Slot];
+
+    // 1. 차징 스킬: 손을 뗐을 때 모은 시간에 비례하여 데미지 발사
+    if (CurrentSkillState == EPlayerSkillState::Charging)
+    {
+        float Multiplier = 1.0f;
+
+        // 최소 시간도 못 채우고 툭 뗐을 경우에도 씹히지 않고 기본 1배 데미지로 즉시 발사!
+        if (CurrentAccumulatedTime < Skill->MinChargeTime)
+        {
+            Multiplier = 1.0f;
+        }
+        else
+        {
+            // 최소 ~ 최대(CastDuration) 사이일 때 누적 시간에 비례하여 데미지 선형 증가 (Lerp)
+            float Alpha = FMath::Clamp(CurrentAccumulatedTime / Skill->CastDuration, 0.0f, 1.0f);
+            Multiplier = FMath::Lerp(1.0f, Skill->MaxDamageMultiplier, Alpha);
+        }
+
+        FRLDamageData FinalDamage = Skill->DamageData;
+        FinalDamage.BaseDamage *= Multiplier; // 모은 시간에 비례한 데미지 뻥튀기!
+        OwnerCharacter->CreateBoxHitbox(Skill->HitboxExtent, Skill->HitboxForwardOffset, FinalDamage, true);
+    }
+
+    // 2. 공통 종료 처리: 쿨타임 시작 및 상태 초기화
     CooldownEndTimes.Add(Slot, GetWorld()->GetTimeSeconds() + Skill->Cooldown);
 
-    GEngine->AddOnScreenDebugMessage(-1, 2.0f, FColor::Green, FString::Printf(TEXT("⚡ [%s] 스킬 시전 완료! (쿨타임 %.1f초)"), *Skill->SkillName.ToString(), Skill->Cooldown));
-    return true;
+    GEngine->AddOnScreenDebugMessage(-1, 2.0f, FColor::Green, FString::Printf(TEXT("스킬 종료! (누른 시간: %.1f초)"), CurrentAccumulatedTime));
+    CurrentSkillState = EPlayerSkillState::Idle;
+    CurrentAccumulatedTime = 0.0f;
 }

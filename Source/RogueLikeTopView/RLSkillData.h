@@ -20,6 +20,7 @@ enum class ESkillCastType : uint8
     Instant       UMETA(DisplayName = "Instant"),
     Cast          UMETA(DisplayName = "Casting"),
     Charge        UMETA(DisplayName = "Charge"),
+    Hold          UMETA(DisplayName = "Holding"),
     GroundTarget  UMETA(DisplayName = "GroundTarget")
 };
 
@@ -46,6 +47,15 @@ public:
 
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Skill|Mechanic", meta = (EditCondition = "CastType == ESkillCastType::Cast || CastType == ESkillCastType::Charge"))
     float CastDuration = 1.5f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Skill|Mechanic|ChargeAndHold")
+    float MinChargeTime = 0.5f; // 최소 이 시간은 눌러야 스킬 발동 (차징용)
+
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Skill|Mechanic|ChargeAndHold")
+    float MaxDamageMultiplier = 2.0f; // 풀차징 시 데미지 배율
+
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Skill|Mechanic|ChargeAndHold")
+    float TickDamageInterval = 0.2f; // 누르고 있는 동안 몇 초마다 데미지가 들어갈지 (홀딩용)
 
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Skill|Animation")
     UAnimMontage* SkillMontage;
