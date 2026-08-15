@@ -202,3 +202,51 @@ void ARLCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCompone
     Super::SetupPlayerInputComponent(PlayerInputComponent);
 
 }
+
+void ARLCharacter::CreateLocationHitbox(FVector TargetLocation, float Radius, const FRLDamageData& DamageData, bool bDrawDebug)
+{
+    TArray<AActor*> ActorsToIgnore;
+    ActorsToIgnore.Add(this);
+
+    TArray<FHitResult> HitResults;
+    TArray<TEnumAsByte<EObjectTypeQuery>> ObjectTypes;
+    ObjectTypes.Add(UEngineTypes::ConvertToObjectType(ECollisionChannel::ECC_Pawn));
+
+    EDrawDebugTrace::Type DebugTrace = bDrawDebug ? EDrawDebugTrace::ForDuration : EDrawDebugTrace::None;
+
+    // 타겟 지점에 구체 스윕 판정
+    bool bHit = UKismetSystemLibrary::SphereTraceMultiForObjects(
+        GetWorld(),
+        TargetLocation,
+        TargetLocation + FVector(0.f, 0.f, 1.f),
+        Radius,
+        ObjectTypes,
+        false,
+        ActorsToIgnore,
+        DebugTrace,
+        HitResults,
+        true,
+        FLinearColor::Red,
+        FLinearColor::Green,
+        1.5f
+    );
+
+    if (bHit)
+    {
+        TSet<AActor*> DamagedActors;
+        for (const FHitResult& Hit : HitResults)
+        {
+            AActor* HitActor = Hit.GetActor();
+            if (HitActor && !DamagedActors.Contains(HitActor))
+            {
+                DamagedActors.Add(HitActor);
+                if (ARLCharacter* TargetChar = Cast<ARLCharacter>(HitActor))
+                {
+                    FRLDamageData FinalDamage = DamageData;
+                    FinalDamage.DamageCauser = this;
+                    TargetChar->ReceiveCustomDamage(FinalDamage, Hit);
+                }
+            }
+        }
+    }
+}

@@ -7,7 +7,6 @@
 class UDecalComponent;
 class USceneComponent;
 
-// 인디케이터 형태 구분
 UENUM(BlueprintType)
 enum class EIndicatorType : uint8
 {
@@ -24,35 +23,27 @@ class ROGUELIKETOPVIEW_API ARLDecalIndicator : public AActor
 public:
     ARLDecalIndicator();
 
-    // 마우스 커서 위치 및 플레이어 위치를 받아 인디케이터 좌표/회전 갱신
-    UFUNCTION(BlueprintCallable, Category = "Indicator")
     void UpdateIndicatorTransform(const FVector& OriginLocation, const FVector& TargetLocation, float MaxRange);
-
-    // 반경(크기) 및 형태 설정
-    UFUNCTION(BlueprintCallable, Category = "Indicator")
-    void SetupIndicator(EIndicatorType Type, float Radius, float Length = 0.f);
-
-    // 머티리얼 변경 (스킬별 전용 마법진/화살표 교체용)
-    UFUNCTION(BlueprintCallable, Category = "Indicator")
-    void SetIndicatorMaterial(UMaterialInterface* NewMaterial);
-
-    // 활성화 / 비활성화
-    UFUNCTION(BlueprintCallable, Category = "Indicator")
+    void SetupIndicator(EIndicatorType Type, float Radius, float MaxRange);
     void SetIndicatorVisibility(bool bVisible);
 
-protected:
-    virtual void BeginPlay() override;
+    // ★ 실제 조준 지점 반환 함수
+    UFUNCTION(BlueprintPure, Category = "Indicator")
+    FVector GetTargetLocation() const { return CurrentTargetLocation; }
 
+protected:
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
     USceneComponent* SceneRoot;
 
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
     UDecalComponent* DecalComp;
 
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
+    UDecalComponent* RangeDecalComp;
+
     UPROPERTY(EditDefaultsOnly, Category = "Indicator")
     EIndicatorType CurrentType = EIndicatorType::Circle;
 
-private:
     UPROPERTY()
-    UMaterialInstanceDynamic* DynamicMaterial;
+    FVector CurrentTargetLocation = FVector::ZeroVector;
 };
