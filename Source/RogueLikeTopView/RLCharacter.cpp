@@ -5,6 +5,7 @@
 #include "GameFramework/SpringArmComponent.h"
 #include "Camera/CameraComponent.h"
 #include "GameFramework/CharacterMovementComponent.h"
+#include "RLHealthComponent.h"
 
 // Sets default values
 ARLCharacter::ARLCharacter()
@@ -31,6 +32,9 @@ ARLCharacter::ARLCharacter()
 	GetCharacterMovement()->BrakingDecelerationWalking = 1000.f;
 
 	bUseControllerRotationYaw = false;
+
+	// 생성자 맨 아래에 체력 컴포넌트를 조립해 줍니다.
+	HealthComp = CreateDefaultSubobject<URLHealthComponent>(TEXT("HealthComp"));
 }
 
 // Called when the game starts or when spawned

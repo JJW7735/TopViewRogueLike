@@ -23,6 +23,10 @@ protected:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Camera")
 	class UCameraComponent* TopDownCamera;
 
+	// 체력 컴포넌트 변수
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
+	class URLHealthComponent* HealthComp;
+
 public:	
 	// Called every frame
 	virtual void Tick(float DeltaTime) override;
