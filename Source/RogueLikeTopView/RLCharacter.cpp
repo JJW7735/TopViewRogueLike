@@ -151,6 +151,36 @@ void ARLCharacter::TestAttack()
     CreateBoxHitbox(FVector(100.f, 80.f, 50.f), 130.f, AttackData, true);
 }
 
+void ARLCharacter::Dodge(FVector CursorLocation)
+{
+    // 1. 현재 내 캐릭터의 위치를 가져옵니다.
+    FVector MyLocation = GetActorLocation();
+
+    // 2. 방향 벡터 공식: 목적지(마우스) - 출발지(내 위치)
+    FVector DashDirection = CursorLocation - MyLocation;
+
+    // 3. 탑뷰 게임이므로 하늘로 솟아오르거나 땅으로 파고들지 않게 Z축을 0으로 지워버립니다.
+    DashDirection.Z = 0.0f;
+
+    // 마우스가 캐릭터와 완전히 똑같은 위치일 때 발생하는 에러를 방지합니다.
+    if (DashDirection.IsNearlyZero())
+    {
+        return;
+    }
+
+    // 4. 방향만 남기기 위해 벡터의 길이를 1로 정규화(Normalize)합니다.
+    DashDirection.Normalize();
+
+    // 5. 묵직한 탱커에게 어울리는 돌진 거리를 설정합니다. (원하시는 대로 숫자를 조절하세요)
+    float DashPower = 2500.0f;
+
+    // 6. 언리얼 엔진의 캐릭터 발사 함수! 기존의 관성을 무시하고(true) 즉각 쏘아 보냅니다.
+    LaunchCharacter(DashDirection * DashPower, true, true);
+
+    // 7. 쏘아 보냄과 동시에 캐릭터가 회피하는 방향을 즉시 바라보도록 회전시킵니다.
+    SetActorRotation(DashDirection.Rotation());
+}
+
 // Called every frame
 void ARLCharacter::Tick(float DeltaTime)
 {
