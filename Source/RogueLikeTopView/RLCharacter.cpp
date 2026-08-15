@@ -5,12 +5,9 @@
 #include "GameFramework/SpringArmComponent.h"
 #include "Camera/CameraComponent.h"
 #include "GameFramework/CharacterMovementComponent.h"
-<<<<<<< Updated upstream
 #include "RLHealthComponent.h"
-=======
 #include "Kismet/KismetSystemLibrary.h"
 #include "DrawDebugHelpers.h"
->>>>>>> Stashed changes
 
 // Sets default values
 ARLCharacter::ARLCharacter()
@@ -37,7 +34,7 @@ ARLCharacter::ARLCharacter()
 
 	bUseControllerRotationYaw = false;
 
-	// »ý¼ºÀÚ ¸Ç ¾Æ·¡¿¡ Ã¼·Â ÄÄÆ÷³ÍÆ®¸¦ Á¶¸³ÇØ ÁÝ´Ï´Ù.
+	// ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ ï¿½Æ·ï¿½ï¿½ï¿½ Ã¼ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Æ®ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½Ý´Ï´ï¿½.
 	HealthComp = CreateDefaultSubobject<URLHealthComponent>(TEXT("HealthComp"));
 }
 
