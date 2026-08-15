@@ -45,17 +45,27 @@ public:
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Skill|Mechanic", meta = (ClampMin = "0.0"))
     float Cooldown = 5.0f;
 
-    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Skill|Mechanic", meta = (EditCondition = "CastType == ESkillCastType::Cast || CastType == ESkillCastType::Charge"))
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Skill|Mechanic", meta = (EditCondition = "CastType == ESkillCastType::Cast || CastType == ESkillCastType::Charge || CastType == ESkillCastType::Hold"))
     float CastDuration = 1.5f;
 
+    // 팀원 차징 & 홀딩 옵션
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Skill|Mechanic|ChargeAndHold")
-    float MinChargeTime = 0.5f; // 최소 이 시간은 눌러야 스킬 발동 (차징용)
+    float MinChargeTime = 0.5f;
 
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Skill|Mechanic|ChargeAndHold")
-    float MaxDamageMultiplier = 2.0f; // 풀차징 시 데미지 배율
+    float MaxDamageMultiplier = 2.0f;
 
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Skill|Mechanic|ChargeAndHold")
-    float TickDamageInterval = 0.2f; // 누르고 있는 동안 몇 초마다 데미지가 들어갈지 (홀딩용)
+    float TickDamageInterval = 0.2f;
+
+    // ─────────────────────────────────────────────
+    // ★ 장판 조준(GroundTarget) 인디케이터 옵션
+    // ─────────────────────────────────────────────
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Skill|GroundTarget", meta = (EditCondition = "CastType == ESkillCastType::GroundTarget"))
+    float MaxRange = 800.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Skill|GroundTarget", meta = (EditCondition = "CastType == ESkillCastType::GroundTarget"))
+    float IndicatorRadius = 250.0f;
 
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Skill|Animation")
     UAnimMontage* SkillMontage;
@@ -66,7 +76,6 @@ public:
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Skill|Hitbox")
     FVector HitboxExtent = FVector(120.f, 80.f, 60.f);
 
-    // ★ HitForwardOffset -> HitboxForwardOffset 으로 수정
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Skill|Hitbox")
     float HitboxForwardOffset = 150.f;
 };

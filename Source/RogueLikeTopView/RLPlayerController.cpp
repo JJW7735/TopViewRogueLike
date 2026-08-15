@@ -32,33 +32,43 @@ void ARLPlayerController::SetupInputComponent()
     if (UEnhancedInputComponent* EnhancedInputComponent = Cast<UEnhancedInputComponent>(InputComponent))
     {
         // 1. 이동 및 기본 공격 바인딩
-        EnhancedInputComponent->BindAction(RightClickMoveAction, ETriggerEvent::Started, this, &ARLPlayerController::OnMoveStarted);
-        EnhancedInputComponent->BindAction(RightClickMoveAction, ETriggerEvent::Triggered, this, &ARLPlayerController::OnMoveTriggered);
-        if (TestAttackAction) EnhancedInputComponent->BindAction(TestAttackAction, ETriggerEvent::Started, this, &ARLPlayerController::OnTestAttack);
+        if (RightClickMoveAction)
+        {
+            EnhancedInputComponent->BindAction(RightClickMoveAction, ETriggerEvent::Started, this, &ARLPlayerController::OnMoveStarted);
+            EnhancedInputComponent->BindAction(RightClickMoveAction, ETriggerEvent::Triggered, this, &ARLPlayerController::OnMoveTriggered);
+        }
+        if (TestAttackAction)
+        {
+            EnhancedInputComponent->BindAction(TestAttackAction, ETriggerEvent::Started, this, &ARLPlayerController::OnTestAttack);
+        }
 
-        // 2. Q 스킬 바인딩 (눌렀을 때, 누르고 있을 때, 뗐을 때)
-        if (SkillQ_Action) {
+        // 2. Q 스킬 바인딩
+        if (SkillQ_Action)
+        {
             EnhancedInputComponent->BindAction(SkillQ_Action, ETriggerEvent::Started, this, &ARLPlayerController::OnSkillQ_Started);
             EnhancedInputComponent->BindAction(SkillQ_Action, ETriggerEvent::Triggered, this, &ARLPlayerController::OnSkillQ_Triggered);
             EnhancedInputComponent->BindAction(SkillQ_Action, ETriggerEvent::Completed, this, &ARLPlayerController::OnSkillQ_Completed);
         }
 
         // 3. W 스킬 바인딩
-        if (SkillW_Action) {
+        if (SkillW_Action)
+        {
             EnhancedInputComponent->BindAction(SkillW_Action, ETriggerEvent::Started, this, &ARLPlayerController::OnSkillW_Started);
             EnhancedInputComponent->BindAction(SkillW_Action, ETriggerEvent::Triggered, this, &ARLPlayerController::OnSkillW_Triggered);
             EnhancedInputComponent->BindAction(SkillW_Action, ETriggerEvent::Completed, this, &ARLPlayerController::OnSkillW_Completed);
         }
 
         // 4. E 스킬 바인딩
-        if (SkillE_Action) {
+        if (SkillE_Action)
+        {
             EnhancedInputComponent->BindAction(SkillE_Action, ETriggerEvent::Started, this, &ARLPlayerController::OnSkillE_Started);
             EnhancedInputComponent->BindAction(SkillE_Action, ETriggerEvent::Triggered, this, &ARLPlayerController::OnSkillE_Triggered);
             EnhancedInputComponent->BindAction(SkillE_Action, ETriggerEvent::Completed, this, &ARLPlayerController::OnSkillE_Completed);
         }
 
         // 5. R 스킬 바인딩
-        if (SkillR_Action) {
+        if (SkillR_Action)
+        {
             EnhancedInputComponent->BindAction(SkillR_Action, ETriggerEvent::Started, this, &ARLPlayerController::OnSkillR_Started);
             EnhancedInputComponent->BindAction(SkillR_Action, ETriggerEvent::Triggered, this, &ARLPlayerController::OnSkillR_Triggered);
             EnhancedInputComponent->BindAction(SkillR_Action, ETriggerEvent::Completed, this, &ARLPlayerController::OnSkillR_Completed);
@@ -70,12 +80,36 @@ void ARLPlayerController::OnTestAttack()
 {
     if (ARLCharacter* ControlledChar = Cast<ARLCharacter>(GetPawn()))
     {
+        if (URLSkillComponent* SkillComp = ControlledChar->GetSkillComponent())
+        {
+            // ★ 장판 조준 모드일 때 좌클릭 -> 스킬 시전 확정!
+            if (SkillComp->IsAiming())
+            {
+                SkillComp->ConfirmGroundCast();
+                return;
+            }
+        }
+
+        // 평상시 기본 공격
         ControlledChar->TestAttack();
     }
 }
 
 void ARLPlayerController::OnMoveStarted()
 {
+    if (ARLCharacter* ControlledChar = Cast<ARLCharacter>(GetPawn()))
+    {
+        if (URLSkillComponent* SkillComp = ControlledChar->GetSkillComponent())
+        {
+            // ★ 장판 조준 중 우클릭 시 이동하지 않고 조준 취소!
+            if (SkillComp->IsAiming())
+            {
+                SkillComp->CancelGroundCast();
+                return;
+            }
+        }
+    }
+
     FHitResult Hit;
     if (GetHitResultUnderCursor(ECollisionChannel::ECC_Visibility, true, Hit))
     {
@@ -93,6 +127,15 @@ void ARLPlayerController::OnMoveStarted()
 
 void ARLPlayerController::OnMoveTriggered()
 {
+    if (ARLCharacter* ControlledChar = Cast<ARLCharacter>(GetPawn()))
+    {
+        if (URLSkillComponent* SkillComp = ControlledChar->GetSkillComponent())
+        {
+            // ★ 조준 중에는 우클릭 이동 차단
+            if (SkillComp->IsAiming()) return;
+        }
+    }
+
     FHitResult Hit;
     if (GetHitResultUnderCursor(ECollisionChannel::ECC_Visibility, true, Hit))
     {
