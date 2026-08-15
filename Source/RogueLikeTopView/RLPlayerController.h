@@ -50,8 +50,20 @@ private:
     void OnMoveStarted();
     void OnMoveTriggered();
     void OnTestAttack();
-    void OnCastSkillQ();
-    void OnCastSkillW();
-    void OnCastSkillE();
-    void OnCastSkillR();
+
+    void OnSkillQ_Started();
+    void OnSkillQ_Triggered();
+    void OnSkillQ_Completed();
+
+    void OnSkillW_Started();
+    void OnSkillW_Triggered();
+    void OnSkillW_Completed();
+
+    void OnSkillE_Started();
+    void OnSkillE_Triggered();
+    void OnSkillE_Completed();
+
+    void OnSkillR_Started();
+    void OnSkillR_Triggered();
+    void OnSkillR_Completed();
 };
