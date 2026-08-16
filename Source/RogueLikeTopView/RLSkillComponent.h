@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "Components/ActorComponent.h"
 #include "RLSkillData.h"
+#include "TimerManager.h"
 #include "RLSkillComponent.generated.h"
 
 class ARLCharacter;
@@ -114,4 +115,11 @@ protected:
     void StopPlayerMovement();
     void RotateOwnerToMouseCursor();
     FVector GetMouseGroundLocation() const;
+
+    // ===== 이속 버프 전용 =====
+    UPROPERTY()
+    FTimerHandle SpeedBuffTimerHandle;
+
+    UFUNCTION()
+    void EndSpeedBuff();
 };

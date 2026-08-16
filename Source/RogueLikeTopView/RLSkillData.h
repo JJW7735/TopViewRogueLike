@@ -23,7 +23,9 @@ enum class ESkillCastType : uint8
     Charge        UMETA(DisplayName = "Charge"),
     Hold          UMETA(DisplayName = "Holding"),
     GroundTarget  UMETA(DisplayName = "GroundTarget"),
-    Projectile    UMETA(DisplayName = "Projectile")
+    Projectile    UMETA(DisplayName = "Projectile"),
+    Dash          UMETA(DisplayName = "Dash"),
+    Buff          UMETA(DisplayName = "Buff")
 };
 
 UCLASS(BlueprintType)
@@ -91,4 +93,18 @@ public:
 
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Skill|Hitbox")
     float HitboxForwardOffset = 150.f;
+
+    // ===== Dash 전용 =====
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Skill|Dash",
+        meta = (EditCondition = "CastType == ESkillCastType::Dash"))
+    float DashPower = 1500.f;
+
+    // ===== Buff 전용 =====
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Skill|Buff",
+        meta = (EditCondition = "CastType == ESkillCastType::Buff"))
+    float SpeedMultiplier = 1.5f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Skill|Buff",
+        meta = (EditCondition = "CastType == ESkillCastType::Buff"))
+    float BuffDuration = 3.0f;
 };

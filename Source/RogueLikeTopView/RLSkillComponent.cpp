@@ -149,10 +149,48 @@ void URLSkillComponent::OnSkillInputStarted(ESkillSlot Slot)
         StartCasting(Slot);
         break;
 
+    case ESkillCastType::Dash:
+    {
+        if (Skill->SkillMontage) OwnerCharacter->PlayAnimMontage(Skill->SkillMontage);
+
+        FVector DashDirection = OwnerCharacter->GetActorForwardVector();
+        OwnerCharacter->LaunchCharacter(DashDirection * Skill->DashPower, true, true);
+
+        OwnerCharacter->CreateBoxHitbox(Skill->HitboxExtent, Skill->HitboxForwardOffset, Skill->DamageData, true);
+
+        CooldownEndTimes.Add(Slot, GetWorld()->GetTimeSeconds() + Skill->Cooldown);
+        CurrentSkillState = EPlayerSkillState::Idle;
+        break;
+    }
+
     case ESkillCastType::Charge:
         CurrentSkillState = EPlayerSkillState::Charging;
         if (Skill->SkillMontage) OwnerCharacter->PlayAnimMontage(Skill->SkillMontage);
         break;
+
+
+    case ESkillCastType::Buff:
+    {
+        if (Skill->SkillMontage) OwnerCharacter->PlayAnimMontage(Skill->SkillMontage);
+
+        if (UCharacterMovementComponent* MoveComp = OwnerCharacter->GetCharacterMovement())
+        {
+            MoveComp->MaxWalkSpeed = MoveComp->MaxWalkSpeed * Skill->SpeedMultiplier;
+
+            GetWorld()->GetTimerManager().SetTimer(
+                SpeedBuffTimerHandle,
+                this,
+                &URLSkillComponent::EndSpeedBuff,
+                Skill->BuffDuration,
+                false
+            );
+        }
+
+        CooldownEndTimes.Add(Slot, GetWorld()->GetTimeSeconds() + Skill->Cooldown);
+        CurrentSkillState = EPlayerSkillState::Idle;
+        break;
+    }
+
 
     case ESkillCastType::Hold:
         CurrentSkillState = EPlayerSkillState::Holding;
@@ -460,4 +498,14 @@ FVector URLSkillComponent::GetMouseGroundLocation() const
         return Hit.ImpactPoint;
     }
     return OwnerCharacter->GetActorLocation();
+
+
+}
+
+void URLSkillComponent::EndSpeedBuff()
+{
+    if (OwnerCharacter && OwnerCharacter->GetCharacterMovement())
+    {
+        OwnerCharacter->GetCharacterMovement()->MaxWalkSpeed = 600.0f;
+    }
 }
