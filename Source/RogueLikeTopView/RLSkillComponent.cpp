@@ -3,6 +3,8 @@
 #include "RLDecalIndicator.h"
 #include "GameFramework/PlayerController.h"
 #include "GameFramework/CharacterMovementComponent.h"
+#include "RLProjectile.h"
+#include "GameFramework/ProjectileMovementComponent.h"
 
 URLSkillComponent::URLSkillComponent()
 {
@@ -128,7 +130,16 @@ void URLSkillComponent::OnSkillInputStarted(ESkillSlot Slot)
             FActorSpawnParameters SpawnParams;
             SpawnParams.Owner = OwnerCharacter;
             SpawnParams.Instigator = OwnerCharacter;
-            GetWorld()->SpawnActor<AActor>(Skill->ProjectileClass, SpawnLoc, OwnerCharacter->GetActorRotation(), SpawnParams);
+
+            ARLProjectile* SpawnedProjectile = GetWorld()->SpawnActor<ARLProjectile>(
+                Skill->ProjectileClass, SpawnLoc, OwnerCharacter->GetActorRotation(), SpawnParams);
+
+            if (SpawnedProjectile)
+            {
+                SpawnedProjectile->DamageData = Skill->DamageData;
+                SpawnedProjectile->MovementComp->Velocity =
+                    OwnerCharacter->GetActorRotation().Vector() * Skill->ProjectileSpeed;
+            }
         }
         CooldownEndTimes.Add(Slot, GetWorld()->GetTimeSeconds() + Skill->Cooldown);
         CurrentSkillState = EPlayerSkillState::Idle;
