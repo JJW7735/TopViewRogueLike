@@ -84,8 +84,9 @@ protected:
     UPROPERTY()
     ARLCharacter* OwnerCharacter;
 
-    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Skill")
-    TMap<ESkillSlot, URLSkillData*> EquippedSkills;
+    // 완벽 수정 후 (에디터 디테일 패널에서 자유롭게 추가/삭제 가능)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Skill")
+    TMap<ESkillSlot, URLSkillData*> EquippedSkills;;
 
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Skill")
     TMap<ESkillSlot, float> CooldownEndTimes;
