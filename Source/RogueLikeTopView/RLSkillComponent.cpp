@@ -183,6 +183,12 @@ void URLSkillComponent::OnSkillInputTriggered(ESkillSlot Slot)
     {
         RotateOwnerToMouseCursor();
         CurrentAccumulatedTime = FMath::Min(CurrentAccumulatedTime + GetWorld()->GetDeltaSeconds(), Skill->CastDuration);
+
+        if (CurrentAccumulatedTime >= Skill->CastDuration)
+        {
+            CurrentAccumulatedTime = Skill->CastDuration; // 오차 방지를 위해 최대치로 고정
+            OnSkillInputCompleted(Slot); // 손을 떼지 않아도 강제로 완료(발사) 처리
+        }
     }
 }
 

@@ -8,6 +8,7 @@
 UENUM(BlueprintType)
 enum class ESkillSlot : uint8
 {
+    Slot_LMB UMETA(DisplayName = "Left Mouse Button (Basic Attack)"),
     Slot_Q UMETA(DisplayName = "Q Skill"),
     Slot_W UMETA(DisplayName = "W Skill"),
     Slot_E UMETA(DisplayName = "E Skill"),
