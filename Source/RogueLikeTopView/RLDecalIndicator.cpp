@@ -20,13 +20,13 @@ ARLDecalIndicator::ARLDecalIndicator()
     RangeDecalComp->SetRelativeRotation(FRotator(-90.f, 0.f, 0.f));
     RangeDecalComp->DecalSize = FVector(250.f, 800.f, 800.f);
 
-    static ConstructorHelpers::FObjectFinder<UMaterialInterface> CircleMat(TEXT("/Game/Common/Decals/M_Decal_Circle.M_Decal_Circle"));
+    static ConstructorHelpers::FObjectFinder<UMaterialInterface> CircleMat(TEXT("/Game/Effect/Material/M_Decal_Circle.M_Decal_Circle"));
     if (CircleMat.Succeeded())
     {
         DecalComp->SetDecalMaterial(CircleMat.Object);
     }
 
-    static ConstructorHelpers::FObjectFinder<UMaterialInterface> RangeMat(TEXT("/Game/Common/Decals/M_Decal_RangeRing.M_Decal_RangeRing"));
+    static ConstructorHelpers::FObjectFinder<UMaterialInterface> RangeMat(TEXT("/Game/Effect/Material/M_Decal_RangeRing.M_Decal_RangeRing"));
     if (RangeMat.Succeeded())
     {
         RangeDecalComp->SetDecalMaterial(RangeMat.Object);
@@ -90,4 +90,22 @@ void ARLDecalIndicator::SetIndicatorVisibility(bool bVisible)
     SetActorHiddenInGame(!bVisible);
     DecalComp->SetVisibility(bVisible);
     RangeDecalComp->SetVisibility(bVisible);
+}
+
+void ARLDecalIndicator::LockTargetLocation(const FVector& LockedLocation)
+{
+    CurrentTargetLocation = LockedLocation;
+
+    if (DecalComp)
+    {
+        DecalComp->SetWorldLocation(LockedLocation);
+        DecalComp->SetWorldRotation(FRotator(-90.f, 0.f, 0.f));
+        DecalComp->SetVisibility(true);
+    }
+
+    // 캐스팅 중에는 플레이어 발밑의 사거리 원 숨김
+    if (RangeDecalComp)
+    {
+        RangeDecalComp->SetVisibility(false);
+    }
 }

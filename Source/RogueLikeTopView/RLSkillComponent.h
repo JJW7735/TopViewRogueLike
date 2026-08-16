@@ -8,18 +8,18 @@
 class ARLCharacter;
 class ARLDecalIndicator;
 
-// 쿨타임 변경 알림 델리게이트
-DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FOnSkillCooldownChanged, ESkillSlot, Slot, float, RemainingTime, float, TotalCooldown);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FOnSkillCooldownChanged, ESkillSlot, Slot, float, RemainingTime, float, MaxCooldown);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_FourParams(FOnCastProgressChanged, ESkillSlot, Slot, float, CurrentTime, float, MaxDuration, float, ProgressRatio);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnCastStateChanged, ESkillSlot, Slot, bool, bIsCasting);
 
-// 스킬 상태 (팀원 상태 + Aiming 통합)
 UENUM(BlueprintType)
 enum class EPlayerSkillState : uint8
 {
     Idle,
-    Casting,
-    Charging,
-    Holding,
-    Aiming
+    Casting,      // 캐스팅 게이지 채우는 중 (100% 도달 시에만 발동)
+    Charging,     // 차징 힘 모으는 중
+    Holding,      // 홀딩 유지 중
+    Aiming        // 장판 위치 조준 중 (이동 가능)
 };
 
 UCLASS(ClassGroup = (Custom), meta = (BlueprintSpawnableComponent))
@@ -29,36 +29,22 @@ class ROGUELIKETOPVIEW_API URLSkillComponent : public UActorComponent
 
 public:
     URLSkillComponent();
-
     virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
 
-    // 입력 처리 함수군 (Enhanced Input 바인딩용)
-    UFUNCTION(BlueprintCallable, Category = "Skill|Input")
     void OnSkillInputStarted(ESkillSlot Slot);
-
-    UFUNCTION(BlueprintCallable, Category = "Skill|Input")
     void OnSkillInputTriggered(ESkillSlot Slot);
-
-    UFUNCTION(BlueprintCallable, Category = "Skill|Input")
     void OnSkillInputCompleted(ESkillSlot Slot);
 
-    // 단일 시전 호환용
     UFUNCTION(BlueprintCallable, Category = "Skill")
-    bool TryCastSkill(ESkillSlot Slot);
-
-    // ─────────────────────────────────────────────
-    // ★ 장판 조준(GroundTarget) 제어 함수
-    // ─────────────────────────────────────────────
-    UFUNCTION(BlueprintCallable, Category = "Skill|Indicator")
     void ConfirmGroundCast();
 
-    UFUNCTION(BlueprintCallable, Category = "Skill|Indicator")
+    UFUNCTION(BlueprintCallable, Category = "Skill")
     void CancelGroundCast();
 
-    UFUNCTION(BlueprintPure, Category = "Skill|Indicator")
-    bool IsAiming() const { return CurrentSkillState == EPlayerSkillState::Aiming; }
+    void StartCasting(ESkillSlot Slot);
+    void FinishCasting();
+    void InterruptCasting(const FString& Reason = TEXT("Interrupted"));
 
-    // 유틸리티 및 쿨타임 조회
     UFUNCTION(BlueprintCallable, Category = "Skill")
     void EquipSkill(ESkillSlot Slot, URLSkillData* NewSkill);
 
@@ -68,41 +54,63 @@ public:
     UFUNCTION(BlueprintPure, Category = "Skill")
     float GetRemainingCooldown(ESkillSlot Slot) const;
 
-    UFUNCTION(BlueprintCallable, Category = "Skill")
-    void RotateOwnerToMouseCursor();
+    UFUNCTION(BlueprintPure, Category = "Skill")
+    bool IsAiming() const { return CurrentSkillState == EPlayerSkillState::Aiming; }
 
     UFUNCTION(BlueprintPure, Category = "Skill")
-    EPlayerSkillState GetCurrentSkillState() const { return CurrentSkillState; }
+    bool IsCasting() const { return CurrentSkillState == EPlayerSkillState::Casting; }
 
-    UPROPERTY(BlueprintAssignable, Category = "Skill|Events")
+    UFUNCTION(BlueprintPure, Category = "Skill")
+    bool IsCharging() const { return CurrentSkillState == EPlayerSkillState::Charging; }
+
+    UFUNCTION(BlueprintPure, Category = "Skill")
+    bool IsHolding() const { return CurrentSkillState == EPlayerSkillState::Holding; }
+
+    UFUNCTION(BlueprintPure, Category = "Skill")
+    EPlayerSkillState GetSkillState() const { return CurrentSkillState; }
+
+    UPROPERTY(BlueprintAssignable, Category = "Skill|UI")
     FOnSkillCooldownChanged OnSkillCooldownChanged;
+
+    UPROPERTY(BlueprintAssignable, Category = "Skill|UI")
+    FOnCastProgressChanged OnCastProgressChanged;
+
+    UPROPERTY(BlueprintAssignable, Category = "Skill|UI")
+    FOnCastStateChanged OnCastStateChanged;
 
 protected:
     virtual void BeginPlay() override;
 
-    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Skill|Equipped")
-    TMap<ESkillSlot, URLSkillData*> EquippedSkills;
-
-    UPROPERTY()
-    TMap<ESkillSlot, float> CooldownEndTimes;
-
-    UPROPERTY(BlueprintReadOnly, Category = "Skill|State")
-    EPlayerSkillState CurrentSkillState = EPlayerSkillState::Idle;
-
-    UPROPERTY(BlueprintReadOnly, Category = "Skill|State")
-    float CurrentAccumulatedTime = 0.0f;
-
-    UPROPERTY(BlueprintReadOnly, Category = "Skill|State")
-    ESkillSlot CurrentActiveSlot;
-
-    // 바닥 데칼 인디케이터 액터
-    UPROPERTY()
-    ARLDecalIndicator* DecalIndicator;
-
-private:
     UPROPERTY()
     ARLCharacter* OwnerCharacter;
 
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Skill")
+    TMap<ESkillSlot, URLSkillData*> EquippedSkills;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Skill")
+    TMap<ESkillSlot, float> CooldownEndTimes;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Skill")
+    EPlayerSkillState CurrentSkillState = EPlayerSkillState::Idle;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Skill")
+    ESkillSlot CurrentActiveSlot = ESkillSlot::Slot_Q;
+
+    UPROPERTY()
+    float CurrentAccumulatedTime = 0.0f;
+
+    UPROPERTY()
+    float LastHoldTickTime = 0.0f;
+
+    // 캐스팅 성공 시 폭발할 목표 지점 좌표
+    UPROPERTY()
+    FVector PendingExplosionLocation = FVector::ZeroVector;
+
+    UPROPERTY()
+    ARLDecalIndicator* DecalIndicator;
+
     void StartGroundTargetAiming(ESkillSlot Slot);
+    void StopPlayerMovement();
+    void RotateOwnerToMouseCursor();
     FVector GetMouseGroundLocation() const;
 };

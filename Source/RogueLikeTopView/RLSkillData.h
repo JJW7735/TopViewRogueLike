@@ -46,17 +46,19 @@ public:
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Skill|Mechanic", meta = (ClampMin = "0.0"))
     float Cooldown = 5.0f;
 
-    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Skill|Mechanic", meta = (EditCondition = "CastType == ESkillCastType::Cast || CastType == ESkillCastType::Charge || CastType == ESkillCastType::Hold"))
+    // ★ GroundTarget(지점 캐스팅)에서도 CastDuration을 사용할 수 있도록 조건 추가
+    // (CastDuration이 0이면 즉발 장판, 0보다 크면 소서리스식 지점 캐스팅으로 동작!)
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Skill|Mechanic", meta = (EditCondition = "CastType == ESkillCastType::Cast || CastType == ESkillCastType::Charge || CastType == ESkillCastType::Hold || CastType == ESkillCastType::GroundTarget"))
     float CastDuration = 1.5f;
 
-    // 차징 & 홀딩 옵션
-    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Skill|Mechanic|ChargeAndHold")
+    // 차징 & 홀딩 전용 옵션
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Skill|Mechanic|ChargeAndHold", meta = (EditCondition = "CastType == ESkillCastType::Charge || CastType == ESkillCastType::Hold"))
     float MinChargeTime = 0.5f;
 
-    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Skill|Mechanic|ChargeAndHold")
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Skill|Mechanic|ChargeAndHold", meta = (EditCondition = "CastType == ESkillCastType::Charge"))
     float MaxDamageMultiplier = 2.0f;
 
-    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Skill|Mechanic|ChargeAndHold")
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Skill|Mechanic|ChargeAndHold", meta = (EditCondition = "CastType == ESkillCastType::Hold"))
     float TickDamageInterval = 0.2f;
 
     // 투사체(Projectile) 옵션
@@ -76,6 +78,7 @@ public:
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Skill|GroundTarget", meta = (EditCondition = "CastType == ESkillCastType::GroundTarget"))
     float IndicatorRadius = 250.0f;
 
+    // 애니메이션 & 전투 데이터
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Skill|Animation")
     UAnimMontage* SkillMontage;
 

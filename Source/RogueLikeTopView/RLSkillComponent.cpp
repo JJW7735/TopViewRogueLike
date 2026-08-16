@@ -14,7 +14,6 @@ void URLSkillComponent::BeginPlay()
     Super::BeginPlay();
     OwnerCharacter = Cast<ARLCharacter>(GetOwner());
 
-    // 인디케이터 액터 풀링 생성
     if (GetWorld())
     {
         FActorSpawnParameters Params;
@@ -31,28 +30,358 @@ void URLSkillComponent::TickComponent(float DeltaTime, ELevelTick TickType, FAct
 {
     Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
 
-    // 1. 장판 조준 상태: 실시간 데칼 위치 갱신
+    // 1. 조준(Aiming) 상태: 플레이어가 이동해도 마우스 커서 위치 실시간 추적
     if (CurrentSkillState == EPlayerSkillState::Aiming && DecalIndicator && OwnerCharacter)
     {
         if (URLSkillData* Skill = EquippedSkills.FindRef(CurrentActiveSlot))
         {
-            FVector MousePos = GetMouseGroundLocation();
-            FVector PlayerPos = OwnerCharacter->GetActorLocation();
-            DecalIndicator->UpdateIndicatorTransform(PlayerPos, MousePos, Skill->MaxRange);
+            DecalIndicator->UpdateIndicatorTransform(OwnerCharacter->GetActorLocation(), GetMouseGroundLocation(), Skill->MaxRange);
         }
     }
 
-    // 2. 쿨타임 UI 브로드캐스트
+    // 2. 캐스팅(Casting) 상태: 100% 도달할 때까지 게이지 누적
+    if (CurrentSkillState == EPlayerSkillState::Casting)
+    {
+        URLSkillData* Skill = EquippedSkills.FindRef(CurrentActiveSlot);
+        if (!Skill)
+        {
+            InterruptCasting(TEXT("스킬 데이터 누락"));
+            return;
+        }
+
+        CurrentAccumulatedTime += DeltaTime;
+        float Ratio = FMath::Clamp(CurrentAccumulatedTime / FMath::Max(0.01f, Skill->CastDuration), 0.0f, 1.0f);
+
+        // UI에 게이지 브로드캐스트
+        OnCastProgressChanged.Broadcast(CurrentActiveSlot, CurrentAccumulatedTime, Skill->CastDuration, Ratio);
+
+        // 일반 전방 캐스팅일 때만 마우스 방향 회전 허용
+        if (Skill->CastType != ESkillCastType::GroundTarget)
+        {
+            RotateOwnerToMouseCursor();
+        }
+
+        // ★ 100% 끝까지 시전 완료했을 때만 발동!
+        if (CurrentAccumulatedTime >= Skill->CastDuration)
+        {
+            FinishCasting();
+        }
+    }
+
+    // 3. 쿨타임 UI 브로드캐스트
     for (const auto& Pair : EquippedSkills)
     {
         ESkillSlot Slot = Pair.Key;
         URLSkillData* Skill = Pair.Value;
         if (Skill && IsOnCooldown(Slot))
         {
-            float Remaining = GetRemainingCooldown(Slot);
-            OnSkillCooldownChanged.Broadcast(Slot, Remaining, Skill->Cooldown);
+            OnSkillCooldownChanged.Broadcast(Slot, GetRemainingCooldown(Slot), Skill->Cooldown);
         }
     }
+}
+
+// ========================================================
+// 1. 스킬 입력 시작 (Started)
+// ========================================================
+void URLSkillComponent::OnSkillInputStarted(ESkillSlot Slot)
+{
+    if (!EquippedSkills.Contains(Slot) || !EquippedSkills[Slot]) return;
+    if (IsOnCooldown(Slot)) return;
+
+    URLSkillData* Skill = EquippedSkills[Slot];
+
+    // ① 지점 조작 스킬 (GroundTarget): 이동 멈춤 없이 조준 가이드만 활성화!
+    if (Skill->CastType == ESkillCastType::GroundTarget)
+    {
+        StartGroundTargetAiming(Slot);
+        return;
+    }
+
+    if (CurrentSkillState == EPlayerSkillState::Aiming)
+    {
+        CancelGroundCast();
+    }
+
+    if (CurrentSkillState != EPlayerSkillState::Idle) return;
+
+    CurrentActiveSlot = Slot;
+    CurrentAccumulatedTime = 0.0f;
+    LastHoldTickTime = 0.0f;
+
+    StopPlayerMovement();
+    RotateOwnerToMouseCursor();
+
+    switch (Skill->CastType)
+    {
+    case ESkillCastType::Instant:
+        if (Skill->SkillMontage) OwnerCharacter->PlayAnimMontage(Skill->SkillMontage);
+        else OwnerCharacter->CreateBoxHitbox(Skill->HitboxExtent, Skill->HitboxForwardOffset, Skill->DamageData, true);
+        CooldownEndTimes.Add(Slot, GetWorld()->GetTimeSeconds() + Skill->Cooldown);
+        CurrentSkillState = EPlayerSkillState::Idle;
+        break;
+
+    case ESkillCastType::Projectile:
+        if (Skill->SkillMontage) OwnerCharacter->PlayAnimMontage(Skill->SkillMontage);
+        if (Skill->ProjectileClass)
+        {
+            FVector SpawnLoc = OwnerCharacter->GetActorLocation() + (OwnerCharacter->GetActorForwardVector() * Skill->ProjectileSpawnForwardOffset);
+            FActorSpawnParameters SpawnParams;
+            SpawnParams.Owner = OwnerCharacter;
+            SpawnParams.Instigator = OwnerCharacter;
+            GetWorld()->SpawnActor<AActor>(Skill->ProjectileClass, SpawnLoc, OwnerCharacter->GetActorRotation(), SpawnParams);
+        }
+        CooldownEndTimes.Add(Slot, GetWorld()->GetTimeSeconds() + Skill->Cooldown);
+        CurrentSkillState = EPlayerSkillState::Idle;
+        break;
+
+    case ESkillCastType::Cast:
+        StartCasting(Slot);
+        break;
+
+    case ESkillCastType::Charge:
+        CurrentSkillState = EPlayerSkillState::Charging;
+        if (Skill->SkillMontage) OwnerCharacter->PlayAnimMontage(Skill->SkillMontage);
+        break;
+
+    case ESkillCastType::Hold:
+        CurrentSkillState = EPlayerSkillState::Holding;
+        if (Skill->SkillMontage) OwnerCharacter->PlayAnimMontage(Skill->SkillMontage);
+        break;
+
+    default:
+        break;
+    }
+}
+
+// ========================================================
+// 2. 키 누르고 있는 중 (Triggered - 차징 / 홀딩)
+// ========================================================
+void URLSkillComponent::OnSkillInputTriggered(ESkillSlot Slot)
+{
+    if (CurrentActiveSlot != Slot) return;
+
+    URLSkillData* Skill = EquippedSkills.FindRef(Slot);
+    if (!Skill) return;
+
+    if (CurrentSkillState == EPlayerSkillState::Holding)
+    {
+        RotateOwnerToMouseCursor();
+        CurrentAccumulatedTime += GetWorld()->GetDeltaSeconds();
+
+        if (CurrentAccumulatedTime - LastHoldTickTime >= Skill->TickDamageInterval)
+        {
+            LastHoldTickTime = CurrentAccumulatedTime;
+            OwnerCharacter->CreateBoxHitbox(Skill->HitboxExtent, Skill->HitboxForwardOffset, Skill->DamageData, false);
+        }
+
+        if (CurrentAccumulatedTime >= Skill->CastDuration)
+        {
+            OnSkillInputCompleted(Slot);
+        }
+    }
+    else if (CurrentSkillState == EPlayerSkillState::Charging)
+    {
+        RotateOwnerToMouseCursor();
+        CurrentAccumulatedTime = FMath::Min(CurrentAccumulatedTime + GetWorld()->GetDeltaSeconds(), Skill->CastDuration);
+    }
+}
+
+// ========================================================
+// 3. 키 뗌 (Completed)
+// ========================================================
+void URLSkillComponent::OnSkillInputCompleted(ESkillSlot Slot)
+{
+    if (CurrentSkillState == EPlayerSkillState::Casting || CurrentSkillState == EPlayerSkillState::Aiming || CurrentActiveSlot != Slot)
+    {
+        return;
+    }
+
+    URLSkillData* Skill = EquippedSkills.FindRef(Slot);
+    if (!Skill) return;
+
+    if (CurrentSkillState == EPlayerSkillState::Charging)
+    {
+        float Multiplier = 1.0f;
+        if (CurrentAccumulatedTime >= Skill->MinChargeTime)
+        {
+            float Denominator = FMath::Max(0.01f, Skill->CastDuration - Skill->MinChargeTime);
+            float Alpha = FMath::Clamp((CurrentAccumulatedTime - Skill->MinChargeTime) / Denominator, 0.0f, 1.0f);
+            Multiplier = FMath::Lerp(1.0f, Skill->MaxDamageMultiplier, Alpha);
+        }
+
+        FRLDamageData FinalDamage = Skill->DamageData;
+        FinalDamage.BaseDamage *= Multiplier;
+
+        OwnerCharacter->CreateBoxHitbox(Skill->HitboxExtent, Skill->HitboxForwardOffset, FinalDamage, true);
+        CooldownEndTimes.Add(Slot, GetWorld()->GetTimeSeconds() + Skill->Cooldown);
+    }
+    else if (CurrentSkillState == EPlayerSkillState::Holding)
+    {
+        if (Skill->SkillMontage) OwnerCharacter->StopAnimMontage(Skill->SkillMontage);
+        CooldownEndTimes.Add(Slot, GetWorld()->GetTimeSeconds() + Skill->Cooldown);
+    }
+
+    CurrentSkillState = EPlayerSkillState::Idle;
+    CurrentAccumulatedTime = 0.0f;
+}
+
+// ========================================================
+// 4. 좌클릭 확정 (ConfirmGroundCast) ➔ 이동 멈추고 캐스팅 돌입
+// ========================================================
+void URLSkillComponent::ConfirmGroundCast()
+{
+    if (CurrentSkillState != EPlayerSkillState::Aiming || !DecalIndicator || !OwnerCharacter) return;
+
+    URLSkillData* Skill = EquippedSkills.FindRef(CurrentActiveSlot);
+    if (!Skill) return;
+
+    // 1. 마우스로 찍은 목표 위치 저장
+    PendingExplosionLocation = DecalIndicator->GetTargetLocation();
+
+    // 2. 캐릭터 회전 및 이동 정지
+    FVector Dir = (PendingExplosionLocation - OwnerCharacter->GetActorLocation()).GetSafeNormal2D();
+    if (!Dir.IsNearlyZero())
+    {
+        OwnerCharacter->SetActorRotation(FRotator(0.f, Dir.Rotation().Yaw, 0.f));
+    }
+    StopPlayerMovement();
+
+    // 3. 지점 캐스팅 모드 시작 (CastDuration > 0)
+    if (Skill->CastDuration > 0.0f)
+    {
+        CurrentSkillState = EPlayerSkillState::Casting;
+        CurrentAccumulatedTime = 0.0f;
+
+        // 바닥에 장판 고정
+        DecalIndicator->LockTargetLocation(PendingExplosionLocation);
+
+        if (Skill->SkillMontage)
+        {
+            OwnerCharacter->PlayAnimMontage(Skill->SkillMontage);
+        }
+
+        // 캐스팅 UI 켜기
+        OnCastStateChanged.Broadcast(CurrentActiveSlot, true);
+    }
+    else
+    {
+        // 시전 시간이 0이면 즉발 폭발
+        if (Skill->SkillMontage)
+        {
+            OwnerCharacter->PlayAnimMontage(Skill->SkillMontage);
+        }
+
+        OwnerCharacter->CreateLocationHitbox(PendingExplosionLocation, Skill->IndicatorRadius, Skill->DamageData, true);
+        CooldownEndTimes.Add(CurrentActiveSlot, GetWorld()->GetTimeSeconds() + Skill->Cooldown);
+
+        DecalIndicator->SetIndicatorVisibility(false);
+        CurrentSkillState = EPlayerSkillState::Idle;
+    }
+}
+
+// ========================================================
+// 5. ★ 캐스팅 100% 완료 ➔ 이때만 데미지 발동 & 쿨타임 등록
+// ========================================================
+void URLSkillComponent::FinishCasting()
+{
+    if (CurrentSkillState != EPlayerSkillState::Casting || !OwnerCharacter) return;
+
+    URLSkillData* Skill = EquippedSkills.FindRef(CurrentActiveSlot);
+    if (Skill)
+    {
+        // ① 지점 캐스팅 스킬 ➔ 목표 지점에 강력한 폭발 발생!
+        if (Skill->CastType == ESkillCastType::GroundTarget)
+        {
+            OwnerCharacter->CreateLocationHitbox(PendingExplosionLocation, Skill->IndicatorRadius, Skill->DamageData, true);
+        }
+        // ② 전방 캐스팅 스킬 ➔ 전방 박스 판정 발생
+        else
+        {
+            OwnerCharacter->CreateBoxHitbox(Skill->HitboxExtent, Skill->HitboxForwardOffset, Skill->DamageData, true);
+        }
+
+        // 쿨타임 등록 (성공 시에만 적용)
+        CooldownEndTimes.Add(CurrentActiveSlot, GetWorld()->GetTimeSeconds() + Skill->Cooldown);
+    }
+
+    // 장판 데칼 끄기 & UI 닫기
+    if (DecalIndicator)
+    {
+        DecalIndicator->SetIndicatorVisibility(false);
+    }
+
+    OnCastStateChanged.Broadcast(CurrentActiveSlot, false);
+    CurrentSkillState = EPlayerSkillState::Idle;
+    CurrentAccumulatedTime = 0.0f;
+}
+
+// ========================================================
+// 6. ★ 캐스팅 도중 끊김/취소 ➔ 스킬 완전 불발 (장판 삭제 & 데미지 0)
+// ========================================================
+void URLSkillComponent::InterruptCasting(const FString& Reason)
+{
+    if (CurrentSkillState != EPlayerSkillState::Casting) return;
+
+    URLSkillData* Skill = EquippedSkills.FindRef(CurrentActiveSlot);
+    if (OwnerCharacter && Skill && Skill->SkillMontage)
+    {
+        OwnerCharacter->StopAnimMontage(Skill->SkillMontage);
+    }
+
+    // ★ 장판 데칼 즉시 삭제 (바닥에 남아있지 않음)
+    if (DecalIndicator)
+    {
+        DecalIndicator->SetIndicatorVisibility(false);
+    }
+
+    // 캐스팅 UI 끄기
+    OnCastStateChanged.Broadcast(CurrentActiveSlot, false);
+
+    // ★ 데미지 판정 없이 상태만 초기화 (스킬 완전 실패)
+    CurrentSkillState = EPlayerSkillState::Idle;
+    CurrentAccumulatedTime = 0.0f;
+}
+
+void URLSkillComponent::CancelGroundCast()
+{
+    if (CurrentSkillState != EPlayerSkillState::Aiming) return;
+
+    CurrentSkillState = EPlayerSkillState::Idle;
+    if (DecalIndicator)
+    {
+        DecalIndicator->SetIndicatorVisibility(false);
+    }
+}
+
+void URLSkillComponent::StartCasting(ESkillSlot Slot)
+{
+    URLSkillData* Skill = EquippedSkills.FindRef(Slot);
+    if (!Skill || !OwnerCharacter) return;
+
+    CurrentSkillState = EPlayerSkillState::Casting;
+    CurrentActiveSlot = Slot;
+    CurrentAccumulatedTime = 0.0f;
+
+    StopPlayerMovement();
+
+    if (Skill->SkillMontage)
+    {
+        OwnerCharacter->PlayAnimMontage(Skill->SkillMontage);
+    }
+
+    OnCastStateChanged.Broadcast(Slot, true);
+}
+
+void URLSkillComponent::StartGroundTargetAiming(ESkillSlot Slot)
+{
+    URLSkillData* Skill = EquippedSkills.FindRef(Slot);
+    if (!Skill || !DecalIndicator) return;
+
+    CurrentSkillState = EPlayerSkillState::Aiming;
+    CurrentActiveSlot = Slot;
+
+    DecalIndicator->SetupIndicator(EIndicatorType::Circle, Skill->IndicatorRadius, Skill->MaxRange);
+    DecalIndicator->SetIndicatorVisibility(true);
 }
 
 void URLSkillComponent::EquipSkill(ESkillSlot Slot, URLSkillData* NewSkill)
@@ -72,24 +401,32 @@ float URLSkillComponent::GetRemainingCooldown(ESkillSlot Slot) const
     return FMath::Max(0.0f, CooldownEndTimes[Slot] - GetWorld()->GetTimeSeconds());
 }
 
+void URLSkillComponent::StopPlayerMovement()
+{
+    if (!OwnerCharacter) return;
+    if (OwnerCharacter->GetCharacterMovement())
+    {
+        OwnerCharacter->GetCharacterMovement()->StopMovementImmediately();
+    }
+    if (APlayerController* PC = Cast<APlayerController>(OwnerCharacter->GetController()))
+    {
+        PC->StopMovement();
+    }
+}
+
 void URLSkillComponent::RotateOwnerToMouseCursor()
 {
     if (!OwnerCharacter) return;
-
     APlayerController* PC = Cast<APlayerController>(OwnerCharacter->GetController());
     if (!PC) return;
 
     FHitResult Hit;
     if (PC->GetHitResultUnderCursor(ECC_Visibility, true, Hit))
     {
-        FVector ImpactPoint = Hit.ImpactPoint;
-        FVector CharLoc = OwnerCharacter->GetActorLocation();
-
-        FVector LookDir = (ImpactPoint - CharLoc).GetSafeNormal2D();
+        FVector LookDir = (Hit.ImpactPoint - OwnerCharacter->GetActorLocation()).GetSafeNormal2D();
         if (!LookDir.IsNearlyZero())
         {
-            FRotator TargetRot = LookDir.Rotation();
-            OwnerCharacter->SetActorRotation(FRotator(0.f, TargetRot.Yaw, 0.f));
+            OwnerCharacter->SetActorRotation(FRotator(0.f, LookDir.Rotation().Yaw, 0.f));
         }
     }
 }
@@ -106,215 +443,4 @@ FVector URLSkillComponent::GetMouseGroundLocation() const
         return Hit.ImpactPoint;
     }
     return OwnerCharacter->GetActorLocation();
-}
-
-void URLSkillComponent::OnSkillInputStarted(ESkillSlot Slot)
-{
-    if (!EquippedSkills.Contains(Slot) || !EquippedSkills[Slot]) return;
-    if (IsOnCooldown(Slot)) return;
-
-    URLSkillData* Skill = EquippedSkills[Slot];
-
-    // 1. 장판 지정 스킬 (GroundTarget)
-    if (Skill->CastType == ESkillCastType::GroundTarget)
-    {
-        if (OwnerCharacter)
-        {
-            if (OwnerCharacter->GetCharacterMovement())
-            {
-                OwnerCharacter->GetCharacterMovement()->StopMovementImmediately();
-            }
-            if (APlayerController* PC = Cast<APlayerController>(OwnerCharacter->GetController()))
-            {
-                PC->StopMovement();
-            }
-        }
-
-        StartGroundTargetAiming(Slot);
-        return;
-    }
-
-    // 다른 스킬 입력 시 장판 조준 취소
-    if (CurrentSkillState == EPlayerSkillState::Aiming)
-    {
-        CancelGroundCast();
-    }
-
-    if (CurrentSkillState != EPlayerSkillState::Idle) return;
-
-    CurrentActiveSlot = Slot;
-    CurrentAccumulatedTime = 0.0f;
-
-    if (OwnerCharacter && OwnerCharacter->GetCharacterMovement())
-    {
-        OwnerCharacter->GetCharacterMovement()->StopMovementImmediately();
-    }
-
-    RotateOwnerToMouseCursor();
-
-    switch (Skill->CastType)
-    {
-    case ESkillCastType::Instant:
-        if (Skill->SkillMontage)
-        {
-            OwnerCharacter->PlayAnimMontage(Skill->SkillMontage);
-        }
-        else
-        {
-            OwnerCharacter->CreateBoxHitbox(Skill->HitboxExtent, Skill->HitboxForwardOffset, Skill->DamageData, true);
-        }
-        CooldownEndTimes.Add(Slot, GetWorld()->GetTimeSeconds() + Skill->Cooldown);
-        CurrentSkillState = EPlayerSkillState::Idle;
-        break;
-
-        // ★ 투사체 발사 복구
-    case ESkillCastType::Projectile:
-        if (OwnerCharacter && Skill->ProjectileClass)
-        {
-            if (Skill->SkillMontage)
-            {
-                OwnerCharacter->PlayAnimMontage(Skill->SkillMontage);
-            }
-
-            FVector Forward = OwnerCharacter->GetActorForwardVector();
-            FVector SpawnLocation = OwnerCharacter->GetActorLocation() + (Forward * Skill->ProjectileSpawnForwardOffset);
-            FRotator SpawnRotation = OwnerCharacter->GetActorRotation();
-
-            FActorSpawnParameters SpawnParams;
-            SpawnParams.Owner = OwnerCharacter;
-            SpawnParams.Instigator = OwnerCharacter;
-
-            GetWorld()->SpawnActor<AActor>(Skill->ProjectileClass, SpawnLocation, SpawnRotation, SpawnParams);
-        }
-        CooldownEndTimes.Add(Slot, GetWorld()->GetTimeSeconds() + Skill->Cooldown);
-        CurrentSkillState = EPlayerSkillState::Idle;
-        break;
-
-    case ESkillCastType::Cast:
-        CurrentSkillState = EPlayerSkillState::Casting;
-        break;
-
-    case ESkillCastType::Charge:
-        CurrentSkillState = EPlayerSkillState::Charging;
-        break;
-
-    case ESkillCastType::Hold:
-        CurrentSkillState = EPlayerSkillState::Holding;
-        break;
-
-    default:
-        break;
-    }
-}
-
-void URLSkillComponent::OnSkillInputTriggered(ESkillSlot Slot)
-{
-    if (CurrentSkillState == EPlayerSkillState::Aiming || CurrentSkillState == EPlayerSkillState::Idle || CurrentActiveSlot != Slot)
-    {
-        return;
-    }
-
-    CurrentAccumulatedTime += GetWorld()->GetDeltaSeconds();
-    URLSkillData* Skill = EquippedSkills[Slot];
-    if (!Skill) return;
-
-    RotateOwnerToMouseCursor();
-
-    if (CurrentAccumulatedTime >= Skill->CastDuration)
-    {
-        OnSkillInputCompleted(Slot);
-    }
-}
-
-void URLSkillComponent::OnSkillInputCompleted(ESkillSlot Slot)
-{
-    if (CurrentSkillState == EPlayerSkillState::Aiming || CurrentSkillState == EPlayerSkillState::Idle || CurrentActiveSlot != Slot)
-    {
-        return;
-    }
-
-    URLSkillData* Skill = EquippedSkills.FindRef(Slot);
-    if (!Skill) return;
-
-    if (CurrentSkillState == EPlayerSkillState::Charging)
-    {
-        float Multiplier = 1.0f;
-        if (CurrentAccumulatedTime >= Skill->MinChargeTime)
-        {
-            float Alpha = FMath::Clamp(CurrentAccumulatedTime / Skill->CastDuration, 0.0f, 1.0f);
-            Multiplier = FMath::Lerp(1.0f, Skill->MaxDamageMultiplier, Alpha);
-        }
-
-        FRLDamageData FinalDamage = Skill->DamageData;
-        FinalDamage.BaseDamage *= Multiplier;
-
-        if (Skill->SkillMontage) OwnerCharacter->PlayAnimMontage(Skill->SkillMontage);
-        else OwnerCharacter->CreateBoxHitbox(Skill->HitboxExtent, Skill->HitboxForwardOffset, FinalDamage, true);
-    }
-    else if (CurrentSkillState == EPlayerSkillState::Casting)
-    {
-        if (Skill->SkillMontage) OwnerCharacter->PlayAnimMontage(Skill->SkillMontage);
-        else OwnerCharacter->CreateBoxHitbox(Skill->HitboxExtent, Skill->HitboxForwardOffset, Skill->DamageData, true);
-    }
-
-    CooldownEndTimes.Add(Slot, GetWorld()->GetTimeSeconds() + Skill->Cooldown);
-    CurrentSkillState = EPlayerSkillState::Idle;
-    CurrentAccumulatedTime = 0.0f;
-}
-
-bool URLSkillComponent::TryCastSkill(ESkillSlot Slot)
-{
-    OnSkillInputStarted(Slot);
-    return true;
-}
-
-void URLSkillComponent::StartGroundTargetAiming(ESkillSlot Slot)
-{
-    URLSkillData* Skill = EquippedSkills.FindRef(Slot);
-    if (!Skill || !DecalIndicator) return;
-
-    CurrentSkillState = EPlayerSkillState::Aiming;
-    CurrentActiveSlot = Slot;
-
-    DecalIndicator->SetupIndicator(EIndicatorType::Circle, Skill->IndicatorRadius, Skill->MaxRange);
-    DecalIndicator->SetIndicatorVisibility(true);
-}
-
-void URLSkillComponent::ConfirmGroundCast()
-{
-    if (CurrentSkillState != EPlayerSkillState::Aiming || !DecalIndicator || !OwnerCharacter) return;
-
-    URLSkillData* Skill = EquippedSkills.FindRef(CurrentActiveSlot);
-    if (Skill)
-    {
-        FVector TargetPos = DecalIndicator->GetTargetLocation();
-
-        FVector Dir = (TargetPos - OwnerCharacter->GetActorLocation()).GetSafeNormal2D();
-        if (!Dir.IsNearlyZero())
-        {
-            OwnerCharacter->SetActorRotation(FRotator(0.f, Dir.Rotation().Yaw, 0.f));
-        }
-
-        if (Skill->SkillMontage)
-        {
-            OwnerCharacter->PlayAnimMontage(Skill->SkillMontage);
-        }
-
-        OwnerCharacter->CreateLocationHitbox(TargetPos, Skill->IndicatorRadius, Skill->DamageData, true);
-        CooldownEndTimes.Add(CurrentActiveSlot, GetWorld()->GetTimeSeconds() + Skill->Cooldown);
-    }
-
-    CurrentSkillState = EPlayerSkillState::Idle;
-    DecalIndicator->SetIndicatorVisibility(false);
-}
-
-void URLSkillComponent::CancelGroundCast()
-{
-    if (CurrentSkillState != EPlayerSkillState::Aiming) return;
-
-    CurrentSkillState = EPlayerSkillState::Idle;
-    if (DecalIndicator)
-    {
-        DecalIndicator->SetIndicatorVisibility(false);
-    }
 }

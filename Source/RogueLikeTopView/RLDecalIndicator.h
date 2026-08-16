@@ -27,9 +27,10 @@ public:
     void SetupIndicator(EIndicatorType Type, float Radius, float MaxRange);
     void SetIndicatorVisibility(bool bVisible);
 
-    // ★ 실제 조준 지점 반환 함수
-    UFUNCTION(BlueprintPure, Category = "Indicator")
-    FVector GetTargetLocation() const { return CurrentTargetLocation; }
+    // ★ 이 함수 선언 추가!
+    void LockTargetLocation(const FVector& LockedLocation);
+
+    virtual FVector GetTargetLocation(AActor* RequestedBy = nullptr) const override { return CurrentTargetLocation; }
 
 protected:
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")

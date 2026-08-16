@@ -1,4 +1,4 @@
-#include "RLPlayerController.h"
+ï»¿#include "RLPlayerController.h"
 #include "RLCharacter.h"
 #include "EnhancedInputComponent.h"
 #include "EnhancedInputSubsystems.h"
@@ -31,7 +31,7 @@ void ARLPlayerController::SetupInputComponent()
 
     if (UEnhancedInputComponent* EnhancedInputComponent = Cast<UEnhancedInputComponent>(InputComponent))
     {
-        // 1. ÀÌµ¿ ¹× ±âº» °ø°İ ¹ÙÀÎµù
+        // 1. ì´ë™ ë° ê¸°ë³¸ ê³µê²© ë°”ì¸ë”©
         if (RightClickMoveAction)
         {
             EnhancedInputComponent->BindAction(RightClickMoveAction, ETriggerEvent::Started, this, &ARLPlayerController::OnMoveStarted);
@@ -42,7 +42,7 @@ void ARLPlayerController::SetupInputComponent()
             EnhancedInputComponent->BindAction(TestAttackAction, ETriggerEvent::Started, this, &ARLPlayerController::OnTestAttack);
         }
 
-        // 2. Q ½ºÅ³ ¹ÙÀÎµù
+        // 2. Q ìŠ¤í‚¬ ë°”ì¸ë”©
         if (SkillQ_Action)
         {
             EnhancedInputComponent->BindAction(SkillQ_Action, ETriggerEvent::Started, this, &ARLPlayerController::OnSkillQ_Started);
@@ -50,7 +50,7 @@ void ARLPlayerController::SetupInputComponent()
             EnhancedInputComponent->BindAction(SkillQ_Action, ETriggerEvent::Completed, this, &ARLPlayerController::OnSkillQ_Completed);
         }
 
-        // 3. W ½ºÅ³ ¹ÙÀÎµù
+        // 3. W ìŠ¤í‚¬ ë°”ì¸ë”©
         if (SkillW_Action)
         {
             EnhancedInputComponent->BindAction(SkillW_Action, ETriggerEvent::Started, this, &ARLPlayerController::OnSkillW_Started);
@@ -58,7 +58,7 @@ void ARLPlayerController::SetupInputComponent()
             EnhancedInputComponent->BindAction(SkillW_Action, ETriggerEvent::Completed, this, &ARLPlayerController::OnSkillW_Completed);
         }
 
-        // 4. E ½ºÅ³ ¹ÙÀÎµù
+        // 4. E ìŠ¤í‚¬ ë°”ì¸ë”©
         if (SkillE_Action)
         {
             EnhancedInputComponent->BindAction(SkillE_Action, ETriggerEvent::Started, this, &ARLPlayerController::OnSkillE_Started);
@@ -66,7 +66,7 @@ void ARLPlayerController::SetupInputComponent()
             EnhancedInputComponent->BindAction(SkillE_Action, ETriggerEvent::Completed, this, &ARLPlayerController::OnSkillE_Completed);
         }
 
-        // 5. R ½ºÅ³ ¹ÙÀÎµù
+        // 5. R ìŠ¤í‚¬ ë°”ì¸ë”©
         if (SkillR_Action)
         {
             EnhancedInputComponent->BindAction(SkillR_Action, ETriggerEvent::Started, this, &ARLPlayerController::OnSkillR_Started);
@@ -82,7 +82,7 @@ void ARLPlayerController::OnTestAttack()
     {
         if (URLSkillComponent* SkillComp = ControlledChar->GetSkillComponent())
         {
-            // ¡Ú ÀåÆÇ Á¶ÁØ ¸ğµåÀÏ ¶§ ÁÂÅ¬¸¯ -> ½ºÅ³ ½ÃÀü È®Á¤!
+            // â˜… ì¥íŒ ì¡°ì¤€ ëª¨ë“œì¼ ë•Œ ì¢Œí´ë¦­ -> ìŠ¤í‚¬ ì‹œì „ í™•ì •!
             if (SkillComp->IsAiming())
             {
                 SkillComp->ConfirmGroundCast();
@@ -90,7 +90,7 @@ void ARLPlayerController::OnTestAttack()
             }
         }
 
-        // Æò»ó½Ã ±âº» °ø°İ
+        // í‰ìƒì‹œ ê¸°ë³¸ ê³µê²©
         ControlledChar->TestAttack();
     }
 }
@@ -101,11 +101,16 @@ void ARLPlayerController::OnMoveStarted()
     {
         if (URLSkillComponent* SkillComp = ControlledChar->GetSkillComponent())
         {
-            // ¡Ú ÀåÆÇ Á¶ÁØ Áß ¿ìÅ¬¸¯ ½Ã ÀÌµ¿ÇÏÁö ¾Ê°í Á¶ÁØ Ãë¼Ò!
+            // â˜… ì¥íŒ ì¡°ì¤€ ì¤‘ ìš°í´ë¦­ ì‹œ ì´ë™í•˜ì§€ ì•Šê³  ì¡°ì¤€ ì·¨ì†Œ!
             if (SkillComp->IsAiming())
             {
                 SkillComp->CancelGroundCast();
                 return;
+            }
+
+            if (SkillComp->IsCasting())
+            {
+                SkillComp->InterruptCasting(TEXT("ì´ë™ ëª…ë ¹ìœ¼ë¡œ ì¸í•œ ì‹œì „ ì·¨ì†Œ"));
             }
         }
     }
@@ -131,7 +136,7 @@ void ARLPlayerController::OnMoveTriggered()
     {
         if (URLSkillComponent* SkillComp = ControlledChar->GetSkillComponent())
         {
-            // ¡Ú Á¶ÁØ Áß¿¡´Â ¿ìÅ¬¸¯ ÀÌµ¿ Â÷´Ü
+            // â˜… ì¡°ì¤€ ì¤‘ì—ëŠ” ìš°í´ë¦­ ì´ë™ ì°¨ë‹¨
             if (SkillComp->IsAiming()) return;
         }
     }
@@ -144,7 +149,7 @@ void ARLPlayerController::OnMoveTriggered()
 }
 
 // ==========================================
-// Q ½ºÅ³ ¹ßµ¿ ·ÎÁ÷
+// Q ìŠ¤í‚¬ ë°œë™ ë¡œì§
 // ==========================================
 void ARLPlayerController::OnSkillQ_Started()
 {
@@ -166,7 +171,7 @@ void ARLPlayerController::OnSkillQ_Completed()
 }
 
 // ==========================================
-// W ½ºÅ³ ¹ßµ¿ ·ÎÁ÷
+// W ìŠ¤í‚¬ ë°œë™ ë¡œì§
 // ==========================================
 void ARLPlayerController::OnSkillW_Started()
 {
@@ -188,7 +193,7 @@ void ARLPlayerController::OnSkillW_Completed()
 }
 
 // ==========================================
-// E ½ºÅ³ ¹ßµ¿ ·ÎÁ÷
+// E ìŠ¤í‚¬ ë°œë™ ë¡œì§
 // ==========================================
 void ARLPlayerController::OnSkillE_Started()
 {
@@ -210,7 +215,7 @@ void ARLPlayerController::OnSkillE_Completed()
 }
 
 // ==========================================
-// R ½ºÅ³ ¹ßµ¿ ·ÎÁ÷
+// R ìŠ¤í‚¬ ë°œë™ ë¡œì§
 // ==========================================
 void ARLPlayerController::OnSkillR_Started()
 {
