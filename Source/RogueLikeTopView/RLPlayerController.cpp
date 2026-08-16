@@ -31,18 +31,22 @@ void ARLPlayerController::SetupInputComponent()
 
     if (UEnhancedInputComponent* EnhancedInputComponent = Cast<UEnhancedInputComponent>(InputComponent))
     {
-        // 1. 이동 및 기본 공격 바인딩
+        // 1. 이동 바인딩 (우클릭)
         if (RightClickMoveAction)
         {
             EnhancedInputComponent->BindAction(RightClickMoveAction, ETriggerEvent::Started, this, &ARLPlayerController::OnMoveStarted);
             EnhancedInputComponent->BindAction(RightClickMoveAction, ETriggerEvent::Triggered, this, &ARLPlayerController::OnMoveTriggered);
         }
-        if (TestAttackAction)
+
+        // 2. 기본 공격 바인딩 (좌클릭) - 기존 TestAttack 대체
+        if (BasicAttackAction)
         {
-            EnhancedInputComponent->BindAction(TestAttackAction, ETriggerEvent::Started, this, &ARLPlayerController::OnTestAttack);
+            EnhancedInputComponent->BindAction(BasicAttackAction, ETriggerEvent::Started, this, &ARLPlayerController::OnBasicAttack_Started);
+            EnhancedInputComponent->BindAction(BasicAttackAction, ETriggerEvent::Triggered, this, &ARLPlayerController::OnBasicAttack_Triggered);
+            EnhancedInputComponent->BindAction(BasicAttackAction, ETriggerEvent::Completed, this, &ARLPlayerController::OnBasicAttack_Completed);
         }
 
-        // 2. Q 스킬 바인딩
+        // 3. Q 스킬 바인딩
         if (SkillQ_Action)
         {
             EnhancedInputComponent->BindAction(SkillQ_Action, ETriggerEvent::Started, this, &ARLPlayerController::OnSkillQ_Started);
@@ -50,7 +54,7 @@ void ARLPlayerController::SetupInputComponent()
             EnhancedInputComponent->BindAction(SkillQ_Action, ETriggerEvent::Completed, this, &ARLPlayerController::OnSkillQ_Completed);
         }
 
-        // 3. W 스킬 바인딩
+        // 4. W 스킬 바인딩
         if (SkillW_Action)
         {
             EnhancedInputComponent->BindAction(SkillW_Action, ETriggerEvent::Started, this, &ARLPlayerController::OnSkillW_Started);
@@ -58,7 +62,7 @@ void ARLPlayerController::SetupInputComponent()
             EnhancedInputComponent->BindAction(SkillW_Action, ETriggerEvent::Completed, this, &ARLPlayerController::OnSkillW_Completed);
         }
 
-        // 4. E 스킬 바인딩
+        // 5. E 스킬 바인딩
         if (SkillE_Action)
         {
             EnhancedInputComponent->BindAction(SkillE_Action, ETriggerEvent::Started, this, &ARLPlayerController::OnSkillE_Started);
@@ -66,7 +70,7 @@ void ARLPlayerController::SetupInputComponent()
             EnhancedInputComponent->BindAction(SkillE_Action, ETriggerEvent::Completed, this, &ARLPlayerController::OnSkillE_Completed);
         }
 
-        // 5. R 스킬 바인딩
+        // 6. R 스킬 바인딩
         if (SkillR_Action)
         {
             EnhancedInputComponent->BindAction(SkillR_Action, ETriggerEvent::Started, this, &ARLPlayerController::OnSkillR_Started);
@@ -76,7 +80,10 @@ void ARLPlayerController::SetupInputComponent()
     }
 }
 
-void ARLPlayerController::OnTestAttack()
+// ==========================================
+// 좌클릭(기본 공격) 발동 로직
+// ==========================================
+void ARLPlayerController::OnBasicAttack_Started()
 {
     if (ARLCharacter* ControlledChar = Cast<ARLCharacter>(GetPawn()))
     {
@@ -88,13 +95,38 @@ void ARLPlayerController::OnTestAttack()
                 SkillComp->ConfirmGroundCast();
                 return;
             }
-        }
 
-        // 평상시 기본 공격
-        ControlledChar->TestAttack();
+            // 평상시: 기본 공격 스킬(Slot_LMB) 시작
+            SkillComp->OnSkillInputStarted(ESkillSlot::Slot_LMB);
+        }
     }
 }
 
+void ARLPlayerController::OnBasicAttack_Triggered()
+{
+    if (ARLCharacter* RLChar = Cast<ARLCharacter>(GetPawn()))
+    {
+        if (URLSkillComponent* SkillComp = RLChar->GetSkillComponent())
+        {
+            SkillComp->OnSkillInputTriggered(ESkillSlot::Slot_LMB);
+        }
+    }
+}
+
+void ARLPlayerController::OnBasicAttack_Completed()
+{
+    if (ARLCharacter* RLChar = Cast<ARLCharacter>(GetPawn()))
+    {
+        if (URLSkillComponent* SkillComp = RLChar->GetSkillComponent())
+        {
+            SkillComp->OnSkillInputCompleted(ESkillSlot::Slot_LMB);
+        }
+    }
+}
+
+// ==========================================
+// 이동 발동 로직
+// ==========================================
 void ARLPlayerController::OnMoveStarted()
 {
     if (ARLCharacter* ControlledChar = Cast<ARLCharacter>(GetPawn()))

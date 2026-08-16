@@ -28,7 +28,7 @@ protected:
 	UInputAction* RightClickMoveAction;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input|Combat")
-	UInputAction* TestAttackAction;
+	UInputAction* BasicAttackAction;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "FX")
 	UNiagaraSystem* FXCursor;
@@ -49,7 +49,10 @@ private:
 	// 마우스 이동 & 기본 공격 핸들러
 	void OnMoveStarted();
 	void OnMoveTriggered();
-	void OnTestAttack();
+	
+	void OnBasicAttack_Started();
+	void OnBasicAttack_Triggered();
+	void OnBasicAttack_Completed();
 
 	// Q 스킬 (Started, Triggered, Completed)
 	void OnSkillQ_Started();
