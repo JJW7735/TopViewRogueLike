@@ -42,6 +42,10 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Skill")
     void CancelGroundCast();
 
+    // ★ 추가됨: 애니메이션 노티파이가 신호를 보내면, 현재 사용 중인 스킬의 데미지를 발생시키는 함수
+    UFUNCTION(BlueprintCallable, Category = "Skill")
+    void TriggerActiveSkillHit();
+
     void StartCasting(ESkillSlot Slot);
     void FinishCasting();
     void InterruptCasting(const FString& Reason = TEXT("Interrupted"));
@@ -68,6 +72,8 @@ public:
     bool IsHolding() const { return CurrentSkillState == EPlayerSkillState::Holding; }
 
     UFUNCTION(BlueprintPure, Category = "Skill")
+
+
     EPlayerSkillState GetSkillState() const { return CurrentSkillState; }
 
     UPROPERTY(BlueprintAssignable, Category = "Skill|UI")

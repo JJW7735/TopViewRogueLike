@@ -120,7 +120,7 @@ void URLSkillComponent::OnSkillInputStarted(ESkillSlot Slot)
         {
             OwnerCharacter->PlayAnimMontage(Skill->SkillMontage);
         }
-        OwnerCharacter->CreateBoxHitbox(Skill->HitboxExtent, Skill->HitboxForwardOffset, Skill->DamageData, true);
+
         
         CooldownEndTimes.Add(Slot, GetWorld()->GetTimeSeconds() + Skill->Cooldown);
         CurrentSkillState = EPlayerSkillState::Idle;
@@ -399,6 +399,19 @@ void URLSkillComponent::InterruptCasting(const FString& Reason)
     // ★ 데미지 판정 없이 상태만 초기화 (스킬 완전 실패)
     CurrentSkillState = EPlayerSkillState::Idle;
     CurrentAccumulatedTime = 0.0f;
+}
+
+void URLSkillComponent::TriggerActiveSkillHit()
+{
+    if (!OwnerCharacter) return;
+
+    // 현재 사용 중인 스킬의 데이터를 가져옵니다.
+    URLSkillData* Skill = EquippedSkills.FindRef(CurrentActiveSlot);
+    if (Skill)
+    {
+        // 스킬 데이터에 저장된 범위와 데미지로 히트박스를 생성합니다!
+        OwnerCharacter->CreateBoxHitbox(Skill->HitboxExtent, Skill->HitboxForwardOffset, Skill->DamageData, true);
+    }
 }
 
 void URLSkillComponent::CancelGroundCast()
