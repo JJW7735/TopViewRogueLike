@@ -11,6 +11,7 @@
 #include "RLSkillComponent.h"
 #include "RLSkillData.h"
 #include "DrawDebugHelpers.h"
+#include "Animation/AnimInstance.h"
 
 // Sets default values
 ARLCharacter::ARLCharacter()
@@ -187,11 +188,34 @@ void ARLCharacter::Dodge(FVector CursorLocation)
 void ARLCharacter::Tick(float DeltaTime)
 {
     Super::Tick(DeltaTime);
+
+    // ========================================================
+    // ★ 마우스 클릭(Pathfinding) & 모든 미끄러짐 완벽 방지 코드
+    // ========================================================
+    if (UAnimInstance* AnimInstance = GetMesh()->GetAnimInstance())
+    {
+        // 현재 어떤 몽타주라도 재생 중이라면?
+        if (AnimInstance->IsAnyMontagePlaying())
+        {
+            // 1. 캐릭터 무브먼트의 물리적 이동 속도를 매 프레임 즉시 0으로 만듭니다.
+            if (GetCharacterMovement())
+            {
+                GetCharacterMovement()->StopMovementImmediately();
+            }
+
+            // 2. 마우스 클릭으로 인한 길찾기(NavMesh) 이동 명령까지 완전히 취소시킵니다.
+            if (APlayerController* PC = Cast<APlayerController>(GetController()))
+            {
+                PC->StopMovement();
+            }
+        }
+    }
 }
 
 void ARLCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
 {
     Super::SetupPlayerInputComponent(PlayerInputComponent);
+    // (이곳은 키 바인딩용 함수이므로 방어 코드를 제거하고 깔끔하게 비워둡니다)
 }
 
 void ARLCharacter::CreateLocationHitbox(FVector TargetLocation, float Radius, const FRLDamageData& DamageData, bool bDrawDebug)
@@ -239,4 +263,21 @@ void ARLCharacter::CreateLocationHitbox(FVector TargetLocation, float Radius, co
             }
         }
     }
+}
+
+void ARLCharacter::AddMovementInput(FVector WorldDirection, float ScaleValue, bool bForce)
+{
+    // 1. 캐릭터의 애니메이션 인스턴스를 가져옵니다.
+    if (UAnimInstance* AnimInstance = GetMesh()->GetAnimInstance())
+    {
+        // 2. 현재 어떤 몽타주라도 재생 중이라면?
+        if (AnimInstance->IsAnyMontagePlaying())
+        {
+            // 부모 클래스의 이동 로직을 실행하지 않고 즉시 함수를 빠져나갑니다. (이동 명령 완전히 무시!)
+            return;
+        }
+    }
+
+    // 3. 몽타주가 재생 중이 아닐 때만 정상적으로 부모 클래스의 이동을 수행합니다.
+    Super::AddMovementInput(WorldDirection, ScaleValue, bForce);
 }

@@ -116,8 +116,12 @@ void URLSkillComponent::OnSkillInputStarted(ESkillSlot Slot)
     switch (Skill->CastType)
     {
     case ESkillCastType::Instant:
-        if (Skill->SkillMontage) OwnerCharacter->PlayAnimMontage(Skill->SkillMontage);
-        else OwnerCharacter->CreateBoxHitbox(Skill->HitboxExtent, Skill->HitboxForwardOffset, Skill->DamageData, true);
+        if (Skill->SkillMontage)
+        {
+            OwnerCharacter->PlayAnimMontage(Skill->SkillMontage);
+        }
+        OwnerCharacter->CreateBoxHitbox(Skill->HitboxExtent, Skill->HitboxForwardOffset, Skill->DamageData, true);
+        
         CooldownEndTimes.Add(Slot, GetWorld()->GetTimeSeconds() + Skill->Cooldown);
         CurrentSkillState = EPlayerSkillState::Idle;
         break;
