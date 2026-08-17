@@ -46,6 +46,7 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Action")
 	void Dodge(FVector CursorLocation);
 
+
 	// ★ 기존 원본 컴포넌트인 SkillComp를 반환하도록 수정
 	UFUNCTION(BlueprintPure, Category = "Skill")
 	URLSkillComponent* GetSkillComponent() const { return SkillComp; }
@@ -85,6 +86,7 @@ protected:
 
 	UFUNCTION()
 	virtual void HandleDeath();
+
 
 public:
 	virtual void Tick(float DeltaTime) override;

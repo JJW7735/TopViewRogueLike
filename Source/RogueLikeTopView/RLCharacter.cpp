@@ -178,6 +178,12 @@ void ARLCharacter::Dodge(FVector CursorLocation)
     LaunchCharacter(DashDirection * DashPower, true, true);
     SetActorRotation(DashDirection.Rotation());
 
+    // ★ 대쉬 시전 시, 기존에 재생 중이던 공격 몽타주를 강제로 캔슬!
+    if (UAnimInstance* AnimInstance = GetMesh()->GetAnimInstance())
+    {
+        AnimInstance->Montage_Stop(0.1f);
+    }
+
     // ★ 회피 시 시전 중이던 캐스팅 취소 (SkillComp 참조)
     if (SkillComp && SkillComp->IsCasting())
     {

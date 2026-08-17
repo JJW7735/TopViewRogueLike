@@ -77,6 +77,25 @@ void ARLPlayerController::SetupInputComponent()
             EnhancedInputComponent->BindAction(SkillR_Action, ETriggerEvent::Triggered, this, &ARLPlayerController::OnSkillR_Triggered);
             EnhancedInputComponent->BindAction(SkillR_Action, ETriggerEvent::Completed, this, &ARLPlayerController::OnSkillR_Completed);
         }
+
+        // ★ 7. 대쉬(회피) 바인딩 연결 (예: 스페이스바)
+        if (DodgeAction)
+        {
+            EnhancedInputComponent->BindAction(DodgeAction, ETriggerEvent::Started, this, &ARLPlayerController::OnDodge_Started);
+        }
+    }
+}
+
+void ARLPlayerController::OnDodge_Started()
+{
+    if (ARLCharacter* RLChar = Cast<ARLCharacter>(GetPawn()))
+    {
+        FHitResult Hit;
+        if (GetHitResultUnderCursor(ECollisionChannel::ECC_Visibility, true, Hit))
+        {
+            // 컨트롤러가 캐릭터에게 "저 마우스 좌표로 대쉬해!" 라고 명령만 전달
+            RLChar->Dodge(Hit.ImpactPoint);
+        }
     }
 }
 
