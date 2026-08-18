@@ -81,6 +81,10 @@ public:
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Skill|GroundTarget", meta = (EditCondition = "CastType == ESkillCastType::GroundTarget"))
     float IndicatorRadius = 250.0f;
 
+    // UCLASS() 내부의 GroundTarget 카테고리에 추가:
+    UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Skill|GroundTarget")
+    TSubclassOf<AActor> GroundActorClass;
+
     // 애니메이션 & 전투 데이터
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Skill|Animation")
     UAnimMontage* SkillMontage;

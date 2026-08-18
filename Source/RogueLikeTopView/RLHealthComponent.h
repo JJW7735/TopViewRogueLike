@@ -28,10 +28,10 @@ public:
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Health")
     float MaxHealth;
 
-    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Health")
+    UPROPERTY(VisibleAnywhere, BlueprintReadWrite, Category = "Health")
     float CurrentHealth;
 
-    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Health")
+    UPROPERTY(VisibleAnywhere, BlueprintReadWrite, Category = "Health")
     bool bIsDead;
 
     /* 체력 변경 및 사망 신호 (블루프린트 체력바에서 이 신호를 받아서 씁니다) */

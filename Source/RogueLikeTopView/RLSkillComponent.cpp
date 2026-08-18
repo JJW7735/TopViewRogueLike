@@ -63,7 +63,7 @@ void URLSkillComponent::TickComponent(float DeltaTime, ELevelTick TickType, FAct
             RotateOwnerToMouseCursor();
         }
 
-        // ★ 100% 끝까지 시전 완료했을 때만 발동!
+        // 100% 끝까지 시전 완료했을 때만 발동
         if (CurrentAccumulatedTime >= Skill->CastDuration)
         {
             FinishCasting();
@@ -92,7 +92,7 @@ void URLSkillComponent::OnSkillInputStarted(ESkillSlot Slot)
 
     URLSkillData* Skill = EquippedSkills[Slot];
 
-    // ① 지점 조작 스킬 (GroundTarget): 이동 멈춤 없이 조준 가이드만 활성화!
+    // ① 지점 조작 스킬 (GroundTarget): 조준 가이드 활성화
     if (Skill->CastType == ESkillCastType::GroundTarget)
     {
         StartGroundTargetAiming(Slot);
@@ -120,8 +120,6 @@ void URLSkillComponent::OnSkillInputStarted(ESkillSlot Slot)
         {
             OwnerCharacter->PlayAnimMontage(Skill->SkillMontage);
         }
-
-        
         CooldownEndTimes.Add(Slot, GetWorld()->GetTimeSeconds() + Skill->Cooldown);
         CurrentSkillState = EPlayerSkillState::Idle;
         break;
@@ -172,7 +170,6 @@ void URLSkillComponent::OnSkillInputStarted(ESkillSlot Slot)
         if (Skill->SkillMontage) OwnerCharacter->PlayAnimMontage(Skill->SkillMontage);
         break;
 
-
     case ESkillCastType::Buff:
     {
         if (Skill->SkillMontage) OwnerCharacter->PlayAnimMontage(Skill->SkillMontage);
@@ -194,7 +191,6 @@ void URLSkillComponent::OnSkillInputStarted(ESkillSlot Slot)
         CurrentSkillState = EPlayerSkillState::Idle;
         break;
     }
-
 
     case ESkillCastType::Hold:
         CurrentSkillState = EPlayerSkillState::Holding;
@@ -239,8 +235,8 @@ void URLSkillComponent::OnSkillInputTriggered(ESkillSlot Slot)
 
         if (CurrentAccumulatedTime >= Skill->CastDuration)
         {
-            CurrentAccumulatedTime = Skill->CastDuration; // 오차 방지를 위해 최대치로 고정
-            OnSkillInputCompleted(Slot); // 손을 떼지 않아도 강제로 완료(발사) 처리
+            CurrentAccumulatedTime = Skill->CastDuration;
+            OnSkillInputCompleted(Slot);
         }
     }
 }
@@ -285,7 +281,7 @@ void URLSkillComponent::OnSkillInputCompleted(ESkillSlot Slot)
 }
 
 // ========================================================
-// 4. 좌클릭 확정 (ConfirmGroundCast) ➔ 이동 멈추고 캐스팅 돌입
+// 4. 좌클릭 확정 (ConfirmGroundCast) ➔ 지점 설치
 // ========================================================
 void URLSkillComponent::ConfirmGroundCast()
 {
@@ -311,7 +307,6 @@ void URLSkillComponent::ConfirmGroundCast()
         CurrentSkillState = EPlayerSkillState::Casting;
         CurrentAccumulatedTime = 0.0f;
 
-        // 바닥에 장판 고정
         DecalIndicator->LockTargetLocation(PendingExplosionLocation);
 
         if (Skill->SkillMontage)
@@ -319,18 +314,34 @@ void URLSkillComponent::ConfirmGroundCast()
             OwnerCharacter->PlayAnimMontage(Skill->SkillMontage);
         }
 
-        // 캐스팅 UI 켜기
         OnCastStateChanged.Broadcast(CurrentActiveSlot, true);
     }
     else
     {
-        // 시전 시간이 0이면 즉발 폭발
+        // 시전 시간이 0이면 즉발 설치
         if (Skill->SkillMontage)
         {
             OwnerCharacter->PlayAnimMontage(Skill->SkillMontage);
         }
 
-        OwnerCharacter->CreateLocationHitbox(PendingExplosionLocation, Skill->IndicatorRadius, Skill->DamageData, true);
+        if (Skill->GroundActorClass)
+        {
+            FActorSpawnParameters SpawnParams;
+            SpawnParams.Owner = OwnerCharacter;
+            SpawnParams.Instigator = OwnerCharacter;
+
+            GetWorld()->SpawnActor<AActor>(
+                Skill->GroundActorClass,
+                PendingExplosionLocation,
+                FRotator::ZeroRotator,
+                SpawnParams
+            );
+        }
+        else
+        {
+            OwnerCharacter->CreateLocationHitbox(PendingExplosionLocation, Skill->IndicatorRadius, Skill->DamageData, true);
+        }
+
         CooldownEndTimes.Add(CurrentActiveSlot, GetWorld()->GetTimeSeconds() + Skill->Cooldown);
 
         DecalIndicator->SetIndicatorVisibility(false);
@@ -339,7 +350,7 @@ void URLSkillComponent::ConfirmGroundCast()
 }
 
 // ========================================================
-// 5. ★ 캐스팅 100% 완료 ➔ 이때만 데미지 발동 & 쿨타임 등록
+// 5. 캐스팅 100% 완료
 // ========================================================
 void URLSkillComponent::FinishCasting()
 {
@@ -348,22 +359,36 @@ void URLSkillComponent::FinishCasting()
     URLSkillData* Skill = EquippedSkills.FindRef(CurrentActiveSlot);
     if (Skill)
     {
-        // ① 지점 캐스팅 스킬 ➔ 목표 지점에 강력한 폭발 발생!
+        // ① 지점 캐스팅 스킬
         if (Skill->CastType == ESkillCastType::GroundTarget)
         {
-            OwnerCharacter->CreateLocationHitbox(PendingExplosionLocation, Skill->IndicatorRadius, Skill->DamageData, true);
+            if (Skill->GroundActorClass)
+            {
+                FActorSpawnParameters SpawnParams;
+                SpawnParams.Owner = OwnerCharacter;
+                SpawnParams.Instigator = OwnerCharacter;
+
+                GetWorld()->SpawnActor<AActor>(
+                    Skill->GroundActorClass,
+                    PendingExplosionLocation,
+                    FRotator::ZeroRotator,
+                    SpawnParams
+                );
+            }
+            else
+            {
+                OwnerCharacter->CreateLocationHitbox(PendingExplosionLocation, Skill->IndicatorRadius, Skill->DamageData, true);
+            }
         }
-        // ② 전방 캐스팅 스킬 ➔ 전방 박스 판정 발생
+        // ② 전방 캐스팅 스킬
         else
         {
             OwnerCharacter->CreateBoxHitbox(Skill->HitboxExtent, Skill->HitboxForwardOffset, Skill->DamageData, true);
         }
 
-        // 쿨타임 등록 (성공 시에만 적용)
         CooldownEndTimes.Add(CurrentActiveSlot, GetWorld()->GetTimeSeconds() + Skill->Cooldown);
     }
 
-    // 장판 데칼 끄기 & UI 닫기
     if (DecalIndicator)
     {
         DecalIndicator->SetIndicatorVisibility(false);
@@ -375,7 +400,7 @@ void URLSkillComponent::FinishCasting()
 }
 
 // ========================================================
-// 6. ★ 캐스팅 도중 끊김/취소 ➔ 스킬 완전 불발 (장판 삭제 & 데미지 0)
+// 6. 캐스팅 끊김 / 캔슬 처리 (누락되었던 함수)
 // ========================================================
 void URLSkillComponent::InterruptCasting(const FString& Reason)
 {
@@ -387,16 +412,13 @@ void URLSkillComponent::InterruptCasting(const FString& Reason)
         OwnerCharacter->StopAnimMontage(Skill->SkillMontage);
     }
 
-    // ★ 장판 데칼 즉시 삭제 (바닥에 남아있지 않음)
     if (DecalIndicator)
     {
         DecalIndicator->SetIndicatorVisibility(false);
     }
 
-    // 캐스팅 UI 끄기
     OnCastStateChanged.Broadcast(CurrentActiveSlot, false);
 
-    // ★ 데미지 판정 없이 상태만 초기화 (스킬 완전 실패)
     CurrentSkillState = EPlayerSkillState::Idle;
     CurrentAccumulatedTime = 0.0f;
 }
@@ -405,11 +427,9 @@ void URLSkillComponent::TriggerActiveSkillHit()
 {
     if (!OwnerCharacter) return;
 
-    // 현재 사용 중인 스킬의 데이터를 가져옵니다.
     URLSkillData* Skill = EquippedSkills.FindRef(CurrentActiveSlot);
     if (Skill)
     {
-        // 스킬 데이터에 저장된 범위와 데미지로 히트박스를 생성합니다!
         OwnerCharacter->CreateBoxHitbox(Skill->HitboxExtent, Skill->HitboxForwardOffset, Skill->DamageData, true);
     }
 }
@@ -515,8 +535,6 @@ FVector URLSkillComponent::GetMouseGroundLocation() const
         return Hit.ImpactPoint;
     }
     return OwnerCharacter->GetActorLocation();
-
-
 }
 
 void URLSkillComponent::EndSpeedBuff()
