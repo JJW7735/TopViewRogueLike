@@ -25,7 +25,8 @@ enum class ESkillCastType : uint8
     GroundTarget  UMETA(DisplayName = "GroundTarget"),
     Projectile    UMETA(DisplayName = "Projectile"),
     Dash          UMETA(DisplayName = "Dash"),
-    Buff          UMETA(DisplayName = "Buff")
+    Buff          UMETA(DisplayName = "Buff"),
+    ChargeDash    UMETA(DisplayName = "ChargeDash")
 };
 
 UCLASS(BlueprintType)
@@ -49,16 +50,14 @@ public:
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Skill|Mechanic", meta = (ClampMin = "0.0"))
     float Cooldown = 5.0f;
 
-    // ★ GroundTarget(지점 캐스팅)에서도 CastDuration을 사용할 수 있도록 조건 추가
-    // (CastDuration이 0이면 즉발 장판, 0보다 크면 소서리스식 지점 캐스팅으로 동작!)
-    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Skill|Mechanic", meta = (EditCondition = "CastType == ESkillCastType::Cast || CastType == ESkillCastType::Charge || CastType == ESkillCastType::Hold || CastType == ESkillCastType::GroundTarget"))
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Skill|Mechanic", meta = (EditCondition = "CastType == ESkillCastType::Cast || CastType == ESkillCastType::Charge || CastType == ESkillCastType::Hold || CastType == ESkillCastType::GroundTarget || CastType == ESkillCastType::ChargeDash"))
     float CastDuration = 1.5f;
 
     // 차징 & 홀딩 전용 옵션
-    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Skill|Mechanic|ChargeAndHold", meta = (EditCondition = "CastType == ESkillCastType::Charge || CastType == ESkillCastType::Hold"))
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Skill|Mechanic|ChargeAndHold", meta = (EditCondition = "CastType == ESkillCastType::Charge || CastType == ESkillCastType::Hold || CastType == ESkillCastType::ChargeDash"))
     float MinChargeTime = 0.5f;
 
-    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Skill|Mechanic|ChargeAndHold", meta = (EditCondition = "CastType == ESkillCastType::Charge"))
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Skill|Mechanic|ChargeAndHold", meta = (EditCondition = "CastType == ESkillCastType::Charge || CastType == ESkillCastType::ChargeDash"))
     float MaxDamageMultiplier = 2.0f;
 
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Skill|Mechanic|ChargeAndHold", meta = (EditCondition = "CastType == ESkillCastType::Hold"))
@@ -81,7 +80,6 @@ public:
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Skill|GroundTarget", meta = (EditCondition = "CastType == ESkillCastType::GroundTarget"))
     float IndicatorRadius = 250.0f;
 
-    // UCLASS() 내부의 GroundTarget 카테고리에 추가:
     UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Skill|GroundTarget")
     TSubclassOf<AActor> GroundActorClass;
 
@@ -100,7 +98,7 @@ public:
 
     // ===== Dash 전용 =====
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Skill|Dash",
-        meta = (EditCondition = "CastType == ESkillCastType::Dash"))
+        meta = (EditCondition = "CastType == ESkillCastType::Dash || CastType == ESkillCastType::ChargeDash"))
     float DashPower = 1500.f;
 
     // ===== Buff 전용 =====

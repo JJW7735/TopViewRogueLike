@@ -5,6 +5,7 @@
 #include "GameFramework/CharacterMovementComponent.h"
 #include "RLProjectile.h"
 #include "GameFramework/ProjectileMovementComponent.h"
+#include "TimerManager.h"
 
 URLSkillComponent::URLSkillComponent()
 {
@@ -32,7 +33,6 @@ void URLSkillComponent::TickComponent(float DeltaTime, ELevelTick TickType, FAct
 {
     Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
 
-    // 1. 조준(Aiming) 상태: 플레이어가 이동해도 마우스 커서 위치 실시간 추적
     if (CurrentSkillState == EPlayerSkillState::Aiming && DecalIndicator && OwnerCharacter)
     {
         if (URLSkillData* Skill = EquippedSkills.FindRef(CurrentActiveSlot))
@@ -41,7 +41,6 @@ void URLSkillComponent::TickComponent(float DeltaTime, ELevelTick TickType, FAct
         }
     }
 
-    // 2. 캐스팅(Casting) 상태: 100% 도달할 때까지 게이지 누적
     if (CurrentSkillState == EPlayerSkillState::Casting)
     {
         URLSkillData* Skill = EquippedSkills.FindRef(CurrentActiveSlot);
@@ -54,23 +53,19 @@ void URLSkillComponent::TickComponent(float DeltaTime, ELevelTick TickType, FAct
         CurrentAccumulatedTime += DeltaTime;
         float Ratio = FMath::Clamp(CurrentAccumulatedTime / FMath::Max(0.01f, Skill->CastDuration), 0.0f, 1.0f);
 
-        // UI에 게이지 브로드캐스트
         OnCastProgressChanged.Broadcast(CurrentActiveSlot, CurrentAccumulatedTime, Skill->CastDuration, Ratio);
 
-        // 일반 전방 캐스팅일 때만 마우스 방향 회전 허용
         if (Skill->CastType != ESkillCastType::GroundTarget)
         {
             RotateOwnerToMouseCursor();
         }
 
-        // 100% 끝까지 시전 완료했을 때만 발동
         if (CurrentAccumulatedTime >= Skill->CastDuration)
         {
             FinishCasting();
         }
     }
 
-    // 3. 쿨타임 UI 브로드캐스트
     for (const auto& Pair : EquippedSkills)
     {
         ESkillSlot Slot = Pair.Key;
@@ -92,7 +87,6 @@ void URLSkillComponent::OnSkillInputStarted(ESkillSlot Slot)
 
     URLSkillData* Skill = EquippedSkills[Slot];
 
-    // ① 지점 조작 스킬 (GroundTarget): 조준 가이드 활성화
     if (Skill->CastType == ESkillCastType::GroundTarget)
     {
         StartGroundTargetAiming(Slot);
@@ -110,7 +104,10 @@ void URLSkillComponent::OnSkillInputStarted(ESkillSlot Slot)
     CurrentAccumulatedTime = 0.0f;
     LastHoldTickTime = 0.0f;
 
-    StopPlayerMovement();
+    if (Skill->CastType != ESkillCastType::Dash)
+    {
+        StopPlayerMovement();
+    }
     RotateOwnerToMouseCursor();
 
     switch (Skill->CastType)
@@ -119,6 +116,10 @@ void URLSkillComponent::OnSkillInputStarted(ESkillSlot Slot)
         if (Skill->SkillMontage)
         {
             OwnerCharacter->PlayAnimMontage(Skill->SkillMontage);
+        }
+        else
+        {
+            OwnerCharacter->CreateBoxHitbox(Skill->HitboxExtent, Skill->HitboxForwardOffset, Skill->DamageData, true);
         }
         CooldownEndTimes.Add(Slot, GetWorld()->GetTimeSeconds() + Skill->Cooldown);
         CurrentSkillState = EPlayerSkillState::Idle;
@@ -156,7 +157,9 @@ void URLSkillComponent::OnSkillInputStarted(ESkillSlot Slot)
         if (Skill->SkillMontage) OwnerCharacter->PlayAnimMontage(Skill->SkillMontage);
 
         FVector DashDirection = OwnerCharacter->GetActorForwardVector();
-        OwnerCharacter->LaunchCharacter(DashDirection * Skill->DashPower, true, true);
+        FVector NewLocation = OwnerCharacter->GetActorLocation() + DashDirection * (Skill->DashPower * 0.05f);
+
+        OwnerCharacter->SetActorLocation(NewLocation, false);
 
         OwnerCharacter->CreateBoxHitbox(Skill->HitboxExtent, Skill->HitboxForwardOffset, Skill->DamageData, true);
 
@@ -166,6 +169,11 @@ void URLSkillComponent::OnSkillInputStarted(ESkillSlot Slot)
     }
 
     case ESkillCastType::Charge:
+        CurrentSkillState = EPlayerSkillState::Charging;
+        if (Skill->SkillMontage) OwnerCharacter->PlayAnimMontage(Skill->SkillMontage);
+        break;
+
+    case ESkillCastType::ChargeDash:
         CurrentSkillState = EPlayerSkillState::Charging;
         if (Skill->SkillMontage) OwnerCharacter->PlayAnimMontage(Skill->SkillMontage);
         break;
@@ -264,6 +272,12 @@ void URLSkillComponent::OnSkillInputCompleted(ESkillSlot Slot)
             Multiplier = FMath::Lerp(1.0f, Skill->MaxDamageMultiplier, Alpha);
         }
 
+        if (Skill->CastType == ESkillCastType::ChargeDash && CurrentAccumulatedTime >= Skill->MinChargeTime)
+        {
+            FVector DashDirection = OwnerCharacter->GetActorForwardVector();
+            OwnerCharacter->LaunchCharacter(DashDirection * Skill->DashPower, true, true);
+        }
+
         FRLDamageData FinalDamage = Skill->DamageData;
         FinalDamage.BaseDamage *= Multiplier;
 
@@ -290,10 +304,8 @@ void URLSkillComponent::ConfirmGroundCast()
     URLSkillData* Skill = EquippedSkills.FindRef(CurrentActiveSlot);
     if (!Skill) return;
 
-    // 1. 마우스로 찍은 목표 위치 저장
     PendingExplosionLocation = DecalIndicator->GetTargetLocation();
 
-    // 2. 캐릭터 회전 및 이동 정지
     FVector Dir = (PendingExplosionLocation - OwnerCharacter->GetActorLocation()).GetSafeNormal2D();
     if (!Dir.IsNearlyZero())
     {
@@ -301,7 +313,6 @@ void URLSkillComponent::ConfirmGroundCast()
     }
     StopPlayerMovement();
 
-    // 3. 지점 캐스팅 모드 시작 (CastDuration > 0)
     if (Skill->CastDuration > 0.0f)
     {
         CurrentSkillState = EPlayerSkillState::Casting;
@@ -318,7 +329,6 @@ void URLSkillComponent::ConfirmGroundCast()
     }
     else
     {
-        // 시전 시간이 0이면 즉발 설치
         if (Skill->SkillMontage)
         {
             OwnerCharacter->PlayAnimMontage(Skill->SkillMontage);
@@ -359,7 +369,6 @@ void URLSkillComponent::FinishCasting()
     URLSkillData* Skill = EquippedSkills.FindRef(CurrentActiveSlot);
     if (Skill)
     {
-        // ① 지점 캐스팅 스킬
         if (Skill->CastType == ESkillCastType::GroundTarget)
         {
             if (Skill->GroundActorClass)
@@ -380,7 +389,6 @@ void URLSkillComponent::FinishCasting()
                 OwnerCharacter->CreateLocationHitbox(PendingExplosionLocation, Skill->IndicatorRadius, Skill->DamageData, true);
             }
         }
-        // ② 전방 캐스팅 스킬
         else
         {
             OwnerCharacter->CreateBoxHitbox(Skill->HitboxExtent, Skill->HitboxForwardOffset, Skill->DamageData, true);
@@ -400,7 +408,7 @@ void URLSkillComponent::FinishCasting()
 }
 
 // ========================================================
-// 6. 캐스팅 끊김 / 캔슬 처리 (누락되었던 함수)
+// 6. 캐스팅 끊김 / 캔슬 처리
 // ========================================================
 void URLSkillComponent::InterruptCasting(const FString& Reason)
 {
