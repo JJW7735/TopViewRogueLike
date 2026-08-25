@@ -130,6 +130,9 @@ protected:
     UPROPERTY()
     FTimerHandle SpeedBuffTimerHandle;
 
+    UPROPERTY()
+    bool bHasTriggeredPreCastMotion = false;
+
     UFUNCTION()
     void EndSpeedBuff();
 };
