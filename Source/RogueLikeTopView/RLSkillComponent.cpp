@@ -54,8 +54,24 @@ void URLSkillComponent::TickComponent(float DeltaTime, ELevelTick TickType, FAct
         }
 
         CurrentAccumulatedTime += DeltaTime;
-        float Ratio = FMath::Clamp(CurrentAccumulatedTime / FMath::Max(0.01f, Skill->CastDuration), 0.0f, 1.0f);
 
+        // 캐스팅 종료 0.5초 전에 End(공격) 모션 미리 점프
+        const float PreMotionLeadTime = 0.5f;
+        const float MotionTriggerTime = FMath::Max(0.0f, Skill->CastDuration - PreMotionLeadTime);
+
+        if (!bHasTriggeredPreCastMotion && CurrentAccumulatedTime >= MotionTriggerTime)
+        {
+            bHasTriggeredPreCastMotion = true;
+            if (Skill->SkillMontage && OwnerCharacter)
+            {
+                if (UAnimInstance* AnimInst = OwnerCharacter->GetMesh() ? OwnerCharacter->GetMesh()->GetAnimInstance() : nullptr)
+                {
+                    AnimInst->Montage_JumpToSection(FName("End"), Skill->SkillMontage);
+                }
+            }
+        }
+
+        float Ratio = FMath::Clamp(CurrentAccumulatedTime / FMath::Max(0.01f, Skill->CastDuration), 0.0f, 1.0f);
         OnCastProgressChanged.Broadcast(CurrentActiveSlot, CurrentAccumulatedTime, Skill->CastDuration, Ratio);
 
         if (Skill->CastType != ESkillCastType::GroundTarget)
@@ -169,6 +185,7 @@ void URLSkillComponent::OnSkillInputStarted(ESkillSlot Slot)
         CurrentSkillState = EPlayerSkillState::Idle;
         break;
     }
+
     case ESkillCastType::Charge:
     case ESkillCastType::ChargeDash:
         CurrentSkillState = EPlayerSkillState::Charging;
@@ -314,6 +331,7 @@ void URLSkillComponent::ConfirmGroundCast()
     {
         CurrentSkillState = EPlayerSkillState::Casting;
         CurrentAccumulatedTime = 0.0f;
+        bHasTriggeredPreCastMotion = false;
 
         DecalIndicator->LockTargetLocation(PendingExplosionLocation);
 
@@ -396,7 +414,8 @@ void URLSkillComponent::FinishCasting()
                 ActiveCastParticleComp = nullptr;
             }
 
-            if (Skill->SkillMontage)
+            // 만약 CastDuration이 0.5초 이하라서 선행 점프를 못 탄 경우를 대비한 안전 장치
+            if (!bHasTriggeredPreCastMotion && Skill->SkillMontage)
             {
                 if (UAnimInstance* AnimInst = OwnerCharacter->GetMesh() ? OwnerCharacter->GetMesh()->GetAnimInstance() : nullptr)
                 {
@@ -449,6 +468,7 @@ void URLSkillComponent::FinishCasting()
     OnCastStateChanged.Broadcast(CurrentActiveSlot, false);
     CurrentSkillState = EPlayerSkillState::Idle;
     CurrentAccumulatedTime = 0.0f;
+    bHasTriggeredPreCastMotion = false;
 }
 
 // ========================================================
@@ -479,6 +499,7 @@ void URLSkillComponent::InterruptCasting(const FString& Reason)
 
     CurrentSkillState = EPlayerSkillState::Idle;
     CurrentAccumulatedTime = 0.0f;
+    bHasTriggeredPreCastMotion = false;
 }
 
 void URLSkillComponent::TriggerActiveSkillHit()
@@ -511,6 +532,7 @@ void URLSkillComponent::StartCasting(ESkillSlot Slot)
     CurrentSkillState = EPlayerSkillState::Casting;
     CurrentActiveSlot = Slot;
     CurrentAccumulatedTime = 0.0f;
+    bHasTriggeredPreCastMotion = false;
 
     StopPlayerMovement();
 
