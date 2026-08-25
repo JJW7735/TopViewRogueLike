@@ -154,13 +154,15 @@ void URLSkillComponent::OnSkillInputStarted(ESkillSlot Slot)
 
     case ESkillCastType::Dash:
     {
-        if (Skill->SkillMontage) OwnerCharacter->PlayAnimMontage(Skill->SkillMontage);
+        if (Skill->SkillMontage)
+        {
+            OwnerCharacter->PlayAnimMontage(Skill->SkillMontage);
+        }
 
-        FVector DashDirection = OwnerCharacter->GetActorForwardVector();
-        FVector TargetLocation = OwnerCharacter->GetActorLocation() + DashDirection * (Skill->DashPower * 0.3f);
+        const FVector DashDirection = OwnerCharacter->GetActorForwardVector();
+        const FVector NewLocation = OwnerCharacter->GetActorLocation() + DashDirection * (Skill->DashPower * 0.05f);
 
         OwnerCharacter->SetActorLocation(NewLocation, false);
-        OwnerCharacter->StartDashMovement(TargetLocation, 0.15f);
         OwnerCharacter->CreateBoxHitbox(Skill->HitboxExtent, Skill->HitboxForwardOffset, Skill->DamageData, true);
 
         CooldownEndTimes.Add(Slot, GetWorld()->GetTimeSeconds() + Skill->Cooldown);
