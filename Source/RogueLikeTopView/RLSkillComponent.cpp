@@ -136,7 +136,7 @@ void URLSkillComponent::OnSkillInputStarted(ESkillSlot Slot)
         {
             OwnerCharacter->PlayAnimMontage(Skill->SkillMontage);
         }
-        OwnerCharacter->CreateBoxHitbox(Skill->HitboxExtent, Skill->HitboxForwardOffset, Skill->DamageData, true);
+        
         CooldownEndTimes.Add(Slot, GetWorld()->GetTimeSeconds() + Skill->Cooldown);
         CurrentSkillState = EPlayerSkillState::Idle;
         break;
@@ -511,6 +511,22 @@ void URLSkillComponent::TriggerActiveSkillHit()
     if (Skill)
     {
         OwnerCharacter->CreateBoxHitbox(Skill->HitboxExtent, Skill->HitboxForwardOffset, Skill->DamageData, true);
+    }
+}
+
+void URLSkillComponent::TriggerActiveSkillDash()
+{
+    if (!OwnerCharacter) return;
+
+    URLSkillData* Skill = EquippedSkills.FindRef(CurrentActiveSlot);
+    // 스킬 데이터가 있고, 스킬 타입이 Dash 계열일 때만 발동
+    if (Skill && (Skill->CastType == ESkillCastType::Dash || Skill->CastType == ESkillCastType::ChargeDash))
+    {
+        FVector DashDirection = OwnerCharacter->GetActorForwardVector();
+        FVector LaunchVelocity = DashDirection * Skill->DashPower;
+
+        // 캐릭터를 앞으로 강하게 발사 (XY축 속도 덮어쓰기 True)
+        OwnerCharacter->LaunchCharacter(LaunchVelocity, true, false);
     }
 }
 

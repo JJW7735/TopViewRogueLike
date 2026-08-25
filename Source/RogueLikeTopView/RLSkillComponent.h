@@ -46,6 +46,9 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Skill")
     void TriggerActiveSkillHit();
 
+    UFUNCTION(BlueprintCallable, Category = "Skill")
+    void TriggerActiveSkillDash();
+
     void StartCasting(ESkillSlot Slot);
     void FinishCasting();
     void InterruptCasting(const FString& Reason = TEXT("Interrupted"));
