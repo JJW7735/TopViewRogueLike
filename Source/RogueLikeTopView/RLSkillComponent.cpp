@@ -159,16 +159,19 @@ void URLSkillComponent::OnSkillInputStarted(ESkillSlot Slot)
             OwnerCharacter->PlayAnimMontage(Skill->SkillMontage);
         }
 
-        const FVector DashDirection = OwnerCharacter->GetActorForwardVector();
-        const FVector NewLocation = OwnerCharacter->GetActorLocation() + DashDirection * (Skill->DashPower * 0.05f);
+        FVector DashDirection = OwnerCharacter->GetActorForwardVector();
+        FVector TargetLocation = OwnerCharacter->GetActorLocation() + DashDirection * (Skill->DashPower * 0.3f);
 
-        OwnerCharacter->SetActorLocation(NewLocation, false);
+        OwnerCharacter->StartDashMovement(TargetLocation, 0.15f);
+
         OwnerCharacter->CreateBoxHitbox(Skill->HitboxExtent, Skill->HitboxForwardOffset, Skill->DamageData, true);
 
         CooldownEndTimes.Add(Slot, GetWorld()->GetTimeSeconds() + Skill->Cooldown);
         CurrentSkillState = EPlayerSkillState::Idle;
         break;
     }
+
+
     case ESkillCastType::Charge:
     case ESkillCastType::ChargeDash:
         CurrentSkillState = EPlayerSkillState::Charging;
