@@ -136,7 +136,10 @@ void URLSkillComponent::OnSkillInputStarted(ESkillSlot Slot)
         {
             OwnerCharacter->PlayAnimMontage(Skill->SkillMontage);
         }
-        
+        if (!Skill->bHitOnAnimNotify)   // ← 이 조건만 추가
+        {
+            OwnerCharacter->CreateBoxHitbox(Skill->HitboxExtent, Skill->HitboxForwardOffset, Skill->DamageData, true);
+        }
         CooldownEndTimes.Add(Slot, GetWorld()->GetTimeSeconds() + Skill->Cooldown);
         CurrentSkillState = EPlayerSkillState::Idle;
         break;
