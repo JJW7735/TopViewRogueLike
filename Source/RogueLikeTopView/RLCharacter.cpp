@@ -33,6 +33,7 @@ ARLCharacter::ARLCharacter()
     GetCharacterMovement()->bConstrainToPlane = true;
     GetCharacterMovement()->bRequestedMoveUseAcceleration = true;
     GetCharacterMovement()->BrakingDecelerationWalking = 1000.f;
+    GetCharacterMovement()->NetworkSmoothingMode = ENetworkSmoothingMode::Disabled;
 
     bUseControllerRotationYaw = false;
 
