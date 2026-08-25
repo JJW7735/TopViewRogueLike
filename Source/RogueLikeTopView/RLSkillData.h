@@ -109,4 +109,11 @@ public:
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Skill|Buff",
         meta = (EditCondition = "CastType == ESkillCastType::Buff"))
     float BuffDuration = 3.0f;
+
+    // ===== 파티클 이펙트 (추가) =====
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Skill|Effect")
+    UParticleSystem* ChargeParticle; // 캐스팅 중 바닥에 유지될 지속 번개 (P_Lightning_Small)
+
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Skill|Effect")
+    UParticleSystem* ReleaseParticle; // 캐스팅 완료 시 쾅 터질 대형 번개 (P_Lightning_Big)
 };

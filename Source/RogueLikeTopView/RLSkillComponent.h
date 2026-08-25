@@ -8,6 +8,7 @@
 
 class ARLCharacter;
 class ARLDecalIndicator;
+class UParticleSystemComponent;
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FOnSkillCooldownChanged, ESkillSlot, Slot, float, RemainingTime, float, MaxCooldown);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_FourParams(FOnCastProgressChanged, ESkillSlot, Slot, float, CurrentTime, float, MaxDuration, float, ProgressRatio);
@@ -42,7 +43,6 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Skill")
     void CancelGroundCast();
 
-    // ★ 추가됨: 애니메이션 노티파이가 신호를 보내면, 현재 사용 중인 스킬의 데미지를 발생시키는 함수
     UFUNCTION(BlueprintCallable, Category = "Skill")
     void TriggerActiveSkillHit();
 
@@ -72,8 +72,6 @@ public:
     bool IsHolding() const { return CurrentSkillState == EPlayerSkillState::Holding; }
 
     UFUNCTION(BlueprintPure, Category = "Skill")
-
-
     EPlayerSkillState GetSkillState() const { return CurrentSkillState; }
 
     UPROPERTY(BlueprintAssignable, Category = "Skill|UI")
@@ -91,9 +89,8 @@ protected:
     UPROPERTY()
     ARLCharacter* OwnerCharacter;
 
-    // 완벽 수정 후 (에디터 디테일 패널에서 자유롭게 추가/삭제 가능)
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Skill")
-    TMap<ESkillSlot, URLSkillData*> EquippedSkills;;
+    TMap<ESkillSlot, URLSkillData*> EquippedSkills;
 
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Skill")
     TMap<ESkillSlot, float> CooldownEndTimes;
@@ -113,6 +110,10 @@ protected:
     // 캐스팅 성공 시 폭발할 목표 지점 좌표
     UPROPERTY()
     FVector PendingExplosionLocation = FVector::ZeroVector;
+
+    // 캐스팅 중 바닥에 유지되는 지속 번개 파티클 컴포넌트
+    UPROPERTY()
+    UParticleSystemComponent* ActiveCastParticleComp = nullptr;
 
     UPROPERTY()
     ARLDecalIndicator* DecalIndicator;

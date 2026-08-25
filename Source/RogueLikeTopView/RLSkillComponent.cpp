@@ -6,6 +6,9 @@
 #include "RLProjectile.h"
 #include "GameFramework/ProjectileMovementComponent.h"
 #include "TimerManager.h"
+#include "Kismet/GameplayStatics.h"
+#include "Particles/ParticleSystemComponent.h"
+#include "Animation/AnimInstance.h"
 
 URLSkillComponent::URLSkillComponent()
 {
@@ -160,7 +163,6 @@ void URLSkillComponent::OnSkillInputStarted(ESkillSlot Slot)
         FVector NewLocation = OwnerCharacter->GetActorLocation() + DashDirection * (Skill->DashPower * 0.05f);
 
         OwnerCharacter->SetActorLocation(NewLocation, false);
-
         OwnerCharacter->CreateBoxHitbox(Skill->HitboxExtent, Skill->HitboxForwardOffset, Skill->DamageData, true);
 
         CooldownEndTimes.Add(Slot, GetWorld()->GetTimeSeconds() + Skill->Cooldown);
@@ -169,10 +171,6 @@ void URLSkillComponent::OnSkillInputStarted(ESkillSlot Slot)
     }
 
     case ESkillCastType::Charge:
-        CurrentSkillState = EPlayerSkillState::Charging;
-        if (Skill->SkillMontage) OwnerCharacter->PlayAnimMontage(Skill->SkillMontage);
-        break;
-
     case ESkillCastType::ChargeDash:
         CurrentSkillState = EPlayerSkillState::Charging;
         if (Skill->SkillMontage) OwnerCharacter->PlayAnimMontage(Skill->SkillMontage);
@@ -325,6 +323,17 @@ void URLSkillComponent::ConfirmGroundCast()
             OwnerCharacter->PlayAnimMontage(Skill->SkillMontage);
         }
 
+        if (Skill->ChargeParticle)
+        {
+            ActiveCastParticleComp = UGameplayStatics::SpawnEmitterAtLocation(
+                GetWorld(),
+                Skill->ChargeParticle,
+                PendingExplosionLocation,
+                FRotator::ZeroRotator,
+                true
+            );
+        }
+
         OnCastStateChanged.Broadcast(CurrentActiveSlot, true);
     }
     else
@@ -332,6 +341,17 @@ void URLSkillComponent::ConfirmGroundCast()
         if (Skill->SkillMontage)
         {
             OwnerCharacter->PlayAnimMontage(Skill->SkillMontage);
+        }
+
+        if (Skill->ReleaseParticle)
+        {
+            UGameplayStatics::SpawnEmitterAtLocation(
+                GetWorld(),
+                Skill->ReleaseParticle,
+                PendingExplosionLocation,
+                FRotator::ZeroRotator,
+                true
+            );
         }
 
         if (Skill->GroundActorClass)
@@ -371,6 +391,31 @@ void URLSkillComponent::FinishCasting()
     {
         if (Skill->CastType == ESkillCastType::GroundTarget)
         {
+            if (ActiveCastParticleComp)
+            {
+                ActiveCastParticleComp->DeactivateSystem();
+                ActiveCastParticleComp = nullptr;
+            }
+
+            if (Skill->SkillMontage)
+            {
+                if (UAnimInstance* AnimInst = OwnerCharacter->GetMesh() ? OwnerCharacter->GetMesh()->GetAnimInstance() : nullptr)
+                {
+                    AnimInst->Montage_JumpToSection(FName("End"), Skill->SkillMontage);
+                }
+            }
+
+            if (Skill->ReleaseParticle)
+            {
+                UGameplayStatics::SpawnEmitterAtLocation(
+                    GetWorld(),
+                    Skill->ReleaseParticle,
+                    PendingExplosionLocation,
+                    FRotator::ZeroRotator,
+                    true
+                );
+            }
+
             if (Skill->GroundActorClass)
             {
                 FActorSpawnParameters SpawnParams;
@@ -418,6 +463,12 @@ void URLSkillComponent::InterruptCasting(const FString& Reason)
     if (OwnerCharacter && Skill && Skill->SkillMontage)
     {
         OwnerCharacter->StopAnimMontage(Skill->SkillMontage);
+    }
+
+    if (ActiveCastParticleComp)
+    {
+        ActiveCastParticleComp->DestroyComponent();
+        ActiveCastParticleComp = nullptr;
     }
 
     if (DecalIndicator)
