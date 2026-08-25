@@ -117,10 +117,7 @@ void URLSkillComponent::OnSkillInputStarted(ESkillSlot Slot)
         {
             OwnerCharacter->PlayAnimMontage(Skill->SkillMontage);
         }
-        else
-        {
-            OwnerCharacter->CreateBoxHitbox(Skill->HitboxExtent, Skill->HitboxForwardOffset, Skill->DamageData, true);
-        }
+        OwnerCharacter->CreateBoxHitbox(Skill->HitboxExtent, Skill->HitboxForwardOffset, Skill->DamageData, true);
         CooldownEndTimes.Add(Slot, GetWorld()->GetTimeSeconds() + Skill->Cooldown);
         CurrentSkillState = EPlayerSkillState::Idle;
         break;
@@ -157,9 +154,9 @@ void URLSkillComponent::OnSkillInputStarted(ESkillSlot Slot)
         if (Skill->SkillMontage) OwnerCharacter->PlayAnimMontage(Skill->SkillMontage);
 
         FVector DashDirection = OwnerCharacter->GetActorForwardVector();
-        FVector NewLocation = OwnerCharacter->GetActorLocation() + DashDirection * (Skill->DashPower * 0.05f);
+        FVector TargetLocation = OwnerCharacter->GetActorLocation() + DashDirection * (Skill->DashPower * 0.3f);
 
-        OwnerCharacter->SetActorLocation(NewLocation, false);
+        OwnerCharacter->StartDashMovement(TargetLocation, 0.15f);
 
         OwnerCharacter->CreateBoxHitbox(Skill->HitboxExtent, Skill->HitboxForwardOffset, Skill->DamageData, true);
 
@@ -167,7 +164,6 @@ void URLSkillComponent::OnSkillInputStarted(ESkillSlot Slot)
         CurrentSkillState = EPlayerSkillState::Idle;
         break;
     }
-
     case ESkillCastType::Charge:
         CurrentSkillState = EPlayerSkillState::Charging;
         if (Skill->SkillMontage) OwnerCharacter->PlayAnimMontage(Skill->SkillMontage);
