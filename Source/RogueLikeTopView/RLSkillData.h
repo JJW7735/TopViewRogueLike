@@ -47,6 +47,10 @@ public:
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Skill|Mechanic")
     ESkillCastType CastType = ESkillCastType::Instant;
 
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Skill|Mechanic",
+        meta = (EditCondition = "CastType == ESkillCastType::Instant"))
+    bool bHitOnAnimNotify = false;
+
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Skill|Mechanic", meta = (ClampMin = "0.0"))
     float Cooldown = 5.0f;
 
