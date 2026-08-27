@@ -4,6 +4,7 @@
 #include "Engine/DataAsset.h"
 #include "RLTypes.h"
 #include "RLSkillData.generated.h"
+class UFXSystemAsset;
 
 UENUM(BlueprintType)
 enum class ESkillSlot : uint8
@@ -115,9 +116,18 @@ public:
     float BuffDuration = 3.0f;
 
     // ===== 파티클 이펙트 (추가) =====
-    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Skill|Effect")
-    UParticleSystem* ChargeParticle; // 캐스팅 중 바닥에 유지될 지속 번개 (P_Lightning_Small)
+
 
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Skill|Effect")
-    UParticleSystem* ReleaseParticle; // 캐스팅 완료 시 쾅 터질 대형 번개 (P_Lightning_Big)
+    UFXSystemAsset* ChargeVFX; // 나이아가라 & 캐스케이드 모두 호환
+
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Skill|Effect")
+    UFXSystemAsset* ReleaseVFX; // 나이아가라 & 캐스케이드 모두 호환
+
+    // ===== 부착(Attach) 설정 추가 =====
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Skill|Effect")
+    bool bAttachToWeapon = false; // true면 허공이 아닌 무기/캐릭터 소켓에 부착
+
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Skill|Effect", meta = (EditCondition = "bAttachToWeapon"))
+    FName WeaponSocketName = TEXT("HammerHeadSocket"); // 부착할 뼈대(Bone) 또는 소켓 이름
 };

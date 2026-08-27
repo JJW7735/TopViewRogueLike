@@ -9,6 +9,9 @@
 #include "Kismet/GameplayStatics.h"
 #include "Particles/ParticleSystemComponent.h"
 #include "Animation/AnimInstance.h"
+#include "NiagaraSystem.h"
+#include "NiagaraFunctionLibrary.h"
+#include "NiagaraComponent.h"
 
 URLSkillComponent::URLSkillComponent()
 {
@@ -136,7 +139,20 @@ void URLSkillComponent::OnSkillInputStarted(ESkillSlot Slot)
         {
             OwnerCharacter->PlayAnimMontage(Skill->SkillMontage);
         }
-        if (!Skill->bHitOnAnimNotify)   // ← 이 조건만 추가
+
+        // ===== 방금 추가한 핵심 빈틈 메우기: 평타(Instant) 칠 때도 이펙트 스폰 =====
+        if (Skill->ReleaseVFX)
+        {
+            SpawnSkillVFX(
+                Skill->ReleaseVFX,
+                OwnerCharacter->GetActorLocation(), // 바닥에 깔릴 경우 캐릭터 위치 기준
+                Skill->bAttachToWeapon,
+                Skill->WeaponSocketName
+            );
+        }
+        // ==============================================================
+
+        if (!Skill->bHitOnAnimNotify)
         {
             OwnerCharacter->CreateBoxHitbox(Skill->HitboxExtent, Skill->HitboxForwardOffset, Skill->DamageData, true);
         }
@@ -344,14 +360,13 @@ void URLSkillComponent::ConfirmGroundCast()
             OwnerCharacter->PlayAnimMontage(Skill->SkillMontage);
         }
 
-        if (Skill->ChargeParticle)
+        if (Skill->ChargeVFX)
         {
-            ActiveCastParticleComp = UGameplayStatics::SpawnEmitterAtLocation(
-                GetWorld(),
-                Skill->ChargeParticle,
+            ActiveCastParticleComp = SpawnSkillVFX(
+                Skill->ChargeVFX,
                 PendingExplosionLocation,
-                FRotator::ZeroRotator,
-                true
+                Skill->bAttachToWeapon,
+                Skill->WeaponSocketName
             );
         }
 
@@ -364,14 +379,13 @@ void URLSkillComponent::ConfirmGroundCast()
             OwnerCharacter->PlayAnimMontage(Skill->SkillMontage);
         }
 
-        if (Skill->ReleaseParticle)
+        if (Skill->ReleaseVFX)
         {
-            UGameplayStatics::SpawnEmitterAtLocation(
-                GetWorld(),
-                Skill->ReleaseParticle,
+            SpawnSkillVFX(
+                Skill->ReleaseVFX,
                 PendingExplosionLocation,
-                FRotator::ZeroRotator,
-                true
+                Skill->bAttachToWeapon,
+                Skill->WeaponSocketName
             );
         }
 
@@ -414,7 +428,7 @@ void URLSkillComponent::FinishCasting()
         {
             if (ActiveCastParticleComp)
             {
-                ActiveCastParticleComp->DeactivateSystem();
+                ActiveCastParticleComp->DestroyComponent(); // 이 부분은 그대로 두셔도 잘 작동합니다.
                 ActiveCastParticleComp = nullptr;
             }
 
@@ -427,14 +441,13 @@ void URLSkillComponent::FinishCasting()
                 }
             }
 
-            if (Skill->ReleaseParticle)
+            if (Skill->ReleaseVFX)
             {
-                UGameplayStatics::SpawnEmitterAtLocation(
-                    GetWorld(),
-                    Skill->ReleaseParticle,
+                SpawnSkillVFX(
+                    Skill->ReleaseVFX,
                     PendingExplosionLocation,
-                    FRotator::ZeroRotator,
-                    true
+                    Skill->bAttachToWeapon,
+                    Skill->WeaponSocketName
                 );
             }
 
@@ -488,9 +501,10 @@ void URLSkillComponent::InterruptCasting(const FString& Reason)
         OwnerCharacter->StopAnimMontage(Skill->SkillMontage);
     }
 
+    // 수정된 부분: Destroy 대신 Deactivate 사용 (자연스러운 이펙트 소멸)
     if (ActiveCastParticleComp)
     {
-        ActiveCastParticleComp->DestroyComponent();
+        ActiveCastParticleComp->Deactivate();
         ActiveCastParticleComp = nullptr;
     }
 
@@ -643,4 +657,57 @@ void URLSkillComponent::EndSpeedBuff()
     {
         OwnerCharacter->GetCharacterMovement()->MaxWalkSpeed = 600.0f;
     }
+}
+
+// 나이아가라와 캐스케이드를 구분해서 소켓 부착 또는 바닥에 생성해 주는 완벽한 헬퍼 함수입니다.
+// 나이아가라와 캐스케이드를 구분해서 소켓 부착 또는 바닥에 생성해 주는 완벽한 헬퍼 함수입니다.
+UFXSystemComponent* URLSkillComponent::SpawnSkillVFX(UFXSystemAsset* VFXAsset, FVector Location, bool bAttach, FName SocketName)
+{
+    if (!VFXAsset || !OwnerCharacter) return nullptr;
+
+    // =========================================================================
+    // [핵심 추가] 소켓을 가진 진짜 메시(사람 몸뚱이인지 망치인지)를 스스로 찾아냅니다.
+    // =========================================================================
+    USceneComponent* TargetAttachComp = OwnerCharacter->GetMesh(); // 기본값은 사람 몸뚱이
+
+    if (bAttach && SocketName != NAME_None)
+    {
+        // 캐릭터에 붙어있는 모든 메시 컴포넌트(무기, 장갑 등)를 배열로 가져옵니다.
+        TArray<UMeshComponent*> AllMeshes;
+        OwnerCharacter->GetComponents<UMeshComponent>(AllMeshes);
+
+        // 가져온 메시들을 하나씩 검사해서 우리가 찾는 소켓(예: HammerHeadSocket)이 있는지 확인합니다.
+        for (UMeshComponent* MeshComp : AllMeshes)
+        {
+            if (MeshComp->DoesSocketExist(SocketName))
+            {
+                TargetAttachComp = MeshComp; // 소켓이 망치에 있다면, 타겟을 망치로 바꿉니다!
+                break; // 찾았으니 검색 종료
+            }
+        }
+    }
+    // =========================================================================
+
+    // 1. 나이아가라 검사
+    if (UNiagaraSystem* NiagaraSys = Cast<UNiagaraSystem>(VFXAsset))
+    {
+        if (bAttach && TargetAttachComp)
+        {
+            // OwnerCharacter->GetMesh() 대신 스스로 찾아낸 TargetAttachComp를 사용합니다.
+            return Cast<UFXSystemComponent>(UNiagaraFunctionLibrary::SpawnSystemAttached(NiagaraSys, TargetAttachComp, SocketName, FVector::ZeroVector, FRotator::ZeroRotator, EAttachLocation::SnapToTarget, true));
+        }
+        return Cast<UFXSystemComponent>(UNiagaraFunctionLibrary::SpawnSystemAtLocation(GetWorld(), NiagaraSys, Location, FRotator::ZeroRotator));
+    }
+    // 2. 캐스케이드 검사
+    else if (UParticleSystem* CascadeSys = Cast<UParticleSystem>(VFXAsset))
+    {
+        if (bAttach && TargetAttachComp)
+        {
+            // OwnerCharacter->GetMesh() 대신 스스로 찾아낸 TargetAttachComp를 사용합니다.
+            return Cast<UFXSystemComponent>(UGameplayStatics::SpawnEmitterAttached(CascadeSys, TargetAttachComp, SocketName, FVector::ZeroVector, FRotator::ZeroRotator, EAttachLocation::SnapToTarget, true));
+        }
+        return Cast<UFXSystemComponent>(UGameplayStatics::SpawnEmitterAtLocation(GetWorld(), CascadeSys, Location, FRotator::ZeroRotator));
+    }
+
+    return nullptr;
 }

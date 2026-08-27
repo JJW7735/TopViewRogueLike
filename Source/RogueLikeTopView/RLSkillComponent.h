@@ -9,6 +9,7 @@
 class ARLCharacter;
 class ARLDecalIndicator;
 class UParticleSystemComponent;
+class UFXSystemComponent;
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FOnSkillCooldownChanged, ESkillSlot, Slot, float, RemainingTime, float, MaxCooldown);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_FourParams(FOnCastProgressChanged, ESkillSlot, Slot, float, CurrentTime, float, MaxDuration, float, ProgressRatio);
@@ -116,7 +117,7 @@ protected:
 
     // 캐스팅 중 바닥에 유지되는 지속 번개 파티클 컴포넌트
     UPROPERTY()
-    UParticleSystemComponent* ActiveCastParticleComp = nullptr;
+    UFXSystemComponent* ActiveCastParticleComp = nullptr;
 
     UPROPERTY()
     ARLDecalIndicator* DecalIndicator;
@@ -135,4 +136,6 @@ protected:
 
     UFUNCTION()
     void EndSpeedBuff();
+
+    UFXSystemComponent* SpawnSkillVFX(UFXSystemAsset* VFXAsset, FVector Location, bool bAttach, FName SocketName);
 };
