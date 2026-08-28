@@ -56,6 +56,7 @@ void ARLCharacter::BeginPlay()
         if (DefaultSkill_W) SkillComp->EquipSkill(ESkillSlot::Slot_W, DefaultSkill_W);
         if (DefaultSkill_E) SkillComp->EquipSkill(ESkillSlot::Slot_E, DefaultSkill_E);
         if (DefaultSkill_R) SkillComp->EquipSkill(ESkillSlot::Slot_R, DefaultSkill_R);
+        if (DefaultSkill_LMB) SkillComp->EquipSkill(ESkillSlot::Slot_LMB, DefaultSkill_LMB);
     }
 }
 

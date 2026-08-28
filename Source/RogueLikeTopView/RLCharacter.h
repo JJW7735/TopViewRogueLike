@@ -59,6 +59,8 @@ protected:
 	URLSkillData* DefaultSkill_E;
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Skill|Default")
 	URLSkillData* DefaultSkill_R;
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Skill|Default")
+	URLSkillData* DefaultSkill_LMB;
 
 	// ★ 대시 이동 관련 변수
 	bool bIsDashing = false;
