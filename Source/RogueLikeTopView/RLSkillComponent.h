@@ -133,6 +133,17 @@ protected:
 
     UPROPERTY()
     bool bHasTriggeredPreCastMotion = false;
+     
+    // ↓↓↓ 여기 이 세 줄 추가 ↓↓↓
+    UPROPERTY()
+    int32 ComboCount = 0;
+
+    UPROPERTY()
+    FTimerHandle ComboResetTimerHandle;
+
+    UFUNCTION()
+    void ResetCombo();
+    // ↑↑↑ 여기까지 ↑↑↑
 
     UFUNCTION()
     void EndSpeedBuff();

@@ -135,17 +135,43 @@ void URLSkillComponent::OnSkillInputStarted(ESkillSlot Slot)
     switch (Skill->CastType)
     {
     case ESkillCastType::Instant:
-        if (Skill->SkillMontage)
+    {
+        UAnimMontage* MontageToPlay = Skill->SkillMontage;
+
+        // ===================================================================
+        // LMB(평타) 전용 콤보 로직.
+        // 아래 세 조건을 전부 만족해야만 실행됨:
+        //   1) 이 입력이 정확히 Slot_LMB일 때
+        //   2) 스킬 데이터에서 bUseCombo를 명시적으로 켰을 때
+        //   3) ComboMontages 배열에 실제로 몽타주가 들어있을 때
+        // 친구들 스킬(다른 슬롯이든, 같은 Slot_LMB든)은 bUseCombo가 기본 false라서
+        // 절대 이 블록에 들어오지 않고, 원래 로직(MontageToPlay = SkillMontage)만 탐.
+        // ===================================================================
+        if (Slot == ESkillSlot::Slot_LMB && Skill->bUseCombo && Skill->ComboMontages.Num() > 0)
         {
-            OwnerCharacter->PlayAnimMontage(Skill->SkillMontage);
+            if (ComboCount > 0 && ComboCount - 1 < Skill->ComboMontages.Num())
+            {
+                MontageToPlay = Skill->ComboMontages[ComboCount - 1];
+            }
+            ComboCount = (ComboCount + 1) % (Skill->ComboMontages.Num() + 1);
+
+            GetWorld()->GetTimerManager().ClearTimer(ComboResetTimerHandle);
+            GetWorld()->GetTimerManager().SetTimer(
+                ComboResetTimerHandle, this, &URLSkillComponent::ResetCombo, Skill->ComboResetTime, false);
+        }
+        // ===================================================================
+
+        if (MontageToPlay)
+        {
+            OwnerCharacter->PlayAnimMontage(MontageToPlay);
         }
 
-        // ===== 방금 추가한 핵심 빈틈 메우기: 평타(Instant) 칠 때도 이펙트 스폰 =====
+        // ===== 평타(Instant) 칠 때도 이펙트 스폰 =====
         if (Skill->ReleaseVFX)
         {
             SpawnSkillVFX(
                 Skill->ReleaseVFX,
-                OwnerCharacter->GetActorLocation(), // 바닥에 깔릴 경우 캐릭터 위치 기준
+                OwnerCharacter->GetActorLocation(),
                 Skill->bAttachToWeapon,
                 Skill->WeaponSocketName
             );
@@ -159,6 +185,7 @@ void URLSkillComponent::OnSkillInputStarted(ESkillSlot Slot)
         CooldownEndTimes.Add(Slot, GetWorld()->GetTimeSeconds() + Skill->Cooldown);
         CurrentSkillState = EPlayerSkillState::Idle;
         break;
+    }
 
     case ESkillCastType::Projectile:
         if (Skill->SkillMontage) OwnerCharacter->PlayAnimMontage(Skill->SkillMontage);
@@ -658,6 +685,13 @@ void URLSkillComponent::EndSpeedBuff()
         OwnerCharacter->GetCharacterMovement()->MaxWalkSpeed = 600.0f;
     }
 }
+
+// ↓↓↓ 여기 추가 ↓↓↓
+void URLSkillComponent::ResetCombo()
+{
+    ComboCount = 0;
+}
+// ↑↑↑ 여기까지 ↑↑↑
 
 // 나이아가라와 캐스케이드를 구분해서 소켓 부착 또는 바닥에 생성해 주는 완벽한 헬퍼 함수입니다.
 // 나이아가라와 캐스케이드를 구분해서 소켓 부착 또는 바닥에 생성해 주는 완벽한 헬퍼 함수입니다.

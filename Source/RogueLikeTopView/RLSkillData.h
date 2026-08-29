@@ -92,6 +92,16 @@ public:
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Skill|Animation")
     UAnimMontage* SkillMontage;
 
+    // ↓↓↓ 여기 이 세 줄 추가 ↓↓↓
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Skill|Animation")
+    bool bUseCombo = false; // 콤보 시스템 사용 여부 (기본 꺼짐, 명시적으로 켜야만 작동)
+
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Skill|Animation", meta = (EditCondition = "bUseCombo"))
+    TArray<UAnimMontage*> ComboMontages; // LMB 콤보 전용: [0]=2타, [1]=3타 ...
+
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Skill|Animation", meta = (EditCondition = "bUseCombo", ClampMin = "0.1"))
+    float ComboResetTime = 1.0f; // 이 시간 안에 다시 안 누르면 콤보 초기화
+
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Skill|Combat")
     FRLDamageData DamageData;
 
