@@ -243,6 +243,18 @@ void URLSkillComponent::OnSkillInputStarted(ESkillSlot Slot)
     {
         if (Skill->SkillMontage) OwnerCharacter->PlayAnimMontage(Skill->SkillMontage);
 
+        // ===== 버프 지속 이펙트 스폰 (캐릭터에 부착, 버프 끝나면 제거) =====
+        if (Skill->ReleaseVFX)
+        {
+            ActiveBuffVFXComp = SpawnSkillVFX(
+                Skill->ReleaseVFX,
+                OwnerCharacter->GetActorLocation(),
+                true,       // 캐릭터에 부착
+                NAME_None   // 특정 소켓 없이 메시 루트에 부착
+            );
+        }
+        // ==============================================================
+
         if (UCharacterMovementComponent* MoveComp = OwnerCharacter->GetCharacterMovement())
         {
             MoveComp->MaxWalkSpeed = MoveComp->MaxWalkSpeed * Skill->SpeedMultiplier;
@@ -683,6 +695,13 @@ void URLSkillComponent::EndSpeedBuff()
     if (OwnerCharacter && OwnerCharacter->GetCharacterMovement())
     {
         OwnerCharacter->GetCharacterMovement()->MaxWalkSpeed = 600.0f;
+    }
+
+    // 버프 이펙트도 같이 제거
+    if (ActiveBuffVFXComp)
+    {
+        ActiveBuffVFXComp->Deactivate();
+        ActiveBuffVFXComp = nullptr;
     }
 }
 

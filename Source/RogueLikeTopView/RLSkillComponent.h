@@ -119,6 +119,10 @@ protected:
     UPROPERTY()
     UFXSystemComponent* ActiveCastParticleComp = nullptr;
 
+    // 버프(E) 지속 중 캐릭터에 붙어있는 이펙트 컴포넌트
+    UPROPERTY()
+    UFXSystemComponent* ActiveBuffVFXComp = nullptr;
+
     UPROPERTY()
     ARLDecalIndicator* DecalIndicator;
 
