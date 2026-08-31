@@ -203,7 +203,7 @@ void ARLCharacter::Tick(float DeltaTime)
         DashElapsedTime += DeltaTime;
         float Alpha = FMath::Clamp(DashElapsedTime / DashDuration, 0.0f, 1.0f);
         FVector NewLocation = FMath::Lerp(DashStartLocation, DashTargetLocation, Alpha);
-        SetActorLocation(NewLocation, false);
+        SetActorLocation(NewLocation, true);
 
         if (Alpha >= 1.0f)
         {
