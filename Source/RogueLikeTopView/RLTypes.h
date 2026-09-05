@@ -3,29 +3,57 @@
 #include "CoreMinimal.h"
 #include "RLTypes.generated.h"
 
+class UAnimMontage;
+
 // 공격 판정 및 데미지 정보를 담는 공용 구조체
 USTRUCT(BlueprintType)
 struct FRLDamageData
 {
-    GENERATED_BODY()
+	GENERATED_BODY()
 
-    // 기본 데미지
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Damage")
-    float BaseDamage = 15.0f;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Damage")
+	float BaseDamage = 15.0f;
 
-    // 넉백 파워 (0이면 넉백 없음, 500~800 적당)
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Damage")
-    float KnockbackForce = 600.0f;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Damage")
+	float KnockbackForce = 600.0f;
 
-    // 타격 시 역경직 시간 (초 단위)
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Damage")
-    float HitStopDuration = 0.05f;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Damage")
+	float HitStopDuration = 0.05f;
 
-    // 무적 상태(회피 중) 무시 여부 (특수 패턴용)
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Damage")
-    bool bIgnoreInvincibility = false;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Damage")
+	bool bIgnoreInvincibility = false;
 
-    // 공격자 액터 포인터
-    UPROPERTY(BlueprintReadOnly, Category = "Damage")
-    AActor* DamageCauser = nullptr;
+	UPROPERTY(BlueprintReadOnly, Category = "Damage")
+	AActor* DamageCauser = nullptr;
+};
+
+// ★ 몬스터 개별 공격 패턴 데이터 구조체
+USTRUCT(BlueprintType)
+struct FRLMonsterPatternData
+{
+	GENERATED_BODY()
+
+	// 패턴 식별 이름 (예: "Slash", "Rush", "JumpSmash")
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Pattern")
+	FName PatternID = NAME_None;
+
+	// 공격 모션 몽타주
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Pattern")
+	TObjectPtr<UAnimMontage> AttackMontage = nullptr;
+
+	// 공격 유효 사거리 (이 거리 이내여야 패턴 사용)
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Pattern")
+	float AttackRange = 250.0f;
+
+	// 패턴 재사용 대기 시간 (초)
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Pattern")
+	float Cooldown = 3.0f;
+
+	// 패턴 사용 확률 가중치 (기본 1.0)
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Pattern")
+	float SelectionWeight = 1.0f;
+
+	// 이 패턴 실행 시 적용할 데미지 정보
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Pattern")
+	FRLDamageData DamageData;
 };

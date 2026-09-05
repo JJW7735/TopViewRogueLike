@@ -285,6 +285,18 @@ void ARLCharacter::CreateLocationHitbox(FVector TargetLocation, float Radius, co
             }
         }
     }
+
+    if (bHit)
+    {
+        GEngine->AddOnScreenDebugMessage(-1, 2.0f, FColor::Cyan, FString::Printf(TEXT("W Hitbox 감지된 수: %d"), HitResults.Num()));
+        for (const FHitResult& Hit : HitResults)
+        {
+            if (AActor* HitActor = Hit.GetActor())
+            {
+                GEngine->AddOnScreenDebugMessage(-1, 2.0f, FColor::Green, FString::Printf(TEXT("감지된 액터: %s"), *HitActor->GetName()));
+            }
+        }
+    }
 }
 
 void ARLCharacter::AddMovementInput(FVector WorldDirection, float ScaleValue, bool bForce)
