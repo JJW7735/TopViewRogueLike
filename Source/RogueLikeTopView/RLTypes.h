@@ -4,6 +4,7 @@
 #include "RLTypes.generated.h"
 
 class UAnimMontage;
+class UMaterialInterface;
 
 // 공격 판정 및 데미지 정보를 담는 공용 구조체
 USTRUCT(BlueprintType)
@@ -56,4 +57,20 @@ struct FRLMonsterPatternData
 	// 이 패턴 실행 시 적용할 데미지 정보
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Pattern")
 	FRLDamageData DamageData;
+
+	// 타격 예고 장판(인디케이터) 사용 여부
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Indicator")
+	bool bUseIndicator = false;
+
+	// 장판 데칼 머티리얼 (원형, 사각형 등)
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Indicator", meta = (EditCondition = "bUseIndicator"))
+	TObjectPtr<UMaterialInterface> IndicatorDecalMaterial = nullptr;
+
+	// 데칼 크기 (X: 투사 깊이, Y: 가로 폭/반경, Z: 세로 길이/반경)
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Indicator", meta = (EditCondition = "bUseIndicator"))
+	FVector IndicatorDecalSize = FVector(128.0f, 256.0f, 256.0f);
+
+	// 데칼 위치 오프셋 (돌진기처럼 앞으로 뻗어야 할 때 사용)
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Indicator", meta = (EditCondition = "bUseIndicator"))
+	FVector IndicatorOffset = FVector::ZeroVector;
 };
