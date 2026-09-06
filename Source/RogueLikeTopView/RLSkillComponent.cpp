@@ -92,7 +92,7 @@ void URLSkillComponent::TickComponent(float DeltaTime, ELevelTick TickType, FAct
     {
         ESkillSlot Slot = Pair.Key;
         URLSkillData* Skill = Pair.Value;
-        if (Skill && IsOnCooldown(Slot))
+        if (Skill)
         {
             OnSkillCooldownChanged.Broadcast(Slot, GetRemainingCooldown(Slot), Skill->Cooldown);
         }
