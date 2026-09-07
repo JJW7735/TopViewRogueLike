@@ -11,6 +11,7 @@ class UCameraComponent;
 class URLHealthComponent;
 class URLSkillComponent;
 class URLSkillData;
+class URLStatComponent;
 
 UCLASS()
 class ROGUELIKETOPVIEW_API ARLCharacter : public ACharacter
@@ -49,6 +50,9 @@ public:
 
 	UFUNCTION(BlueprintPure, Category = "Skill")
 	URLSkillComponent* GetSkillComponent() const { return SkillComp; }
+
+	UFUNCTION(BlueprintPure, Category = "Stats")
+	URLStatComponent* GetStatComponent() const { return StatComp; }
 
 	// ★ 언리얼 엔진의 기본 대미지 파이프라인 가로채기 (절대 방어막)
 	virtual float TakeDamage(float DamageAmount, struct FDamageEvent const& DamageEvent, class AController* EventInstigator, AActor* DamageCauser) override;
@@ -92,6 +96,10 @@ protected:
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
 	URLSkillComponent* SkillComp;
+
+	// ★ 추가: 스탯 컴포넌트
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
+	class URLStatComponent* StatComp;
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Skill|Default")
 	URLSkillData* DefaultSkill_Q;

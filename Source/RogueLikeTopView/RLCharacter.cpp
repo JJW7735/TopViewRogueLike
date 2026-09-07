@@ -9,6 +9,7 @@
 #include "Kismet/KismetSystemLibrary.h"
 #include "Kismet/GameplayStatics.h"
 #include "RLSkillComponent.h"
+#include "RLStatComponent.h"
 #include "RLSkillData.h"
 #include "DrawDebugHelpers.h"
 #include "Animation/AnimInstance.h"
@@ -39,6 +40,7 @@ ARLCharacter::ARLCharacter()
 
     HealthComp = CreateDefaultSubobject<URLHealthComponent>(TEXT("HealthComp"));
     SkillComp = CreateDefaultSubobject<URLSkillComponent>(TEXT("SkillComp"));
+    StatComp = CreateDefaultSubobject<URLStatComponent>(TEXT("StatComp"));
 }
 
 void ARLCharacter::BeginPlay()
@@ -66,6 +68,11 @@ void ARLCharacter::BeginPlay()
         FInputModeGameAndUI InputMode;
         InputMode.SetHideCursorDuringCapture(false); // 드래그 중에도 커서 숨기지 않음!
         PC->SetInputMode(InputMode);
+    }
+
+    if (StatComp && GetCharacterMovement())
+    {
+        GetCharacterMovement()->MaxWalkSpeed = StatComp->MoveSpeed;
     }
 }
 

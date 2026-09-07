@@ -11,146 +11,172 @@ class ARLDecalIndicator;
 class UParticleSystemComponent;
 class UFXSystemComponent;
 
+// ========================================================
+// 델리게이트 선언 (UI 연동용)
+// ========================================================
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FOnSkillCooldownChanged, ESkillSlot, Slot, float, RemainingTime, float, MaxCooldown);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_FourParams(FOnCastProgressChanged, ESkillSlot, Slot, float, CurrentTime, float, MaxDuration, float, ProgressRatio);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnCastStateChanged, ESkillSlot, Slot, bool, bIsCasting);
 
+// ========================================================
+// 스킬 상태 Enum
+// ========================================================
 UENUM(BlueprintType)
 enum class EPlayerSkillState : uint8
 {
-    Idle,
-    Casting,      // 캐스팅 게이지 채우는 중 (100% 도달 시에만 발동)
-    Charging,     // 차징 힘 모으는 중
-    Holding,      // 홀딩 유지 중
-    Aiming        // 장판 위치 조준 중 (이동 가능)
+	Idle,
+	Casting,      // 캐스팅 게이지 채우는 중 (100% 도달 시 발동)
+	Charging,     // 차징 힘 모으는 중
+	Holding,      // 홀딩 유지 중
+	Aiming        // 장판 위치 조준 중
 };
 
 UCLASS(ClassGroup = (Custom), meta = (BlueprintSpawnableComponent))
 class ROGUELIKETOPVIEW_API URLSkillComponent : public UActorComponent
 {
-    GENERATED_BODY()
+	GENERATED_BODY()
 
 public:
-    URLSkillComponent();
-    virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
+	URLSkillComponent();
+	virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
 
-    void OnSkillInputStarted(ESkillSlot Slot);
-    void OnSkillInputTriggered(ESkillSlot Slot);
-    void OnSkillInputCompleted(ESkillSlot Slot);
+	// ========================================================
+	// 입력 핸들링
+	// ========================================================
+	void OnSkillInputStarted(ESkillSlot Slot);
+	void OnSkillInputTriggered(ESkillSlot Slot);
+	void OnSkillInputCompleted(ESkillSlot Slot);
 
-    UFUNCTION(BlueprintCallable, Category = "Skill")
-    void ConfirmGroundCast();
+	// ========================================================
+	// 스킬 발동 제어 및 애니메이션 노티파이
+	// ========================================================
+	UFUNCTION(BlueprintCallable, Category = "Skill|Action")
+	void ConfirmGroundCast();
 
-    UFUNCTION(BlueprintCallable, Category = "Skill")
-    void CancelGroundCast();
+	UFUNCTION(BlueprintCallable, Category = "Skill|Action")
+	void CancelGroundCast();
 
-    UFUNCTION(BlueprintCallable, Category = "Skill")
-    void TriggerActiveSkillHit();
+	UFUNCTION(BlueprintCallable, Category = "Skill|Action")
+	void TriggerActiveSkillHit();
 
-    UFUNCTION(BlueprintCallable, Category = "Skill")
-    void TriggerActiveSkillDash();
+	UFUNCTION(BlueprintCallable, Category = "Skill|Action")
+	void TriggerActiveSkillDash();
 
-    void StartCasting(ESkillSlot Slot);
-    void FinishCasting();
-    void InterruptCasting(const FString& Reason = TEXT("Interrupted"));
+	void StartCasting(ESkillSlot Slot);
+	void FinishCasting();
+	void InterruptCasting(const FString& Reason = TEXT("Interrupted"));
 
-    UFUNCTION(BlueprintCallable, Category = "Skill")
-    void EquipSkill(ESkillSlot Slot, URLSkillData* NewSkill);
+	// ========================================================
+	// 유틸리티 및 상태 Getter
+	// ========================================================
+	UFUNCTION(BlueprintCallable, Category = "Skill|Setup")
+	void EquipSkill(ESkillSlot Slot, URLSkillData* NewSkill);
 
-    UFUNCTION(BlueprintPure, Category = "Skill")
-    bool IsOnCooldown(ESkillSlot Slot) const;
+	UFUNCTION(BlueprintPure, Category = "Skill|State")
+	bool IsOnCooldown(ESkillSlot Slot) const;
 
-    UFUNCTION(BlueprintPure, Category = "Skill")
-    float GetRemainingCooldown(ESkillSlot Slot) const;
+	UFUNCTION(BlueprintPure, Category = "Skill|State")
+	float GetRemainingCooldown(ESkillSlot Slot) const;
 
-    UFUNCTION(BlueprintPure, Category = "Skill")
-    bool IsAiming() const { return CurrentSkillState == EPlayerSkillState::Aiming; }
+	UFUNCTION(BlueprintPure, Category = "Skill|State")
+	bool IsAiming() const { return CurrentSkillState == EPlayerSkillState::Aiming; }
 
-    UFUNCTION(BlueprintPure, Category = "Skill")
-    bool IsCasting() const { return CurrentSkillState == EPlayerSkillState::Casting; }
+	UFUNCTION(BlueprintPure, Category = "Skill|State")
+	bool IsCasting() const { return CurrentSkillState == EPlayerSkillState::Casting; }
 
-    UFUNCTION(BlueprintPure, Category = "Skill")
-    bool IsCharging() const { return CurrentSkillState == EPlayerSkillState::Charging; }
+	UFUNCTION(BlueprintPure, Category = "Skill|State")
+	bool IsCharging() const { return CurrentSkillState == EPlayerSkillState::Charging; }
 
-    UFUNCTION(BlueprintPure, Category = "Skill")
-    bool IsHolding() const { return CurrentSkillState == EPlayerSkillState::Holding; }
+	UFUNCTION(BlueprintPure, Category = "Skill|State")
+	bool IsHolding() const { return CurrentSkillState == EPlayerSkillState::Holding; }
 
-    UFUNCTION(BlueprintPure, Category = "Skill")
-    EPlayerSkillState GetSkillState() const { return CurrentSkillState; }
+	UFUNCTION(BlueprintPure, Category = "Skill|State")
+	EPlayerSkillState GetSkillState() const { return CurrentSkillState; }
 
-    UPROPERTY(BlueprintAssignable, Category = "Skill|UI")
-    FOnSkillCooldownChanged OnSkillCooldownChanged;
+	FRLDamageData CalculateFinalDamage(URLSkillData* Skill);
 
-    UPROPERTY(BlueprintAssignable, Category = "Skill|UI")
-    FOnCastProgressChanged OnCastProgressChanged;
+	// ========================================================
+	// 블루프린트 이벤트 (UI 업데이트용)
+	// ========================================================
+	UPROPERTY(BlueprintAssignable, Category = "Skill|UI")
+	FOnSkillCooldownChanged OnSkillCooldownChanged;
 
-    UPROPERTY(BlueprintAssignable, Category = "Skill|UI")
-    FOnCastStateChanged OnCastStateChanged;
+	UPROPERTY(BlueprintAssignable, Category = "Skill|UI")
+	FOnCastProgressChanged OnCastProgressChanged;
+
+	UPROPERTY(BlueprintAssignable, Category = "Skill|UI")
+	FOnCastStateChanged OnCastStateChanged;
 
 protected:
-    virtual void BeginPlay() override;
+	virtual void BeginPlay() override;
 
-    UPROPERTY()
-    ARLCharacter* OwnerCharacter;
+	// ========================================================
+	// 핵심 참조 및 데이터
+	// ========================================================
+	UPROPERTY()
+	ARLCharacter* OwnerCharacter;
 
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Skill")
-    TMap<ESkillSlot, URLSkillData*> EquippedSkills;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Skill|Data")
+	TMap<ESkillSlot, URLSkillData*> EquippedSkills;
 
-    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Skill")
-    TMap<ESkillSlot, float> CooldownEndTimes;
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Skill|State")
+	TMap<ESkillSlot, float> CooldownEndTimes;
 
-    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Skill")
-    EPlayerSkillState CurrentSkillState = EPlayerSkillState::Idle;
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Skill|State")
+	EPlayerSkillState CurrentSkillState = EPlayerSkillState::Idle;
 
-    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Skill")
-    ESkillSlot CurrentActiveSlot = ESkillSlot::Slot_Q;
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Skill|State")
+	ESkillSlot CurrentActiveSlot = ESkillSlot::Slot_Q;
 
-    UPROPERTY()
-    float CurrentAccumulatedTime = 0.0f;
+	// ========================================================
+	// 타이머 및 콤보 변수
+	// ========================================================
+	UPROPERTY()
+	float CurrentAccumulatedTime = 0.0f;
 
-    UPROPERTY()
-    float LastHoldTickTime = 0.0f;
+	UPROPERTY()
+	float LastHoldTickTime = 0.0f;
 
-    // 캐스팅 성공 시 폭발할 목표 지점 좌표
-    UPROPERTY()
-    FVector PendingExplosionLocation = FVector::ZeroVector;
+	UPROPERTY()
+	int32 ComboCount = 0;
 
-    // 캐스팅 중 바닥에 유지되는 지속 번개 파티클 컴포넌트
-    UPROPERTY()
-    UFXSystemComponent* ActiveCastParticleComp = nullptr;
+	UPROPERTY()
+	FTimerHandle ComboResetTimerHandle;
 
-    // 버프(E) 지속 중 캐릭터에 붙어있는 이펙트 컴포넌트
-    UPROPERTY()
-    UFXSystemComponent* ActiveBuffVFXComp = nullptr;
+	UPROPERTY()
+	FTimerHandle SpeedBuffTimerHandle;
 
-    UPROPERTY()
-    ARLDecalIndicator* DecalIndicator;
+	UPROPERTY()
+	bool bHasTriggeredPreCastMotion = false;
 
-    void StartGroundTargetAiming(ESkillSlot Slot);
-    void StopPlayerMovement();
-    void RotateOwnerToMouseCursor();
-    FVector GetMouseGroundLocation() const;
+	// ========================================================
+	// VFX 및 시각 효과 참조
+	// ========================================================
+	UPROPERTY()
+	FVector PendingExplosionLocation = FVector::ZeroVector;
 
-    // ===== 이속 버프 전용 =====
-    UPROPERTY()
-    FTimerHandle SpeedBuffTimerHandle;
+	UPROPERTY()
+	UFXSystemComponent* ActiveCastParticleComp = nullptr;
 
-    UPROPERTY()
-    bool bHasTriggeredPreCastMotion = false;
-     
-    // ↓↓↓ 여기 이 세 줄 추가 ↓↓↓
-    UPROPERTY()
-    int32 ComboCount = 0;
+	UPROPERTY()
+	UFXSystemComponent* ActiveBuffVFXComp = nullptr;
 
-    UPROPERTY()
-    FTimerHandle ComboResetTimerHandle;
+	UPROPERTY()
+	ARLDecalIndicator* DecalIndicator;
 
-    UFUNCTION()
-    void ResetCombo();
-    // ↑↑↑ 여기까지 ↑↑↑
+	// ========================================================
+	// 내부 헬퍼 함수
+	// ========================================================
+	void StartGroundTargetAiming(ESkillSlot Slot);
+	void StopPlayerMovement();
+	void RotateOwnerToMouseCursor();
+	FVector GetMouseGroundLocation() const;
 
-    UFUNCTION()
-    void EndSpeedBuff();
+	UFUNCTION()
+	void EndSpeedBuff();
 
-    UFXSystemComponent* SpawnSkillVFX(UFXSystemAsset* VFXAsset, FVector Location, bool bAttach, FName SocketName);
+	UFUNCTION()
+	void ResetCombo();
+
+	UFXSystemComponent* SpawnSkillVFX(UFXSystemAsset* VFXAsset, FVector Location, bool bAttach, FName SocketName);
 };
