@@ -197,9 +197,9 @@ void ARLCharacter::Dodge(FVector CursorLocation)
 
     SetActorRotation(DashDirection.Rotation());
 
-    if (UAnimInstance* AnimInstance = GetMesh()->GetAnimInstance())
+    if (DashMontage)
     {
-        AnimInstance->Montage_Stop(0.1f);
+        PlayAnimMontage(DashMontage);
     }
 
     if (SkillComp && SkillComp->IsCasting())

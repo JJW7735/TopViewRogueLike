@@ -104,6 +104,7 @@ void URLSkillComponent::TickComponent(float DeltaTime, ELevelTick TickType, FAct
 // ========================================================
 void URLSkillComponent::OnSkillInputStarted(ESkillSlot Slot)
 {
+    if (OwnerCharacter && OwnerCharacter->IsDashing()) return;
     if (!EquippedSkills.Contains(Slot) || !EquippedSkills[Slot]) return;
     if (IsOnCooldown(Slot)) return;
 
@@ -288,6 +289,7 @@ void URLSkillComponent::OnSkillInputStarted(ESkillSlot Slot)
 // ========================================================
 void URLSkillComponent::OnSkillInputTriggered(ESkillSlot Slot)
 {
+    if (OwnerCharacter && OwnerCharacter->IsDashing()) return;
     if (CurrentActiveSlot != Slot) return;
 
     URLSkillData* Skill = EquippedSkills.FindRef(Slot);

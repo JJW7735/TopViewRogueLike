@@ -70,6 +70,11 @@ public:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Action|Dash")
 	bool bCanDash = true;
 
+	// ★ 추가: 대쉬할 때 재생할 애니메이션 몽타주 빈칸
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Action|Dash")
+	class UAnimMontage* DashMontage;
+	bool IsDashing() const { return bIsDashing; }
+
 protected:
 	virtual void BeginPlay() override;
 
