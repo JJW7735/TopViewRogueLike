@@ -9,94 +9,87 @@
 
 ARLPlayerController::ARLPlayerController()
 {
-    bShowMouseCursor = true;
+	bShowMouseCursor = true;
+	// ★ 드래그 시 커서 고정
+	DefaultMouseCursor = EMouseCursor::Default;
 }
 
 void ARLPlayerController::BeginPlay()
 {
-    Super::BeginPlay();
+	Super::BeginPlay();
 
-    if (UEnhancedInputLocalPlayerSubsystem* Subsystem = ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem>(GetLocalPlayer()))
-    {
-        if (DefaultMappingContext)
-        {
-            Subsystem->AddMappingContext(DefaultMappingContext, 0);
-        }
-    }
+	// ★ 마우스 입력 모드 캡처 시 커서 숨김 방지 세팅
+	FInputModeGameAndUI InputMode;
+	InputMode.SetHideCursorDuringCapture(false);
+	SetInputMode(InputMode);
+
+	if (UEnhancedInputLocalPlayerSubsystem* Subsystem = ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem>(GetLocalPlayer()))
+	{
+		if (DefaultMappingContext)
+		{
+			Subsystem->AddMappingContext(DefaultMappingContext, 0);
+		}
+	}
 }
 
 void ARLPlayerController::SetupInputComponent()
 {
-    Super::SetupInputComponent();
+	Super::SetupInputComponent();
 
-    if (UEnhancedInputComponent* EnhancedInputComponent = Cast<UEnhancedInputComponent>(InputComponent))
-    {
-        // 1. 이동 바인딩 (우클릭)
-        if (RightClickMoveAction)
-        {
-            EnhancedInputComponent->BindAction(RightClickMoveAction, ETriggerEvent::Started, this, &ARLPlayerController::OnMoveStarted);
-            EnhancedInputComponent->BindAction(RightClickMoveAction, ETriggerEvent::Triggered, this, &ARLPlayerController::OnMoveTriggered);
-        }
-
-        // 2. 기본 공격 바인딩 (좌클릭) - 기존 TestAttack 대체
-        if (BasicAttackAction)
-        {
-            EnhancedInputComponent->BindAction(BasicAttackAction, ETriggerEvent::Started, this, &ARLPlayerController::OnBasicAttack_Started);
-            EnhancedInputComponent->BindAction(BasicAttackAction, ETriggerEvent::Triggered, this, &ARLPlayerController::OnBasicAttack_Triggered);
-            EnhancedInputComponent->BindAction(BasicAttackAction, ETriggerEvent::Completed, this, &ARLPlayerController::OnBasicAttack_Completed);
-        }
-
-        // 3. Q 스킬 바인딩
-        if (SkillQ_Action)
-        {
-            EnhancedInputComponent->BindAction(SkillQ_Action, ETriggerEvent::Started, this, &ARLPlayerController::OnSkillQ_Started);
-            EnhancedInputComponent->BindAction(SkillQ_Action, ETriggerEvent::Triggered, this, &ARLPlayerController::OnSkillQ_Triggered);
-            EnhancedInputComponent->BindAction(SkillQ_Action, ETriggerEvent::Completed, this, &ARLPlayerController::OnSkillQ_Completed);
-        }
-
-        // 4. W 스킬 바인딩
-        if (SkillW_Action)
-        {
-            EnhancedInputComponent->BindAction(SkillW_Action, ETriggerEvent::Started, this, &ARLPlayerController::OnSkillW_Started);
-            EnhancedInputComponent->BindAction(SkillW_Action, ETriggerEvent::Triggered, this, &ARLPlayerController::OnSkillW_Triggered);
-            EnhancedInputComponent->BindAction(SkillW_Action, ETriggerEvent::Completed, this, &ARLPlayerController::OnSkillW_Completed);
-        }
-
-        // 5. E 스킬 바인딩
-        if (SkillE_Action)
-        {
-            EnhancedInputComponent->BindAction(SkillE_Action, ETriggerEvent::Started, this, &ARLPlayerController::OnSkillE_Started);
-            EnhancedInputComponent->BindAction(SkillE_Action, ETriggerEvent::Triggered, this, &ARLPlayerController::OnSkillE_Triggered);
-            EnhancedInputComponent->BindAction(SkillE_Action, ETriggerEvent::Completed, this, &ARLPlayerController::OnSkillE_Completed);
-        }
-
-        // 6. R 스킬 바인딩
-        if (SkillR_Action)
-        {
-            EnhancedInputComponent->BindAction(SkillR_Action, ETriggerEvent::Started, this, &ARLPlayerController::OnSkillR_Started);
-            EnhancedInputComponent->BindAction(SkillR_Action, ETriggerEvent::Triggered, this, &ARLPlayerController::OnSkillR_Triggered);
-            EnhancedInputComponent->BindAction(SkillR_Action, ETriggerEvent::Completed, this, &ARLPlayerController::OnSkillR_Completed);
-        }
-
-        // ★ 7. 대쉬(회피) 바인딩 연결 (예: 스페이스바)
-        if (DodgeAction)
-        {
-            EnhancedInputComponent->BindAction(DodgeAction, ETriggerEvent::Started, this, &ARLPlayerController::OnDodge_Started);
-        }
-    }
+	if (UEnhancedInputComponent* EnhancedInputComponent = Cast<UEnhancedInputComponent>(InputComponent))
+	{
+		if (RightClickMoveAction)
+		{
+			EnhancedInputComponent->BindAction(RightClickMoveAction, ETriggerEvent::Started, this, &ARLPlayerController::OnMoveStarted);
+			EnhancedInputComponent->BindAction(RightClickMoveAction, ETriggerEvent::Triggered, this, &ARLPlayerController::OnMoveTriggered);
+		}
+		if (BasicAttackAction)
+		{
+			EnhancedInputComponent->BindAction(BasicAttackAction, ETriggerEvent::Started, this, &ARLPlayerController::OnBasicAttack_Started);
+			EnhancedInputComponent->BindAction(BasicAttackAction, ETriggerEvent::Triggered, this, &ARLPlayerController::OnBasicAttack_Triggered);
+			EnhancedInputComponent->BindAction(BasicAttackAction, ETriggerEvent::Completed, this, &ARLPlayerController::OnBasicAttack_Completed);
+		}
+		if (SkillQ_Action)
+		{
+			EnhancedInputComponent->BindAction(SkillQ_Action, ETriggerEvent::Started, this, &ARLPlayerController::OnSkillQ_Started);
+			EnhancedInputComponent->BindAction(SkillQ_Action, ETriggerEvent::Triggered, this, &ARLPlayerController::OnSkillQ_Triggered);
+			EnhancedInputComponent->BindAction(SkillQ_Action, ETriggerEvent::Completed, this, &ARLPlayerController::OnSkillQ_Completed);
+		}
+		if (SkillW_Action)
+		{
+			EnhancedInputComponent->BindAction(SkillW_Action, ETriggerEvent::Started, this, &ARLPlayerController::OnSkillW_Started);
+			EnhancedInputComponent->BindAction(SkillW_Action, ETriggerEvent::Triggered, this, &ARLPlayerController::OnSkillW_Triggered);
+			EnhancedInputComponent->BindAction(SkillW_Action, ETriggerEvent::Completed, this, &ARLPlayerController::OnSkillW_Completed);
+		}
+		if (SkillE_Action)
+		{
+			EnhancedInputComponent->BindAction(SkillE_Action, ETriggerEvent::Started, this, &ARLPlayerController::OnSkillE_Started);
+			EnhancedInputComponent->BindAction(SkillE_Action, ETriggerEvent::Triggered, this, &ARLPlayerController::OnSkillE_Triggered);
+			EnhancedInputComponent->BindAction(SkillE_Action, ETriggerEvent::Completed, this, &ARLPlayerController::OnSkillE_Completed);
+		}
+		if (SkillR_Action)
+		{
+			EnhancedInputComponent->BindAction(SkillR_Action, ETriggerEvent::Started, this, &ARLPlayerController::OnSkillR_Started);
+			EnhancedInputComponent->BindAction(SkillR_Action, ETriggerEvent::Triggered, this, &ARLPlayerController::OnSkillR_Triggered);
+			EnhancedInputComponent->BindAction(SkillR_Action, ETriggerEvent::Completed, this, &ARLPlayerController::OnSkillR_Completed);
+		}
+		if (DodgeAction)
+		{
+			EnhancedInputComponent->BindAction(DodgeAction, ETriggerEvent::Started, this, &ARLPlayerController::OnDodge_Started);
+		}
+	}
 }
 
 void ARLPlayerController::OnDodge_Started()
 {
-    if (ARLCharacter* RLChar = Cast<ARLCharacter>(GetPawn()))
-    {
-        FHitResult Hit;
-        if (GetHitResultUnderCursor(ECollisionChannel::ECC_Visibility, true, Hit))
-        {
-            // 컨트롤러가 캐릭터에게 "저 마우스 좌표로 대쉬해!" 라고 명령만 전달
-            RLChar->Dodge(Hit.ImpactPoint);
-        }
-    }
+	if (ARLCharacter* RLChar = Cast<ARLCharacter>(GetPawn()))
+	{
+		FHitResult Hit;
+		if (GetHitResultUnderCursor(ECollisionChannel::ECC_Visibility, true, Hit))
+		{
+			RLChar->Dodge(Hit.ImpactPoint);
+		}
+	}
 }
 
 // ==========================================
@@ -104,43 +97,32 @@ void ARLPlayerController::OnDodge_Started()
 // ==========================================
 void ARLPlayerController::OnBasicAttack_Started()
 {
-    if (ARLCharacter* ControlledChar = Cast<ARLCharacter>(GetPawn()))
-    {
-        if (URLSkillComponent* SkillComp = ControlledChar->GetSkillComponent())
-        {
-            // ★ 장판 조준 모드일 때 좌클릭 -> 스킬 시전 확정!
-            if (SkillComp->IsAiming())
-            {
-                SkillComp->ConfirmGroundCast();
-                return;
-            }
-
-            // 평상시: 기본 공격 스킬(Slot_LMB) 시작
-            SkillComp->OnSkillInputStarted(ESkillSlot::Slot_LMB);
-        }
-    }
+	if (ARLCharacter* ControlledChar = Cast<ARLCharacter>(GetPawn()))
+	{
+		if (URLSkillComponent* SkillComp = ControlledChar->GetSkillComponent())
+		{
+			if (SkillComp->IsAiming())
+			{
+				SkillComp->ConfirmGroundCast();
+				return;
+			}
+			SkillComp->OnSkillInputStarted(ESkillSlot::Slot_LMB);
+		}
+	}
 }
 
 void ARLPlayerController::OnBasicAttack_Triggered()
 {
-    if (ARLCharacter* RLChar = Cast<ARLCharacter>(GetPawn()))
-    {
-        if (URLSkillComponent* SkillComp = RLChar->GetSkillComponent())
-        {
-            SkillComp->OnSkillInputTriggered(ESkillSlot::Slot_LMB);
-        }
-    }
+	if (ARLCharacter* RLChar = Cast<ARLCharacter>(GetPawn()))
+		if (URLSkillComponent* SkillComp = RLChar->GetSkillComponent())
+			SkillComp->OnSkillInputTriggered(ESkillSlot::Slot_LMB);
 }
 
 void ARLPlayerController::OnBasicAttack_Completed()
 {
-    if (ARLCharacter* RLChar = Cast<ARLCharacter>(GetPawn()))
-    {
-        if (URLSkillComponent* SkillComp = RLChar->GetSkillComponent())
-        {
-            SkillComp->OnSkillInputCompleted(ESkillSlot::Slot_LMB);
-        }
-    }
+	if (ARLCharacter* RLChar = Cast<ARLCharacter>(GetPawn()))
+		if (URLSkillComponent* SkillComp = RLChar->GetSkillComponent())
+			SkillComp->OnSkillInputCompleted(ESkillSlot::Slot_LMB);
 }
 
 // ==========================================
@@ -148,141 +130,64 @@ void ARLPlayerController::OnBasicAttack_Completed()
 // ==========================================
 void ARLPlayerController::OnMoveStarted()
 {
-    if (ARLCharacter* ControlledChar = Cast<ARLCharacter>(GetPawn()))
-    {
-        if (URLSkillComponent* SkillComp = ControlledChar->GetSkillComponent())
-        {
-            // ★ 장판 조준 중 우클릭 시 이동하지 않고 조준 취소!
-            if (SkillComp->IsAiming())
-            {
-                SkillComp->CancelGroundCast();
-                return;
-            }
+	if (ARLCharacter* ControlledChar = Cast<ARLCharacter>(GetPawn()))
+	{
+		if (URLSkillComponent* SkillComp = ControlledChar->GetSkillComponent())
+		{
+			if (SkillComp->IsAiming())
+			{
+				SkillComp->CancelGroundCast();
+				return;
+			}
+			if (SkillComp->IsCasting())
+			{
+				SkillComp->InterruptCasting(TEXT("이동 명령으로 인한 시전 취소"));
+			}
+		}
+	}
 
-            if (SkillComp->IsCasting())
-            {
-                SkillComp->InterruptCasting(TEXT("이동 명령으로 인한 시전 취소"));
-            }
-        }
-    }
-
-    FHitResult Hit;
-    if (GetHitResultUnderCursor(ECollisionChannel::ECC_Visibility, true, Hit))
-    {
-        if (FXCursor)
-        {
-            UNiagaraFunctionLibrary::SpawnSystemAtLocation(
-                GetWorld(),
-                FXCursor,
-                Hit.Location,
-                Hit.ImpactNormal.Rotation()
-            );
-        }
-    }
+	FHitResult Hit;
+	if (GetHitResultUnderCursor(ECollisionChannel::ECC_Visibility, true, Hit))
+	{
+		if (FXCursor)
+		{
+			UNiagaraFunctionLibrary::SpawnSystemAtLocation(GetWorld(), FXCursor, Hit.Location, Hit.ImpactNormal.Rotation());
+		}
+	}
 }
 
 void ARLPlayerController::OnMoveTriggered()
 {
-    if (ARLCharacter* ControlledChar = Cast<ARLCharacter>(GetPawn()))
-    {
-        if (URLSkillComponent* SkillComp = ControlledChar->GetSkillComponent())
-        {
-            // ★ 조준 중에는 우클릭 이동 차단
-            if (SkillComp->IsAiming()) return;
-        }
-    }
+	if (ARLCharacter* ControlledChar = Cast<ARLCharacter>(GetPawn()))
+	{
+		if (URLSkillComponent* SkillComp = ControlledChar->GetSkillComponent())
+		{
+			if (SkillComp->IsAiming()) return;
+		}
+	}
 
-    FHitResult Hit;
-    if (GetHitResultUnderCursor(ECollisionChannel::ECC_Visibility, true, Hit))
-    {
-        UAIBlueprintHelperLibrary::SimpleMoveToLocation(this, Hit.Location);
-    }
-}
-
-// ==========================================
-// Q 스킬 발동 로직
-// ==========================================
-void ARLPlayerController::OnSkillQ_Started()
-{
-    if (ARLCharacter* RLChar = Cast<ARLCharacter>(GetPawn()))
-        if (URLSkillComponent* SkillComp = RLChar->GetSkillComponent())
-            SkillComp->OnSkillInputStarted(ESkillSlot::Slot_Q);
-}
-void ARLPlayerController::OnSkillQ_Triggered()
-{
-    if (ARLCharacter* RLChar = Cast<ARLCharacter>(GetPawn()))
-        if (URLSkillComponent* SkillComp = RLChar->GetSkillComponent())
-            SkillComp->OnSkillInputTriggered(ESkillSlot::Slot_Q);
-}
-void ARLPlayerController::OnSkillQ_Completed()
-{
-    if (ARLCharacter* RLChar = Cast<ARLCharacter>(GetPawn()))
-        if (URLSkillComponent* SkillComp = RLChar->GetSkillComponent())
-            SkillComp->OnSkillInputCompleted(ESkillSlot::Slot_Q);
+	FHitResult Hit;
+	if (GetHitResultUnderCursor(ECollisionChannel::ECC_Visibility, true, Hit))
+	{
+		UAIBlueprintHelperLibrary::SimpleMoveToLocation(this, Hit.Location);
+	}
 }
 
 // ==========================================
-// W 스킬 발동 로직
+// 스킬 Q, W, E, R (중복 제거 및 정리)
 // ==========================================
-void ARLPlayerController::OnSkillW_Started()
-{
-    if (ARLCharacter* RLChar = Cast<ARLCharacter>(GetPawn()))
-        if (URLSkillComponent* SkillComp = RLChar->GetSkillComponent())
-            SkillComp->OnSkillInputStarted(ESkillSlot::Slot_W);
-}
-void ARLPlayerController::OnSkillW_Triggered()
-{
-    if (ARLCharacter* RLChar = Cast<ARLCharacter>(GetPawn()))
-        if (URLSkillComponent* SkillComp = RLChar->GetSkillComponent())
-            SkillComp->OnSkillInputTriggered(ESkillSlot::Slot_W);
-}
-void ARLPlayerController::OnSkillW_Completed()
-{
-    if (ARLCharacter* RLChar = Cast<ARLCharacter>(GetPawn()))
-        if (URLSkillComponent* SkillComp = RLChar->GetSkillComponent())
-            SkillComp->OnSkillInputCompleted(ESkillSlot::Slot_W);
-}
+void ARLPlayerController::OnSkillQ_Started() { if (ARLCharacter* RLChar = Cast<ARLCharacter>(GetPawn())) if (URLSkillComponent* SkillComp = RLChar->GetSkillComponent()) SkillComp->OnSkillInputStarted(ESkillSlot::Slot_Q); }
+void ARLPlayerController::OnSkillQ_Triggered() { if (ARLCharacter* RLChar = Cast<ARLCharacter>(GetPawn())) if (URLSkillComponent* SkillComp = RLChar->GetSkillComponent()) SkillComp->OnSkillInputTriggered(ESkillSlot::Slot_Q); }
+void ARLPlayerController::OnSkillQ_Completed() { if (ARLCharacter* RLChar = Cast<ARLCharacter>(GetPawn())) if (URLSkillComponent* SkillComp = RLChar->GetSkillComponent()) SkillComp->OnSkillInputCompleted(ESkillSlot::Slot_Q); }
 
-// ==========================================
-// E 스킬 발동 로직
-// ==========================================
-void ARLPlayerController::OnSkillE_Started()
-{
-    if (ARLCharacter* RLChar = Cast<ARLCharacter>(GetPawn()))
-        if (URLSkillComponent* SkillComp = RLChar->GetSkillComponent())
-            SkillComp->OnSkillInputStarted(ESkillSlot::Slot_E);
-}
-void ARLPlayerController::OnSkillE_Triggered()
-{
-    if (ARLCharacter* RLChar = Cast<ARLCharacter>(GetPawn()))
-        if (URLSkillComponent* SkillComp = RLChar->GetSkillComponent())
-            SkillComp->OnSkillInputTriggered(ESkillSlot::Slot_E);
-}
-void ARLPlayerController::OnSkillE_Completed()
-{
-    if (ARLCharacter* RLChar = Cast<ARLCharacter>(GetPawn()))
-        if (URLSkillComponent* SkillComp = RLChar->GetSkillComponent())
-            SkillComp->OnSkillInputCompleted(ESkillSlot::Slot_E);
-}
+void ARLPlayerController::OnSkillW_Started() { if (ARLCharacter* RLChar = Cast<ARLCharacter>(GetPawn())) if (URLSkillComponent* SkillComp = RLChar->GetSkillComponent()) SkillComp->OnSkillInputStarted(ESkillSlot::Slot_W); }
+void ARLPlayerController::OnSkillW_Triggered() { if (ARLCharacter* RLChar = Cast<ARLCharacter>(GetPawn())) if (URLSkillComponent* SkillComp = RLChar->GetSkillComponent()) SkillComp->OnSkillInputTriggered(ESkillSlot::Slot_W); }
+void ARLPlayerController::OnSkillW_Completed() { if (ARLCharacter* RLChar = Cast<ARLCharacter>(GetPawn())) if (URLSkillComponent* SkillComp = RLChar->GetSkillComponent()) SkillComp->OnSkillInputCompleted(ESkillSlot::Slot_W); }
 
-// ==========================================
-// R 스킬 발동 로직
-// ==========================================
-void ARLPlayerController::OnSkillR_Started()
-{
-    if (ARLCharacter* RLChar = Cast<ARLCharacter>(GetPawn()))
-        if (URLSkillComponent* SkillComp = RLChar->GetSkillComponent())
-            SkillComp->OnSkillInputStarted(ESkillSlot::Slot_R);
-}
-void ARLPlayerController::OnSkillR_Triggered()
-{
-    if (ARLCharacter* RLChar = Cast<ARLCharacter>(GetPawn()))
-        if (URLSkillComponent* SkillComp = RLChar->GetSkillComponent())
-            SkillComp->OnSkillInputTriggered(ESkillSlot::Slot_R);
-}
-void ARLPlayerController::OnSkillR_Completed()
-{
-    if (ARLCharacter* RLChar = Cast<ARLCharacter>(GetPawn()))
-        if (URLSkillComponent* SkillComp = RLChar->GetSkillComponent())
-            SkillComp->OnSkillInputCompleted(ESkillSlot::Slot_R);
-}
+void ARLPlayerController::OnSkillE_Started() { if (ARLCharacter* RLChar = Cast<ARLCharacter>(GetPawn())) if (URLSkillComponent* SkillComp = RLChar->GetSkillComponent()) SkillComp->OnSkillInputStarted(ESkillSlot::Slot_E); }
+void ARLPlayerController::OnSkillE_Triggered() { if (ARLCharacter* RLChar = Cast<ARLCharacter>(GetPawn())) if (URLSkillComponent* SkillComp = RLChar->GetSkillComponent()) SkillComp->OnSkillInputTriggered(ESkillSlot::Slot_E); }
+void ARLPlayerController::OnSkillE_Completed() { if (ARLCharacter* RLChar = Cast<ARLCharacter>(GetPawn())) if (URLSkillComponent* SkillComp = RLChar->GetSkillComponent()) SkillComp->OnSkillInputCompleted(ESkillSlot::Slot_E); }
+
+void ARLPlayerController::OnSkillR_Started() { if (ARLCharacter* RLChar = Cast<ARLCharacter>(GetPawn())) if (URLSkillComponent* SkillComp = RLChar->GetSkillComponent()) SkillComp->OnSkillInputStarted(ESkillSlot::Slot_R); }
+void ARLPlayerController::OnSkillR_Triggered() { if (ARLCharacter* RLChar = Cast<ARLCharacter>(GetPawn())) if (URLSkillComponent* SkillComp = RLChar->GetSkillComponent()) SkillComp->OnSkillInputTriggered(ESkillSlot::Slot_R); }
+void ARLPlayerController::OnSkillR_Completed() { if (ARLCharacter* RLChar = Cast<ARLCharacter>(GetPawn())) if (URLSkillComponent* SkillComp = RLChar->GetSkillComponent()) SkillComp->OnSkillInputCompleted(ESkillSlot::Slot_R); }

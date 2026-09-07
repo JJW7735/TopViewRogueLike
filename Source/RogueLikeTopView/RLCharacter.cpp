@@ -58,6 +58,15 @@ void ARLCharacter::BeginPlay()
         if (DefaultSkill_R) SkillComp->EquipSkill(ESkillSlot::Slot_R, DefaultSkill_R);
         if (DefaultSkill_LMB) SkillComp->EquipSkill(ESkillSlot::Slot_LMB, DefaultSkill_LMB);
     }
+
+    if (APlayerController* PC = Cast<APlayerController>(GetController()))
+    {
+        PC->bShowMouseCursor = true;
+
+        FInputModeGameAndUI InputMode;
+        InputMode.SetHideCursorDuringCapture(false); // 드래그 중에도 커서 숨기지 않음!
+        PC->SetInputMode(InputMode);
+    }
 }
 
 void ARLCharacter::ReceiveCustomDamage(const FRLDamageData& DamageData, const FHitResult& HitInfo)
@@ -156,19 +165,36 @@ void ARLCharacter::TestAttack()
 
 void ARLCharacter::Dodge(FVector CursorLocation)
 {
+    if (!bCanDash) return; // 쿨타임 중이면 무시
+
     FVector MyLocation = GetActorLocation();
     FVector DashDirection = CursorLocation - MyLocation;
     DashDirection.Z = 0.0f;
 
-    if (DashDirection.IsNearlyZero())
-    {
-        return;
-    }
-
+    if (DashDirection.IsNearlyZero()) return;
     DashDirection.Normalize();
 
-    float DashPower = 2500.0f;
-    LaunchCharacter(DashDirection * DashPower, true, true);
+    bCanDash = false;
+    bIsInvulnerable = true;
+
+    // 기존 이동 정지
+    if (AController* PC = GetController())
+    {
+        PC->StopMovement();
+    }
+
+    // =====================================================================
+    // ★ [거리와 속도 분리 계산의 핵심]
+    // 1. 어디까지 갈 것인가? (현재 위치 + 방향 * 설정한 거리)
+    FVector TargetLocation = MyLocation + (DashDirection * DashDistance);
+
+    // 2. 그 거리를 이 속도로 가려면 몇 초가 걸리는가? (시간 = 거리 / 속력)
+    float CalculatedDuration = DashDistance / DashSpeed;
+
+    // 3. 물리 엔진 대신, 우리가 만든 정확한 좌표 이동 함수에 꽂아 넣기!
+    StartDashMovement(TargetLocation, CalculatedDuration);
+    // =====================================================================
+
     SetActorRotation(DashDirection.Rotation());
 
     if (UAnimInstance* AnimInstance = GetMesh()->GetAnimInstance())
@@ -180,6 +206,30 @@ void ARLCharacter::Dodge(FVector CursorLocation)
     {
         SkillComp->InterruptCasting(TEXT("회피기로 인한 시전 취소"));
     }
+
+    GetWorldTimerManager().SetTimer(InvincibilityTimerHandle, this, &ARLCharacter::EndInvincibility, InvincibilityDuration, false);
+    GetWorldTimerManager().SetTimer(DashCooldownTimerHandle, this, &ARLCharacter::ResetDashCooldown, DashCooldown, false);
+}
+
+void ARLCharacter::EndInvincibility()
+{
+    bIsInvulnerable = false;
+}
+
+void ARLCharacter::ResetDashCooldown()
+{
+    bCanDash = true;
+}
+
+// ★ 절대 방어막 (적 AI가 ApplyDamage를 써도 무적이면 다 씹어버림)
+float ARLCharacter::TakeDamage(float DamageAmount, struct FDamageEvent const& DamageEvent, class AController* EventInstigator, AActor* DamageCauser)
+{
+    if (bIsInvulnerable)
+    {
+        GEngine->AddOnScreenDebugMessage(-1, 2.0f, FColor::Yellow, TEXT("대쉬 무적 판정! 대미지 무효화!"));
+        return 0.0f;
+    }
+    return Super::TakeDamage(DamageAmount, DamageEvent, EventInstigator, DamageCauser);
 }
 
 // ★ 부드러운 대시 이동 시작
@@ -217,6 +267,7 @@ void ARLCharacter::Tick(float DeltaTime)
     {
         return;
     }
+
 
     if (UAnimInstance* AnimInstance = GetMesh()->GetAnimInstance())
     {
@@ -311,3 +362,4 @@ void ARLCharacter::AddMovementInput(FVector WorldDirection, float ScaleValue, bo
 
     Super::AddMovementInput(WorldDirection, ScaleValue, bForce);
 }
+
