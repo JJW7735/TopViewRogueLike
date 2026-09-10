@@ -27,6 +27,13 @@ public class RogueLikeTopView : ModuleRules
 
 		PublicIncludePaths.AddRange(new string[] {
 			"RogueLikeTopView",
+			"RogueLikeTopView/Character/Public",
+			"RogueLikeTopView/Combat/Public",
+			"RogueLikeTopView/Skill/Public",
+			"RogueLikeTopView/Stats/Public",
+			"RogueLikeTopView/AI/Public",
+			"RogueLikeTopView/Core/Public",
+			"RogueLikeTopView/Player/Public",
 			"RogueLikeTopView/Variant_Strategy",
 			"RogueLikeTopView/Variant_Strategy/UI",
 			"RogueLikeTopView/Variant_TwinStick",
