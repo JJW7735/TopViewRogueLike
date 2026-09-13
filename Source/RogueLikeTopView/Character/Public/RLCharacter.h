@@ -129,6 +129,9 @@ protected:
 	UFUNCTION()
 	virtual void HandleDeath();
 
+	UFUNCTION(BlueprintImplementableEvent, Category = "Death")
+	void OnCharacterDeath();
+
 public:
 	virtual void Tick(float DeltaTime) override;
 	virtual void SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent) override;
