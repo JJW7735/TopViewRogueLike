@@ -45,6 +45,11 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Combat")
 	void CreateLocationHitbox(FVector TargetLocation, float Radius, const FRLDamageData& DamageData, bool bDrawDebug = true);
 
+	// ★ 원거리 공격: 정면 방향으로 투사체(ARLProjectile 파생 클래스)를 스폰합니다.
+	// URLSkillComponent의 ESkillCastType::Projectile 처리 로직과 동일한 방식으로 동작합니다.
+	UFUNCTION(BlueprintCallable, Category = "Combat")
+	void SpawnProjectileAttack(TSubclassOf<AActor> ProjectileClass, float ForwardOffset, float ProjectileSpeed, const FRLDamageData& DamageData);
+
 	UFUNCTION(BlueprintCallable, Category = "Action")
 	void Dodge(FVector CursorLocation);
 

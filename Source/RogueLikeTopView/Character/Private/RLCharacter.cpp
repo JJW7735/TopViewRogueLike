@@ -13,6 +13,8 @@
 #include "RLSkillData.h"
 #include "DrawDebugHelpers.h"
 #include "Animation/AnimInstance.h"
+#include "RLProjectile.h"
+#include "GameFramework/ProjectileMovementComponent.h"
 
 ARLCharacter::ARLCharacter()
 {
@@ -355,6 +357,34 @@ void ARLCharacter::CreateLocationHitbox(FVector TargetLocation, float Radius, co
             {
                 GEngine->AddOnScreenDebugMessage(-1, 2.0f, FColor::Green, FString::Printf(TEXT("감지된 액터: %s"), *HitActor->GetName()));
             }
+        }
+    }
+}
+
+// ★ 원거리 공격: RLSkillComponent의 ESkillCastType::Projectile 분기와 동일한 로직입니다.
+// (플레이어 스킬 투사체와 몬스터 원거리 패턴 투사체가 같은 방식으로 스폰되도록 통일)
+void ARLCharacter::SpawnProjectileAttack(TSubclassOf<AActor> ProjectileClass, float ForwardOffset, float ProjectileSpeed, const FRLDamageData& DamageData)
+{
+    if (!ProjectileClass)
+    {
+        return;
+    }
+
+    FVector SpawnLoc = GetActorLocation() + (GetActorForwardVector() * ForwardOffset);
+    FActorSpawnParameters SpawnParams;
+    SpawnParams.Owner = this;
+    SpawnParams.Instigator = this;
+    SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+
+    if (ARLProjectile* SpawnedProjectile = GetWorld()->SpawnActor<ARLProjectile>(ProjectileClass, SpawnLoc, GetActorRotation(), SpawnParams))
+    {
+        FRLDamageData FinalDamage = DamageData;
+        FinalDamage.DamageCauser = this;
+        SpawnedProjectile->DamageData = FinalDamage;
+
+        if (SpawnedProjectile->MovementComp)
+        {
+            SpawnedProjectile->MovementComp->Velocity = GetActorRotation().Vector() * ProjectileSpeed;
         }
     }
 }

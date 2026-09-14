@@ -73,4 +73,20 @@ struct FRLMonsterPatternData
 	// 데칼 위치 오프셋 (돌진기처럼 앞으로 뻗어야 할 때 사용)
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Indicator", meta = (EditCondition = "bUseIndicator"))
 	FVector IndicatorOffset = FVector::ZeroVector;
+
+	// ★ 원거리(투사체) 패턴 여부. true면 이 패턴은 근접 히트박스 대신 투사체를 발사합니다.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Pattern|Projectile")
+	bool bIsRangedAttack = false;
+
+	// 발사할 투사체 액터 클래스 (예: BP_RLProjectile_Base)
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Pattern|Projectile", meta = (EditCondition = "bIsRangedAttack"))
+	TSubclassOf<AActor> ProjectileClass;
+
+	// 투사체 발사 속도
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Pattern|Projectile", meta = (EditCondition = "bIsRangedAttack"))
+	float ProjectileSpeed = 1200.0f;
+
+	// 투사체 스폰 위치 오프셋 (캐릭터 정면 기준 앞으로 얼마나 띄워서 스폰할지)
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Pattern|Projectile", meta = (EditCondition = "bIsRangedAttack"))
+	float ProjectileSpawnForwardOffset = 80.0f;
 };
