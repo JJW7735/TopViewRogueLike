@@ -48,6 +48,9 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input|Action")
 	UInputAction* DodgeAction;
 
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input|Action")
+	UInputAction* InteractAction;
+
 private:
 	void OnMoveStarted();
 	void OnMoveTriggered();
@@ -73,4 +76,5 @@ private:
 	void OnSkillR_Completed();
 
 	void OnDodge_Started();
+	void OnInteract_Started();
 };

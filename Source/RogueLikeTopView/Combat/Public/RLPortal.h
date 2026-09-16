@@ -29,6 +29,13 @@ public:
     UFUNCTION()
     void OnLevelLoaded();
 
+    UFUNCTION()
+    void OnOverlapEnd(UPrimitiveComponent* OverlappedComp, AActor* OtherActor,
+        UPrimitiveComponent* OtherComp, int32 OtherBodyIndex);
+
+    UFUNCTION(BlueprintCallable, Category = "Portal")
+    void ActivatePortal(ARLCharacter* PlayerChar);
+
 private:
     // 포탈의 충돌 영역 (이 범위에 닿으면 작동)
     UPROPERTY(VisibleAnywhere, Category = "Portal")

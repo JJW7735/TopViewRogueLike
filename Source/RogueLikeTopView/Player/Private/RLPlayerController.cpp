@@ -77,6 +77,10 @@ void ARLPlayerController::SetupInputComponent()
 		{
 			EnhancedInputComponent->BindAction(DodgeAction, ETriggerEvent::Started, this, &ARLPlayerController::OnDodge_Started);
 		}
+		if (InteractAction)
+		{
+			EnhancedInputComponent->BindAction(InteractAction, ETriggerEvent::Started, this, &ARLPlayerController::OnInteract_Started);
+		}
 	}
 }
 
@@ -89,6 +93,14 @@ void ARLPlayerController::OnDodge_Started()
 		{
 			RLChar->Dodge(Hit.ImpactPoint);
 		}
+	}
+}
+
+void ARLPlayerController::OnInteract_Started()
+{
+	if (ARLCharacter* RLChar = Cast<ARLCharacter>(GetPawn()))
+	{
+		RLChar->TryInteract();
 	}
 }
 

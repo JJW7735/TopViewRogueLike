@@ -15,6 +15,7 @@
 #include "Animation/AnimInstance.h"
 #include "RLProjectile.h"
 #include "GameFramework/ProjectileMovementComponent.h"
+#include "RLPortal.h"
 
 ARLCharacter::ARLCharacter()
 {
@@ -133,6 +134,21 @@ void ARLCharacter::HandleDeath()
     GetCapsuleComponent()->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 
     OnCharacterDeath();
+}
+
+
+void ARLCharacter::SetNearbyPortal(ARLPortal* Portal)
+{
+    NearbyPortal = Portal;
+    OnNearbyPortalChanged(Portal != nullptr);
+}
+
+void ARLCharacter::TryInteract()
+{
+    if (NearbyPortal)
+    {
+        NearbyPortal->ActivatePortal(this);
+    }
 }
 
 void ARLCharacter::CreateBoxHitbox(FVector BoxExtent, float ForwardOffset, const FRLDamageData& DamageData, bool bDrawDebug)

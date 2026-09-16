@@ -12,6 +12,7 @@ class URLHealthComponent;
 class URLSkillComponent;
 class URLSkillData;
 class URLStatComponent;
+class ARLPortal;
 
 UCLASS()
 class ROGUELIKETOPVIEW_API ARLCharacter : public ACharacter
@@ -95,6 +96,15 @@ public:
 	class UAnimMontage* DashMontage;
 	bool IsDashing() const { return bIsDashing; }
 
+	UFUNCTION(BlueprintCallable, Category = "Interaction")
+	void SetNearbyPortal(ARLPortal* Portal);
+
+	UFUNCTION(BlueprintCallable, Category = "Interaction")
+	void TryInteract();
+
+	UFUNCTION(BlueprintImplementableEvent, Category = "Interaction")
+	void OnNearbyPortalChanged(bool bInRange);
+
 protected:
 	virtual void BeginPlay() override;
 
@@ -147,6 +157,9 @@ protected:
 
 	UFUNCTION(BlueprintImplementableEvent, Category = "Death")
 	void OnCharacterDeath();
+
+	UPROPERTY()
+	ARLPortal* NearbyPortal = nullptr;
 
 public:
 	virtual void Tick(float DeltaTime) override;
