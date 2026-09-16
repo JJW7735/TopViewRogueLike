@@ -2,7 +2,7 @@
 
 3인 팀 포트폴리오/공모전용 탑뷰 로그라이크. 팀원 전원 클라이언트 프로그래머 지망. 아트/애니메이터 전담 인력 없음 (무료 에셋 + 팀 내 테크아트 담당으로 대체 중).
 
-- 엔진: Unreal Engine 5.7.4
+- 엔진: Unreal Engine 5.8
 - 모듈: `RogueLikeTopView` (단일 게임 모듈)
 - 기본 시작 맵: `Content/Level/Map_Persistent.umap`
 - 기본 GameMode: `Content/Blueprint/BP_RLGameMode` (부모: `GameModeBase` 직접 상속, C++ 템플릿 기본 GameMode 아님)
