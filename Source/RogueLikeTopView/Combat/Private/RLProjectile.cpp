@@ -66,6 +66,18 @@ void ARLProjectile::OnHit(UPrimitiveComponent* OverlappedComp, AActor* OtherActo
 		return;
 	}
 
+	// ★ 같은 팀이면 아예 "맞은 것"으로 치지 않고 그냥 관통시킵니다.
+	// (ReceiveCustomDamage 안에서도 같은 팀이면 데미지를 무시하지만, 그것만으로는 부족합니다 -
+	//  여기서 return을 안 하면 아래 CurrentHitCount가 올라가고 MaxPierceCount에 도달해 Destroy()가
+	//  호출되어서, 데미지는 안 들어가더라도 투사체가 아군 몸에 닿는 순간 사라져버립니다.)
+	if (ARLCharacter* InstigatorCharacter = Cast<ARLCharacter>(GetInstigator()))
+	{
+		if (InstigatorCharacter->TeamID == HitCharacter->TeamID)
+		{
+			return;
+		}
+	}
+
 	FRLDamageData FinalDamageData = DamageData;
 	FinalDamageData.DamageCauser = GetInstigator();
 

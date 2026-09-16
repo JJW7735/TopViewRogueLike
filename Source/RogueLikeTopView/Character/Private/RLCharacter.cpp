@@ -80,6 +80,17 @@ void ARLCharacter::BeginPlay()
 
 void ARLCharacter::ReceiveCustomDamage(const FRLDamageData& DamageData, const FHitResult& HitInfo)
 {
+    // ★ 같은 팀이면 피해를 무시합니다 (아군 피해 방지).
+    // 근접 박스 판정 / 장판 판정 / 투사체 판정이 전부 이 함수를 거쳐서 데미지를 넣기 때문에,
+    // 여기 한 곳만 막아주면 세 가지 공격 방식 모두 한 번에 아군 피해가 방지됩니다.
+    if (ARLCharacter* CauserCharacter = Cast<ARLCharacter>(DamageData.DamageCauser))
+    {
+        if (CauserCharacter->TeamID == TeamID)
+        {
+            return;
+        }
+    }
+
     if (bIsInvulnerable && !DamageData.bIgnoreInvincibility)
     {
         GEngine->AddOnScreenDebugMessage(-1, 1.5f, FColor::Yellow, TEXT("Dodge / Invulnerable!"));

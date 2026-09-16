@@ -6,6 +6,14 @@
 class UAnimMontage;
 class UMaterialInterface;
 
+// ★ 진영(팀) 구분. ARLCharacter::ReceiveCustomDamage에서 같은 팀끼리는 피해를 무시하는 데 사용합니다.
+UENUM(BlueprintType)
+enum class ERLTeam : uint8
+{
+	Player,
+	Enemy
+};
+
 // 공격 판정 및 데미지 정보를 담는 공용 구조체
 USTRUCT(BlueprintType)
 struct FRLDamageData
