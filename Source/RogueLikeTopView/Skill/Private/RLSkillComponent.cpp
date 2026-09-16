@@ -5,6 +5,7 @@
 #include "GameFramework/CharacterMovementComponent.h"
 #include "RLStatComponent.h"
 #include "RLProjectile.h"
+#include "RLGroundAreaEffect.h"
 #include "GameFramework/ProjectileMovementComponent.h"
 #include "TimerManager.h"
 #include "Kismet/GameplayStatics.h"
@@ -200,7 +201,7 @@ void URLSkillComponent::OnSkillInputStarted(ESkillSlot Slot)
 		if (Skill->SkillMontage) OwnerCharacter->PlayAnimMontage(Skill->SkillMontage);
 
 		OwnerCharacter->StartDashMovement(OwnerCharacter->GetActorLocation() + OwnerCharacter->GetActorForwardVector() * (Skill->DashPower * 0.3f), 0.15f);
-		OwnerCharacter->CreateBoxHitbox(Skill->HitboxExtent, Skill->HitboxForwardOffset, Skill->DamageData, true);
+		OwnerCharacter->CreateBoxHitbox(Skill->HitboxExtent, Skill->HitboxForwardOffset, CalculateFinalDamage(Skill), true);
 
 		CooldownEndTimes.Add(Slot, GetWorld()->GetTimeSeconds() + Skill->Cooldown);
 		CurrentSkillState = EPlayerSkillState::Idle;
@@ -255,7 +256,7 @@ void URLSkillComponent::OnSkillInputTriggered(ESkillSlot Slot)
 		if (CurrentAccumulatedTime - LastHoldTickTime >= Skill->TickDamageInterval)
 		{
 			LastHoldTickTime = CurrentAccumulatedTime;
-			OwnerCharacter->CreateBoxHitbox(Skill->HitboxExtent, Skill->HitboxForwardOffset, Skill->DamageData, false);
+			OwnerCharacter->CreateBoxHitbox(Skill->HitboxExtent, Skill->HitboxForwardOffset, CalculateFinalDamage(Skill), false);
 		}
 
 		if (CurrentAccumulatedTime >= Skill->CastDuration)
@@ -360,11 +361,17 @@ void URLSkillComponent::ConfirmGroundCast()
 			FActorSpawnParameters SpawnParams;
 			SpawnParams.Owner = OwnerCharacter;
 			SpawnParams.Instigator = OwnerCharacter;
-			GetWorld()->SpawnActor<AActor>(Skill->GroundActorClass, PendingExplosionLocation, FRotator::ZeroRotator, SpawnParams);
+			if (AActor* SpawnedGroundActor = GetWorld()->SpawnActor<AActor>(Skill->GroundActorClass, PendingExplosionLocation, FRotator::ZeroRotator, SpawnParams))
+			{
+				if (ARLGroundAreaEffect* GroundEffect = Cast<ARLGroundAreaEffect>(SpawnedGroundActor))
+				{
+					GroundEffect->DamageData = CalculateFinalDamage(Skill);
+				}
+			}
 		}
 		else
 		{
-			OwnerCharacter->CreateLocationHitbox(PendingExplosionLocation, Skill->IndicatorRadius, Skill->DamageData, true);
+			OwnerCharacter->CreateLocationHitbox(PendingExplosionLocation, Skill->IndicatorRadius, CalculateFinalDamage(Skill), true);
 		}
 
 		CooldownEndTimes.Add(CurrentActiveSlot, GetWorld()->GetTimeSeconds() + Skill->Cooldown);
@@ -406,16 +413,22 @@ void URLSkillComponent::FinishCasting()
 				FActorSpawnParameters SpawnParams;
 				SpawnParams.Owner = OwnerCharacter;
 				SpawnParams.Instigator = OwnerCharacter;
-				GetWorld()->SpawnActor<AActor>(Skill->GroundActorClass, PendingExplosionLocation, FRotator::ZeroRotator, SpawnParams);
+				if (AActor* SpawnedGroundActor = GetWorld()->SpawnActor<AActor>(Skill->GroundActorClass, PendingExplosionLocation, FRotator::ZeroRotator, SpawnParams))
+				{
+					if (ARLGroundAreaEffect* GroundEffect = Cast<ARLGroundAreaEffect>(SpawnedGroundActor))
+					{
+						GroundEffect->DamageData = CalculateFinalDamage(Skill);
+					}
+				}
 			}
 			else
 			{
-				OwnerCharacter->CreateLocationHitbox(PendingExplosionLocation, Skill->IndicatorRadius, Skill->DamageData, true);
+				OwnerCharacter->CreateLocationHitbox(PendingExplosionLocation, Skill->IndicatorRadius, CalculateFinalDamage(Skill), true);
 			}
 		}
 		else
 		{
-			OwnerCharacter->CreateBoxHitbox(Skill->HitboxExtent, Skill->HitboxForwardOffset, Skill->DamageData, true);
+			OwnerCharacter->CreateBoxHitbox(Skill->HitboxExtent, Skill->HitboxForwardOffset, CalculateFinalDamage(Skill), true);
 		}
 
 		CooldownEndTimes.Add(CurrentActiveSlot, GetWorld()->GetTimeSeconds() + Skill->Cooldown);

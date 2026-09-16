@@ -35,6 +35,12 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Combat")
 	virtual void ReceiveCustomDamage(const FRLDamageData& DamageData, const FHitResult& HitInfo);
 
+	// ★ 블루프린트에서 FHitResult를 직접 만들기 번거로우니(대부분의 필드가 BP에 노출 안 됨),
+	// 충격 위치(ImpactPoint)만 넘기면 내부에서 FHitResult를 만들어 ReceiveCustomDamage를 호출해주는 래퍼입니다.
+	// 인페르노/메테오처럼 GroundActorClass로 스폰되는 장판형 스킬 BP에서 이걸 쓰면 됩니다.
+	UFUNCTION(BlueprintCallable, Category = "Combat")
+	void ReceiveCustomDamageAtLocation(const FRLDamageData& DamageData, FVector ImpactPoint);
+
 	UFUNCTION(BlueprintCallable, Category = "Combat")
 	void SetInvulnerable(bool bNewState) { bIsInvulnerable = bNewState; }
 

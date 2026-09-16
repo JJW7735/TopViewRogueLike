@@ -116,6 +116,15 @@ void ARLCharacter::ReceiveCustomDamage(const FRLDamageData& DamageData, const FH
     }
 }
 
+// ★ BP에서 FHitResult를 직접 조립하기 어려우니, ImpactPoint만 받아서 내부에서 FHitResult를 만들어
+// ReceiveCustomDamage로 넘겨주는 래퍼입니다. (인페르노/메테오 같은 장판형 BP에서 사용)
+void ARLCharacter::ReceiveCustomDamageAtLocation(const FRLDamageData& DamageData, FVector ImpactPoint)
+{
+    FHitResult Hit;
+    Hit.ImpactPoint = ImpactPoint;
+    ReceiveCustomDamage(DamageData, Hit);
+}
+
 void ARLCharacter::HandleDeath()
 {
     GEngine->AddOnScreenDebugMessage(-1, 3.0f, FColor::Black, FString::Printf(TEXT("💀 [%s] 체력이 0이 되어 사망했습니다!"), *GetName()));
@@ -355,18 +364,6 @@ void ARLCharacter::CreateLocationHitbox(FVector TargetLocation, float Radius, co
                     FinalDamage.DamageCauser = this;
                     TargetChar->ReceiveCustomDamage(FinalDamage, Hit);
                 }
-            }
-        }
-    }
-
-    if (bHit)
-    {
-        GEngine->AddOnScreenDebugMessage(-1, 2.0f, FColor::Cyan, FString::Printf(TEXT("W Hitbox 감지된 수: %d"), HitResults.Num()));
-        for (const FHitResult& Hit : HitResults)
-        {
-            if (AActor* HitActor = Hit.GetActor())
-            {
-                GEngine->AddOnScreenDebugMessage(-1, 2.0f, FColor::Green, FString::Printf(TEXT("감지된 액터: %s"), *HitActor->GetName()));
             }
         }
     }
