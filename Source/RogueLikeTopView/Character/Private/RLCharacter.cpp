@@ -1,4 +1,4 @@
-﻿// Fill out your copyright notice in the Description page of Project Settings.
+// Fill out your copyright notice in the Description page of Project Settings.
 
 #include "RLCharacter.h"
 #include "GameFramework/SpringArmComponent.h"
@@ -99,13 +99,22 @@ void ARLCharacter::ReceiveCustomDamage(const FRLDamageData& DamageData, const FH
     }
 
     FString CauserName = DamageData.DamageCauser ? DamageData.DamageCauser->GetName() : TEXT("Environment");
-    FString Msg = FString::Printf(TEXT("💥 [%s] 피격! 데미지: %.1f (공격자: %s)"), *GetName(), DamageData.BaseDamage, *CauserName);
-    GEngine->AddOnScreenDebugMessage(-1, 2.0f, FColor::Red, Msg);
+    if (DamageData.bIsCritical)
+    {
+        FString Msg = FString::Printf(TEXT("⚡⚡ [CRITICAL HIT!!] [%s] 피격! 데미지: %.1f (공격자: %s) ⚡⚡"), *GetName(), DamageData.BaseDamage, *CauserName);
+        GEngine->AddOnScreenDebugMessage(-1, 2.5f, FColor::Orange, Msg);
+    }
+    else
+    {
+        FString Msg = FString::Printf(TEXT("💥 [%s] 피격! 데미지: %.1f (공격자: %s)"), *GetName(), DamageData.BaseDamage, *CauserName);
+        GEngine->AddOnScreenDebugMessage(-1, 2.0f, FColor::Red, Msg);
+    }
 
     if (DamageData.KnockbackForce > 0.0f)
     {
+        float KnockbackMultiplier = DamageData.bIsCritical ? 1.25f : 1.0f;
         FVector KnockbackDir = (GetActorLocation() - HitInfo.ImpactPoint).GetSafeNormal2D();
-        LaunchCharacter(KnockbackDir * DamageData.KnockbackForce + FVector(0.f, 0.f, 150.f), true, true);
+        LaunchCharacter(KnockbackDir * (DamageData.KnockbackForce * KnockbackMultiplier) + FVector(0.f, 0.f, 150.f), true, true);
     }
 
     AController* InstigatorController = DamageData.DamageCauser ? DamageData.DamageCauser->GetInstigatorController() : nullptr;

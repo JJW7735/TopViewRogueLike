@@ -1,4 +1,4 @@
-﻿#include "RLSkillComponent.h"
+#include "RLSkillComponent.h"
 #include "RLCharacter.h"
 #include "RLDecalIndicator.h"
 #include "GameFramework/PlayerController.h"
@@ -644,16 +644,30 @@ UFXSystemComponent* URLSkillComponent::SpawnSkillVFX(UFXSystemAsset* VFXAsset, F
 FRLDamageData URLSkillComponent::CalculateFinalDamage(URLSkillData* Skill)
 {
 	FRLDamageData FinalDamage = Skill->DamageData;
+	FinalDamage.DamageCauser = OwnerCharacter;
 
 	if (OwnerCharacter && OwnerCharacter->GetStatComponent())
 	{
 		URLStatComponent* Stat = OwnerCharacter->GetStatComponent();
 		float BonusDamage = (Stat->AttackPower * Skill->ADScaling) + (Stat->AbilityPower * Skill->APScaling);
-		FinalDamage.BaseDamage += BonusDamage;
+		float RawDamage = Skill->DamageData.BaseDamage + BonusDamage;
 
-		// [Debug] 최종 데미지 로그 출력 (필요 시 주석 처리 가능)
-		FString Msg = FString::Printf(TEXT("Skill Base(%.1f) + Bonus(%.1f) = Final Damage(%.1f)"), Skill->DamageData.BaseDamage, BonusDamage, FinalDamage.BaseDamage);
-		GEngine->AddOnScreenDebugMessage(-1, 2.0f, FColor::Cyan, Msg);
+		// ★ 치명타 판정 및 데미지 계산
+		FinalDamage.BaseDamage = Stat->EvaluateDamage(RawDamage, FinalDamage.bIsCritical);
+
+		// [Debug] 최종 데미지 로그 출력
+		if (FinalDamage.bIsCritical)
+		{
+			FString Msg = FString::Printf(TEXT("⚡ [CRITICAL HIT!] Base(%.1f) + Bonus(%.1f) * Crit(x%.1f) = Final(%.1f)"),
+				Skill->DamageData.BaseDamage, BonusDamage, Stat->CritDamageMultiplier, FinalDamage.BaseDamage);
+			GEngine->AddOnScreenDebugMessage(-1, 2.5f, FColor::Orange, Msg);
+		}
+		else
+		{
+			FString Msg = FString::Printf(TEXT("Skill Base(%.1f) + Bonus(%.1f) = Final Damage(%.1f)"), 
+				Skill->DamageData.BaseDamage, BonusDamage, FinalDamage.BaseDamage);
+			GEngine->AddOnScreenDebugMessage(-1, 2.0f, FColor::Cyan, Msg);
+		}
 	}
 
 	return FinalDamage;

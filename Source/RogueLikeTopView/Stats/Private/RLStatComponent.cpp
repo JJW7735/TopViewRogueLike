@@ -23,4 +23,22 @@ void URLStatComponent::BeginPlay()
 	
 }
 
+float URLStatComponent::EvaluateDamage(float InRawDamage, bool& bOutIsCritical) const
+{
+	bOutIsCritical = false;
+
+	if (CritChance > 0.0f)
+	{
+		const float Roll = FMath::FRandRange(0.0f, 100.0f);
+		if (Roll <= CritChance)
+		{
+			bOutIsCritical = true;
+			return InRawDamage * CritDamageMultiplier;
+		}
+	}
+
+	return InRawDamage;
+}
+
+
 
