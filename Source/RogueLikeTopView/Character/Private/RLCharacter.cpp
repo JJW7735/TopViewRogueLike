@@ -1,4 +1,4 @@
-// Fill out your copyright notice in the Description page of Project Settings.
+﻿// Fill out your copyright notice in the Description page of Project Settings.
 
 #include "RLCharacter.h"
 #include "GameFramework/SpringArmComponent.h"
@@ -98,15 +98,28 @@ void ARLCharacter::ReceiveCustomDamage(const FRLDamageData& DamageData, const FH
         return;
     }
 
+    // 피격자(나)의 방어력 및 피해 감소율 적용
+    float FinalDamageAmount = DamageData.BaseDamage;
+    float ReducedAmount = 0.0f;
+
+    if (StatComp && !DamageData.bTrueDamage)
+    {
+        FinalDamageAmount = StatComp->CalculateDefendedDamage(DamageData.BaseDamage, ReducedAmount);
+    }
+
     FString CauserName = DamageData.DamageCauser ? DamageData.DamageCauser->GetName() : TEXT("Environment");
+    FString DefenseMsg = (ReducedAmount > 0.0f) ? FString::Printf(TEXT(" (방어 감쇄: -%.1f)"), ReducedAmount) : TEXT("");
+
     if (DamageData.bIsCritical)
     {
-        FString Msg = FString::Printf(TEXT("⚡⚡ [CRITICAL HIT!!] [%s] 피격! 데미지: %.1f (공격자: %s) ⚡⚡"), *GetName(), DamageData.BaseDamage, *CauserName);
+        FString Msg = FString::Printf(TEXT("⚡⚡ [CRITICAL HIT!!] [%s] 피격! 데미지: %.1f%s (공격자: %s) ⚡⚡"),
+            *GetName(), FinalDamageAmount, *DefenseMsg, *CauserName);
         GEngine->AddOnScreenDebugMessage(-1, 2.5f, FColor::Orange, Msg);
     }
     else
     {
-        FString Msg = FString::Printf(TEXT("💥 [%s] 피격! 데미지: %.1f (공격자: %s)"), *GetName(), DamageData.BaseDamage, *CauserName);
+        FString Msg = FString::Printf(TEXT("💥 [%s] 피격! 데미지: %.1f%s (공격자: %s)"),
+            *GetName(), FinalDamageAmount, *DefenseMsg, *CauserName);
         GEngine->AddOnScreenDebugMessage(-1, 2.0f, FColor::Red, Msg);
     }
 
@@ -118,7 +131,7 @@ void ARLCharacter::ReceiveCustomDamage(const FRLDamageData& DamageData, const FH
     }
 
     AController* InstigatorController = DamageData.DamageCauser ? DamageData.DamageCauser->GetInstigatorController() : nullptr;
-    UGameplayStatics::ApplyDamage(this, DamageData.BaseDamage, InstigatorController, DamageData.DamageCauser, UDamageType::StaticClass());
+    UGameplayStatics::ApplyDamage(this, FinalDamageAmount, InstigatorController, DamageData.DamageCauser, UDamageType::StaticClass());
 
     if (SkillComp && SkillComp->IsCasting())
     {

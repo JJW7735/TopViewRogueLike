@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include "CoreMinimal.h"
 #include "Components/ActorComponent.h"
@@ -40,6 +40,14 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stats")
 	float AttackSpeed = 1.0f;
 
+	// 7. 방어력 (수치형: 높을수록 받는 피해 감소, 피해 배율: 100 / (100 + Defense))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stats")
+	float Defense = 10.0f;
+
+	// 8. 받는 피해 감소율 (0.0% ~ 80.0%, 버프/유물/스킬에 의한 추가 퍼센트 피해 감소)
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stats", meta = (ClampMin = "0.0", ClampMax = "80.0"))
+	float DamageReduction = 0.0f;
+
 	/**
 	 * 입력받은 데미지를 바탕으로 치명타 여부를 주사위 굴려 판정하고,
 	 * 치명타 발생 시 배율을 곱한 최종 피해량을 반환합니다.
@@ -49,6 +57,15 @@ public:
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Stats")
 	float EvaluateDamage(float InRawDamage, bool& bOutIsCritical) const;
+
+	/**
+	 * 들어오는 피해량에 피격자의 방어력(Defense) 및 피해 감소율(DamageReduction)을 적용하여 최종 받는 피해량을 계산합니다.
+	 * @param InRawDamage 공격자가 가한 원래 데미지
+	 * @param OutReducedDamage 방어력 및 감소율로 인해 경감된 피해량
+	 * @return 경감 후 최종 피해량 (최소 1.0f 보장)
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Stats")
+	float CalculateDefendedDamage(float InRawDamage, float& OutReducedDamage) const;
 
 protected:
 	virtual void BeginPlay() override;

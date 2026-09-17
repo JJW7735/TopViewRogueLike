@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include "CoreMinimal.h"
 #include "RLTypes.generated.h"
@@ -35,6 +35,10 @@ struct FRLDamageData
 	// ★ 치명타 발동 여부 (UI 데미지 플로팅, 연출, 효과 등에 사용)
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Damage")
 	bool bIsCritical = false;
+
+	// ★ 고정 피해 여부 (true면 피격자의 방어력/피해감소를 무시하고 100% 피해 적용)
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Damage")
+	bool bTrueDamage = false;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Damage")
 	AActor* DamageCauser = nullptr;
