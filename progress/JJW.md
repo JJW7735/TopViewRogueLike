@@ -1,21 +1,28 @@
 # JJW
-> 최종 갱신: 2026-09-16
+> 최종 갱신: 2026-09-17
 
 ## 완료
 - 엔진 5.7.4 → 5.8 업그레이드 (`.uproject` EngineAssociation 변경, VS 프로젝트 파일 재생성으로 빌드 에러 해결)
 - 팀/진영 시스템 추가 (`RLTypes.h`의 `ERLTeam` enum + `RLCharacter`의 `TeamID`) — 근접/장판/투사체 공격 전체에 아군 피해 방지 적용
 - 투사체 관통 버그 수정 (아군 맞으면 데미지 없이 통과하도록, `ARLProjectile::OnHit`)
+- 소서리스(SK_Wizard) 캐릭터 리타게팅, IK Rig/Retargeter 구축 및 애니메이션 블루프린트(`wizard_ABP_RLCharacter`) 생성
+- 소서리스 스킬 몽타주 및 DataAsset 구성 (평타 투사체, Q 파이어볼, W 인페르노, E 라이트닝, R 메테오)
+- 장판형 스킬 공용 베이스 액터(`ARLGroundAreaEffect`) 구현 및 `RLSkillComponent`에서 W, R 스킬 AD/AP 스케일링 데미지 누락 버그 수정
+- `ARLCharacter::ReceiveCustomDamageAtLocation` 편의 함수 추가 (BP에서 FHitResult 조립 없이 위치 기반 데미지 전달)
+- 상호작용 시스템 구축 (`IA_Interact`, `ARLPlayerController` E키 바인딩, `WBP_HUD` 상호작용 UI 연동)
+- 포탈(`ARLPortal`) 진입 시 단순 접촉 자동 이동 방식에서 E키 상호작용 시 맵 비동기 로딩/이동하도록 로직 개선
 - Unreal MCP(에디터 내장, Experimental) 활성화 및 설정 (플러그인 켜고 Auto Start Server, `.mcp.json` 생성)
-- Claude Code CLI 설치(Windows) 및 Unreal MCP 서버 연동 확인 (테스트 액터 스폰으로 검증 완료)
+- Claude Code CLI 설치(Windows) 및 Unreal MCP 서버 연동 확인
 - 에디터 내장 "터미널" 패널(Experimental) 조사 — 한글 미지원(폰트 글리프 없음) 확인, 외부 터미널 사용으로 결론
 - `CLAUDE.md` 엔진 버전 5.8로 수정
-- 팀원 작성 `PROGRESS.md` 검토 (엔진 버전 표기가 아직 5.7.4로 안 고쳐져 있는 것 확인, 미수정 상태)
 - `progress/` 폴더 + `/team-status` 커맨드로 팀 진행상황 온디맨드 공유 체계 구축
 
 ## 핵심 구조
 - 모든 데미지는 `ARLCharacter::ReceiveCustomDamage` 한 곳을 거침 (근접/장판/투사체 공통) — 데미지 관련 로직은 여기만 고치면 셋 다 적용됨
+- 블루프린트 장판형 액터는 `ARLCharacter::ReceiveCustomDamageAtLocation` 또는 `ARLGroundAreaEffect` 상속 후 `DamageData` 참조
 - `ERLTeam` 기본값은 Enemy. 플레이어 BP는 클래스 디폴트에서 Player로 바꿔야 함
 - 투사체는 데미지 무시와 별개로 `ARLProjectile::OnHit`에서 피격 처리(관통 카운트) 자체도 같은 팀이면 막아야 함
+- 포탈은 오버랩 시 `ARLCharacter::SetNearbyPortal`로 등록하고, 플레이어가 E키(`TryInteract`)를 누를 때 `ActivatePortal`을 호출하여 이동
 - Unreal MCP는 에디터에서 Auto Start Server 켜져 있어야 동작 (에디터 꺼져 있으면 Claude Code 쪽 MCP 연결 실패함)
 - Claude Code는 `.claude/commands/`나 `.claude/agents/`에 파일을 추가해도 실행 중 세션엔 자동 반영 안 됨 — 새 커맨드 추가/수정하면 세션 재시작(`/exit` 후 재실행) 필요
 - 에디터 내장 터미널(Experimental, Tools 메뉴)은 한글 폰트 미지원이라 한글 깨짐 — 한글로 Claude Code 쓸 땐 외부 PowerShell 터미널 사용
