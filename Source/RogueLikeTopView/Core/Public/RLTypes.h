@@ -14,6 +14,18 @@ enum class ERLTeam : uint8
 	Enemy
 };
 
+// ★ 공격 판정 형태. BTT_Attack이 이 값을 보고 ARLCharacter::CreateBoxHitbox / CreateLocationHitbox /
+// SpawnProjectileAttack 중 어느 것을 호출할지 결정합니다.
+// Box/Location 판정의 실제 크기는 별도 필드를 두지 않고 FRLMonsterPatternData의
+// IndicatorDecalSize(X=ForwardOffset/깊이, Y·Z=Box 절반폭 또는 Radius)와 IndicatorOffset을 그대로 재사용합니다.
+UENUM(BlueprintType)
+enum class ERLAttackShape : uint8
+{
+	Box,        // 정면 박스 판정 (근접, 예: SwingCombo, Subjugation)
+	Location,   // 특정 지점 중심 구체 판정 (광역/바닥찍기, 예: GroundSlam)
+	Projectile  // 투사체 발사 (bIsRangedAttack == true인 패턴, 예: SoulPull)
+};
+
 // 공격 판정 및 데미지 정보를 담는 공용 구조체
 USTRUCT(BlueprintType)
 struct FRLDamageData
@@ -73,6 +85,11 @@ struct FRLMonsterPatternData
 	// 이 패턴 실행 시 적용할 데미지 정보
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Pattern")
 	FRLDamageData DamageData;
+
+	// ★ 공격 판정 형태 (BTT_Attack이 CreateBoxHitbox/CreateLocationHitbox/SpawnProjectileAttack 중
+	// 무엇을 호출할지 이 값으로 분기합니다). Projectile로 설정할 경우 bIsRangedAttack도 true로 맞춰주세요.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Pattern")
+	ERLAttackShape AttackShape = ERLAttackShape::Box;
 
 	// 타격 예고 장판(인디케이터) 사용 여부
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Indicator")
