@@ -1,5 +1,5 @@
 # JJW
-> 최종 갱신: 2026-09-17
+> 최종 갱신: 2026-09-23
 
 ## 완료
 - 엔진 5.7.4 → 5.8 업그레이드 (`.uproject` EngineAssociation 변경, VS 프로젝트 파일 재생성으로 빌드 에러 해결)
@@ -16,6 +16,13 @@
 - 에디터 내장 "터미널" 패널(Experimental) 조사 — 한글 미지원(폰트 글리프 없음) 확인, 외부 터미널 사용으로 결론
 - `CLAUDE.md` 엔진 버전 5.8로 수정
 - `progress/` 폴더 + `/team-status` 커맨드로 팀 진행상황 온디맨드 공유 체계 구축
+
+## 진행 중 (다음에 이어서 — 2026-09-23)
+- **증상**: 보스가 스폰/추격까지는 정상인데, 플레이어가 공격 사거리에 들어오면 `SelectPattern`이 패턴 번호를 계속 재시도(`3 2 1 0`)만 하고 공격 없이 등장모션이 다시 재생됨
+- **확인된 진짜 원인**: `AM_Boss_Swing` 몽타주가 재생 시작 후 약 1초 만에 `Montage.Stop`으로 강제 종료됨 (`Notify_Hit`가 걸린 스윙 후반부 타이밍에 도달하기 전에 끊김). BT의 `OnCompleted`가 노티파이 발동 여부와 무관하게 바로 `FinishExecute(true)`로 연결돼있어서, BT 입장에서는 "정상 완료"로 착각하고 다음(Wait)으로 넘어감 — 그래서 겉보기엔 정상 흐름처럼 보였던 것
+- **유력 용의자**: BT observer 데코레이터(`BTDecorator_Blackboard_0/1/2`)가 `IsInAttackRange`/`bIsEnraged` 등 블랙보드 값을 감시하다가, 재평가 시점에 실행 중인 Attack 시퀀스를 abort시키는 구조로 추정
+- **다음에 확인할 것**: 공격 애니메이션 재생 "중"에 라이브 BT 디버거에서 Sequence/Attack 노드가 빨갛게 abort되는 순간이 있는지 직접 확인 (abort 확인되면 해당 데코레이터의 Observer Aborts 설정/조건을 고칠 것)
+- **추가 발견**: `BP_Boss`에 `AttackCollision_L`/`AttackCollision_R`(BoxComponent) + `AlreadyHitActors` + `AttackDamage` 기반의 완전히 별도인 무기 콜리전 데미지 시스템이 이미 존재함. `Notify_Hit` + `BTT_Attack`의 `CreateBoxHitbox` 경로와는 다른, 보스 전용 독자 메커니즘일 가능성 — 어느 쪽이 실제로 쓰이는 경로인지 정리 필요
 
 ## 핵심 구조
 - 모든 데미지는 `ARLCharacter::ReceiveCustomDamage` 한 곳을 거침 (근접/장판/투사체 공통) — 데미지 관련 로직은 여기만 고치면 셋 다 적용됨

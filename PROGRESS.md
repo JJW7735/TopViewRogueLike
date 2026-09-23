@@ -1,6 +1,6 @@
 # 🎮 RLTV (RogueLikeTopView) 개발 진행 상황 & 프로젝트 가이드
 
-> **최종 갱신일:** 2026-09-17  
+> **최종 갱신일:** 2026-09-23  
 > **프로젝트 성격:** 3인 포트폴리오/공모전 탑다운 로그라이크 액션  
 > **엔진 버전:** Unreal Engine 5.8  
 > **AI 어시스턴트 협업:** Gemini (Antigravity CLI), Claude (Claude Code)
@@ -32,6 +32,7 @@
 - [x] **`ARLGroundAreaEffect`**: 장판형 스킬(인페르노/메테오) 공용 베이스 액터, 스탯 스케일링 데미지(`DamageData`) 전달
 - [x] **`ARLDecalIndicator`**: 스킬 시전/몬스터 공격 예고 장판(Decal) 표시
 - [x] **`ARLPortal`**: 상호작용(E키) 기반 맵 전환 및 레벨 스트리밍 비동기 로딩 연동 액터
+- [ ] **보스 근접 공격이 항상 씹히는 버그 (진행중, 아래 작업 히스토리 참고)**
 
 ### ⚡ 스킬 & 스탯 (Skill & Stats)
 - [x] **`URLSkillComponent` & `URLSkillData`**: 데이터 기반 스킬 쿨다운, 시전 타입, 투사체/근접/장판 발동
@@ -50,6 +51,7 @@
 
 ## 📋 2. 다음 개발 우선순위 (Next Milestones)
 
+- [ ] **보스 근접 공격 버그 수정** (최우선 — 아래 작업 히스토리 2026-09-23 참고)
 - [ ] **절차적 맵 생성 (Procedural Dungeon / Room Generation)**
   - 방(시작방, 전투방, 상점방, 보스방) 템플릿 연결 시스템 또는 레벨 스트리밍 결합
   - 방 입장 시 문 닫힘 및 몬스터 처치 시 포탈/문 개방 연동
@@ -82,6 +84,7 @@
 
 | 일자 | 작업자 (도구) | 작업 내용 |
 | :--- | :--- | :--- |
+| 2026-09-23 | JJW (Claude) | 보스 근접 공격이 항상 씹히는 버그 원인 추적: `AM_Boss_Swing` 몽타주가 재생 시작 ~1초 만에 `Montage.Stop`으로 강제 종료됨을 로그로 확인 (`Notify_Hit` 도달 전에 끊김). BT의 `OnCompleted`가 노티파이 여부와 무관하게 `FinishExecute(true)`로 연결돼있어 겉보기엔 정상 흐름처럼 보였던 것도 확인. BT observer 데코레이터(`BTDecorator_Blackboard`) 재평가로 인한 abort가 유력 용의자 — 라이브 BT 디버거로 공격 애니메이션 재생 "중" abort 여부 확인 필요 (진행중, 내일 이어서). 추가로 `BP_Boss`에 `AttackCollision_L`/`AttackCollision_R` + `AlreadyHitActors` 기반의 별도 무기 콜리전 데미지 시스템이 이미 존재함을 발견, `Notify_Hit`/`CreateBoxHitbox` 경로와의 관계 확인 필요 |
 | 2026-09-17 | JJW | 포탈 상호작용 시스템 구축 (`IA_Interact`, `ARLPlayerController` E키 바인딩, `ARLPortal` 수정, `WBP_HUD` 안내 연동) |
 | 2026-09-17 | JJW | 소서리스 캐릭터 리타게팅(`SK_Wizard`), 애니메이션 블루프린트(`wizard_ABP_RLCharacter`) 및 전용 스킬셋(Q, W, E, R) DataAsset/몽타주 연동 |
 | 2026-09-16 | JJW | 장판형 스킬 베이스 `ARLGroundAreaEffect` 구현, 소서리스 W/R 스킬 AD/AP 계수 누락 버그 수정 및 `ReceiveCustomDamageAtLocation` 추가 |
