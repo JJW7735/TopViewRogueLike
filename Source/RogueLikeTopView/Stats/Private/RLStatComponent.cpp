@@ -1,4 +1,4 @@
-﻿// Fill out your copyright notice in the Description page of Project Settings.
+// Fill out your copyright notice in the Description page of Project Settings.
 
 
 #include "RLStatComponent.h"
@@ -70,4 +70,9 @@ float URLStatComponent::CalculateDefendedDamage(float InRawDamage, float& OutRed
 
 	OutReducedDamage = FMath::Max(0.0f, InRawDamage - FinalDamage);
 	return FinalDamage;
+}
+
+void URLStatComponent::NotifyStatsChanged()
+{
+	OnStatsChanged.Broadcast();
 }

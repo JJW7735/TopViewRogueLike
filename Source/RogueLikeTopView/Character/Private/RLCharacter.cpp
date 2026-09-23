@@ -1,4 +1,4 @@
-﻿// Fill out your copyright notice in the Description page of Project Settings.
+// Fill out your copyright notice in the Description page of Project Settings.
 
 #include "RLCharacter.h"
 #include "GameFramework/SpringArmComponent.h"
@@ -16,6 +16,9 @@
 #include "RLProjectile.h"
 #include "GameFramework/ProjectileMovementComponent.h"
 #include "RLPortal.h"
+#include "RLRewardChest.h"
+#include "RLRewardSubsystem.h"
+#include "RLRewardSelectWidget.h"
 
 ARLCharacter::ARLCharacter()
 {
@@ -73,9 +76,13 @@ void ARLCharacter::BeginPlay()
         PC->SetInputMode(InputMode);
     }
 
-    if (StatComp && GetCharacterMovement())
+    if (StatComp)
     {
-        GetCharacterMovement()->MaxWalkSpeed = StatComp->MoveSpeed;
+        StatComp->OnStatsChanged.AddDynamic(this, &ARLCharacter::HandleStatsChanged);
+        if (GetCharacterMovement())
+        {
+            GetCharacterMovement()->MaxWalkSpeed = StatComp->MoveSpeed;
+        }
     }
 }
 
@@ -159,17 +166,78 @@ void ARLCharacter::HandleDeath()
 }
 
 
+void ARLCharacter::HandleStatsChanged()
+{
+    if (StatComp && GetCharacterMovement())
+    {
+        GetCharacterMovement()->MaxWalkSpeed = StatComp->MoveSpeed;
+    }
+}
+
 void ARLCharacter::SetNearbyPortal(ARLPortal* Portal)
 {
     NearbyPortal = Portal;
-    OnNearbyPortalChanged(Portal != nullptr);
+    OnNearbyPortalChanged(NearbyChest != nullptr || NearbyPortal != nullptr);
+}
+
+void ARLCharacter::SetNearbyChest(ARLRewardChest* Chest)
+{
+    NearbyChest = Chest;
+    OnNearbyPortalChanged(NearbyChest != nullptr || NearbyPortal != nullptr);
 }
 
 void ARLCharacter::TryInteract()
 {
+    // 보상 상자가 근처에 있으면 상자 먼저 열기
+    if (NearbyChest)
+    {
+        NearbyChest->OpenChest(this);
+        return;
+    }
+
+    // 포탈이 근처에 있으면 포탈 이동
     if (NearbyPortal)
     {
         NearbyPortal->ActivatePortal(this);
+        return;
+    }
+
+    if (GEngine)
+    {
+        GEngine->AddOnScreenDebugMessage(-1, 1.5f, FColor::Silver, TEXT("주변에 상호작용할 대상(상자/포탈)이 없습니다."));
+    }
+}
+
+void ARLCharacter::TestOpenRewardUI()
+{
+    URLRewardSubsystem* Subsystem = URLRewardSubsystem::GetRewardSubsystem(this);
+    if (!Subsystem)
+    {
+        return;
+    }
+
+    TArray<FRLRewardData> Rewards = Subsystem->RollRewards(3);
+    APlayerController* PC = Cast<APlayerController>(GetController());
+    if (!PC)
+    {
+        return;
+    }
+
+    TSubclassOf<URLRewardSelectWidget> WidgetClass = LoadClass<URLRewardSelectWidget>(
+        nullptr, TEXT("/Game/Blueprint/UI/WBP_RewardSelect.WBP_RewardSelect_C"));
+    if (WidgetClass)
+    {
+        URLRewardSelectWidget* Widget = CreateWidget<URLRewardSelectWidget>(PC, WidgetClass);
+        if (Widget)
+        {
+            Widget->AddToViewport(50);
+            Widget->InitializeWidget(this, Rewards);
+        }
+    }
+    else
+    {
+        GEngine->AddOnScreenDebugMessage(-1, 3.0f, FColor::Yellow,
+            TEXT("⚠️ WBP_RewardSelect 에셋을 찾을 수 없습니다. Content/Blueprint/UI/WBP_RewardSelect를 생성해주세요."));
     }
 }
 

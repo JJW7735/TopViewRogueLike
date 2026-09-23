@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 
 #include "CoreMinimal.h"
 #include "Components/ActorComponent.h"
@@ -40,4 +40,12 @@ public:
 
     UPROPERTY(BlueprintAssignable, Category = "Health")
     FOnDeathSignature OnDeath;
+
+    /** 체력 회복 함수 */
+    UFUNCTION(BlueprintCallable, Category = "Health")
+    void Heal(float HealAmount);
+
+    /** 최대 체력 영구 증가 함수 (선택적으로 현재 체력도 증가) */
+    UFUNCTION(BlueprintCallable, Category = "Health")
+    void IncreaseMaxHealth(float Amount, bool bHealCurrent = true);
 };

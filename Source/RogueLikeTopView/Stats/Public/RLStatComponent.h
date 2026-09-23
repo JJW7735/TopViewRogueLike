@@ -1,8 +1,10 @@
-﻿#pragma once
+#pragma once
 
 #include "CoreMinimal.h"
 #include "Components/ActorComponent.h"
 #include "RLStatComponent.generated.h"
+
+DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnStatsChangedSignature);
 
 UCLASS(ClassGroup = (Custom), meta = (BlueprintSpawnableComponent))
 class ROGUELIKETOPVIEW_API URLStatComponent : public UActorComponent
@@ -11,6 +13,13 @@ class ROGUELIKETOPVIEW_API URLStatComponent : public UActorComponent
 
 public:
 	URLStatComponent();
+
+	// 스탯이 변경되었을 때(보상 획득, 버프 등) 방송할 델리게이트
+	UPROPERTY(BlueprintAssignable, Category = "Stats")
+	FOnStatsChangedSignature OnStatsChanged;
+
+	UFUNCTION(BlueprintCallable, Category = "Stats")
+	void NotifyStatsChanged();
 
 	// ==========================================
 	// ★ 핵심 스탯 4가지

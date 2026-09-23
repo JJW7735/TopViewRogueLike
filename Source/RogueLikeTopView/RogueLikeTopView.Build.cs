@@ -20,7 +20,8 @@ public class RogueLikeTopView : ModuleRules
 			"GameplayStateTreeModule",
 			"Niagara",
 			"UMG",
-			"Slate"
+			"Slate",
+			"SlateCore"
 		});
 
 		PrivateDependencyModuleNames.AddRange(new string[] { });
@@ -34,6 +35,7 @@ public class RogueLikeTopView : ModuleRules
 			"RogueLikeTopView/AI/Public",
 			"RogueLikeTopView/Core/Public",
 			"RogueLikeTopView/Player/Public",
+			"RogueLikeTopView/Reward/Public",
 			"RogueLikeTopView/Variant_Strategy",
 			"RogueLikeTopView/Variant_Strategy/UI",
 			"RogueLikeTopView/Variant_TwinStick",

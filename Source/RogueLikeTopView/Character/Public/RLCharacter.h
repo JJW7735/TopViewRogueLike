@@ -1,4 +1,4 @@
-﻿// Fill out your copyright notice in the Description page of Project Settings.
+// Fill out your copyright notice in the Description page of Project Settings.
 #pragma once
 
 #include "CoreMinimal.h"
@@ -13,6 +13,7 @@ class URLSkillComponent;
 class URLSkillData;
 class URLStatComponent;
 class ARLPortal;
+class ARLRewardChest;
 
 UCLASS()
 class ROGUELIKETOPVIEW_API ARLCharacter : public ACharacter
@@ -100,7 +101,16 @@ public:
 	void SetNearbyPortal(ARLPortal* Portal);
 
 	UFUNCTION(BlueprintCallable, Category = "Interaction")
+	void SetNearbyChest(ARLRewardChest* Chest);
+
+	UFUNCTION(BlueprintPure, Category = "Interaction")
+	ARLRewardChest* GetNearbyChest() const { return NearbyChest; }
+
+	UFUNCTION(BlueprintCallable, Category = "Interaction")
 	void TryInteract();
+
+	UFUNCTION(BlueprintCallable, Exec, Category = "Reward")
+	void TestOpenRewardUI();
 
 	UFUNCTION(BlueprintImplementableEvent, Category = "Interaction")
 	void OnNearbyPortalChanged(bool bInRange);
@@ -155,11 +165,17 @@ protected:
 	UFUNCTION()
 	virtual void HandleDeath();
 
+	UFUNCTION()
+	void HandleStatsChanged();
+
 	UFUNCTION(BlueprintImplementableEvent, Category = "Death")
 	void OnCharacterDeath();
 
 	UPROPERTY()
 	ARLPortal* NearbyPortal = nullptr;
+
+	UPROPERTY()
+	ARLRewardChest* NearbyChest = nullptr;
 
 public:
 	virtual void Tick(float DeltaTime) override;

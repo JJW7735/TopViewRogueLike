@@ -1,4 +1,4 @@
-﻿#include "RLHealthComponent.h"
+#include "RLHealthComponent.h"
 #include "GameFramework/Actor.h"
 
 // 생성자: 기본 체력을 100으로 세팅합니다.
@@ -47,4 +47,37 @@ void URLHealthComponent::HandleTakeAnyDamage(AActor* DamagedActor, float Damage,
         bIsDead = true;
         OnDeath.Broadcast(); // 사망 방송을 보냅니다.
     }
+}
+
+void URLHealthComponent::Heal(float HealAmount)
+{
+    if (bIsDead || HealAmount <= 0.0f)
+    {
+        return;
+    }
+
+    const float OldHealth = CurrentHealth;
+    CurrentHealth = FMath::Clamp(CurrentHealth + HealAmount, 0.0f, MaxHealth);
+    const float ActualHealed = CurrentHealth - OldHealth;
+
+    if (ActualHealed > 0.0f)
+    {
+        OnHealthChanged.Broadcast(CurrentHealth, MaxHealth, -ActualHealed);
+    }
+}
+
+void URLHealthComponent::IncreaseMaxHealth(float Amount, bool bHealCurrent)
+{
+    if (Amount <= 0.0f)
+    {
+        return;
+    }
+
+    MaxHealth += Amount;
+    if (bHealCurrent)
+    {
+        CurrentHealth = FMath::Clamp(CurrentHealth + Amount, 0.0f, MaxHealth);
+    }
+
+    OnHealthChanged.Broadcast(CurrentHealth, MaxHealth, 0.0f);
 }
