@@ -1,13 +1,15 @@
-// Fill out your copyright notice in the Description page of Project Settings.
-
 #include "RLEnemyCharacter.h"
 #include "RLHealthComponent.h"
+#include "RLRewardChest.h"
 #include "AIController.h"
 #include "BehaviorTree/BlackboardComponent.h"
 #include "BrainComponent.h"
+#include "Components/CapsuleComponent.h"
+#include "Engine/World.h"
 
 ARLEnemyCharacter::ARLEnemyCharacter()
 {
+	DropChestClass = ARLRewardChest::StaticClass();
 }
 
 void ARLEnemyCharacter::BeginPlay()
@@ -87,13 +89,38 @@ void ARLEnemyCharacter::HandleDeath()
 
 	bIsEnraged = false;
 
-	// ★ AAIController::GetBrainComponent() / UBrainComponent::StopLogic()은 AIModule의 안정적인 공개 API입니다.
-	// 정확한 시그니처는 IDE 자동완성으로 한 번 더 확인해보시는 걸 권장합니다(제가 엔진 소스를 직접 grep한 건 아니라서요).
 	if (AAIController* AICon = Cast<AAIController>(GetController()))
 	{
 		if (UBrainComponent* Brain = AICon->GetBrainComponent())
 		{
 			Brain->StopLogic(TEXT("EnemyDied"));
+		}
+	}
+
+	// 몬스터 사망 델리게이트 방송 (방 관리자 / 웨이브 시스템 연동)
+	OnEnemyDied.Broadcast(this);
+
+	// ★ 사망 시 보상 상자 드롭
+	if (bDropChestOnDeath && DropChestClass)
+	{
+		if (FMath::FRand() <= DropChance)
+		{
+			FVector SpawnLoc = GetActorLocation() + ChestSpawnOffset;
+			if (UCapsuleComponent* Capsule = GetCapsuleComponent())
+			{
+				SpawnLoc.Z -= Capsule->GetScaledCapsuleHalfHeight();
+			}
+
+			FActorSpawnParameters SpawnParams;
+			SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
+
+			GetWorld()->SpawnActor<ARLRewardChest>(DropChestClass, SpawnLoc, FRotator::ZeroRotator, SpawnParams);
+
+			if (GEngine)
+			{
+				GEngine->AddOnScreenDebugMessage(-1, 3.5f, FColor::Yellow,
+					FString::Printf(TEXT("🎁 [%s] 처치! 보상 상자가 생성되었습니다!"), *GetName()));
+			}
 		}
 	}
 }

@@ -18,6 +18,10 @@
 //   음수(기본값)면 아무 동작도 하지 않으므로, 일반 몬스터한테는 사실상 없는 기능처럼 동작합니다.
 // - AI(BT) 정지 로직도 여기 둔 이유: 플레이어 캐릭터는 AIController/BehaviorTree가 없으니
 //   ARLCharacter에 두면 의미가 없고, 몬스터 전용 계층에 두는 게 맞습니다.
+class ARLRewardChest;
+
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnEnemyDeathEvent, ARLEnemyCharacter*, DeadEnemy);
+
 UCLASS()
 class ROGUELIKETOPVIEW_API ARLEnemyCharacter : public ARLCharacter
 {
@@ -25,6 +29,30 @@ class ROGUELIKETOPVIEW_API ARLEnemyCharacter : public ARLCharacter
 
 public:
 	ARLEnemyCharacter();
+
+	// 몬스터 사망 시 외부(ArenaManager 등)에 알리는 델리게이트
+	UPROPERTY(BlueprintAssignable, Category = "Enemy|Death")
+	FOnEnemyDeathEvent OnEnemyDied;
+
+	// ==========================================
+	// ★ 보상 상자 드롭 설정
+	// ==========================================
+
+	// 사망 시 보상 상자를 스폰할지 여부 (보스나 엘리트 몬스터의 경우 체크)
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Enemy|Reward")
+	bool bDropChestOnDeath = false;
+
+	// 스폰할 보상 상자 클래스 (기본값: ARLRewardChest)
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Enemy|Reward", meta = (EditCondition = "bDropChestOnDeath"))
+	TSubclassOf<ARLRewardChest> DropChestClass;
+
+	// 상자 드롭 확률 (0.0f ~ 1.0f, 1.0f = 100% 확정 드롭)
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Enemy|Reward", meta = (ClampMin = "0.0", ClampMax = "1.0", EditCondition = "bDropChestOnDeath"))
+	float DropChance = 1.0f;
+
+	// 상자 스폰 위치 오프셋
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Enemy|Reward", meta = (EditCondition = "bDropChestOnDeath"))
+	FVector ChestSpawnOffset = FVector::ZeroVector;
 
 	// ★ 0 이상이면 "이 퍼센트 이하로 체력이 떨어지면 분노 상태로 전환"이 활성화됩니다.
 	// 기본값 -1.0f = 비활성(일반 몬스터). 보스 BP의 클래스 디폴트에서만 0.3 같은 값으로 켜주세요.
