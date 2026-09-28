@@ -13,6 +13,8 @@
 #include "RLSkillData.h"
 #include "DrawDebugHelpers.h"
 #include "Animation/AnimInstance.h"
+#include "Animation/AnimMontage.h"
+#include "Animation/AnimNotifies/AnimNotify.h"
 #include "RLProjectile.h"
 #include "GameFramework/ProjectileMovementComponent.h"
 #include "RLPortal.h"
@@ -21,6 +23,7 @@
 #include "RLRewardSelectWidget.h"
 #include "RLInventoryComponent.h"
 #include "RLItemDataAsset.h"
+#include "RLDecalIndicator.h"
 
 ARLCharacter::ARLCharacter()
 {
@@ -397,6 +400,129 @@ void ARLCharacter::CreateBoxHitbox(FVector BoxExtent, float ForwardOffset, const
     }
 }
 
+void ARLCharacter::ShowBoxAttackIndicator(FVector BoxExtent, float ForwardOffset, UMaterialInterface* DecalMaterial)
+{
+    if (!AttackIndicator)
+    {
+        FActorSpawnParameters Params;
+        Params.Owner = this;
+        Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+
+        AttackIndicator = GetWorld()->SpawnActor<ARLDecalIndicator>(ARLDecalIndicator::StaticClass(), FVector::ZeroVector, FRotator::ZeroRotator, Params);
+    }
+
+    if (!AttackIndicator)
+    {
+        return;
+    }
+
+    AttackIndicator->SetupBoxIndicator(BoxExtent, DecalMaterial);
+    AttackIndicator->UpdateBoxTransform(GetActorLocation(), ForwardOffset, GetActorRotation().Yaw);
+    AttackIndicator->SetIndicatorVisibility(true);
+}
+
+void ARLCharacter::HideAttackIndicator()
+{
+    if (AttackIndicator)
+    {
+        AttackIndicator->SetIndicatorVisibility(false);
+    }
+}
+
+void ARLCharacter::StartBoxAttackTelegraph(UAnimMontage* Montage, FName HitNotifyName, float LeadTime, FVector BoxExtent, float ForwardOffset, UMaterialInterface* DecalMaterial)
+{
+    StopAttackTelegraph();
+
+    if (!Montage)
+    {
+        return;
+    }
+
+    // Montage Notify(AnimNotify_PlayMontageNotify)는 Notify->GetNotifyName()이 Notify Name 값을 돌려주고,
+    // 스켈레톤 노티파이는 Notify가 null이고 이벤트의 NotifyName에 이름이 들어있어서 둘 다 확인합니다.
+    const FString HitName = HitNotifyName.ToString();
+    TArray<float> HitTimes;
+    for (const FAnimNotifyEvent& Event : Montage->Notifies)
+    {
+        const bool bMatch = Event.Notify ? Event.Notify->GetNotifyName() == HitName : Event.NotifyName == HitNotifyName;
+        if (bMatch)
+        {
+            HitTimes.Add(Event.GetTriggerTime());
+        }
+    }
+    HitTimes.Sort();
+
+    // 콤보 히트 간격이 LeadTime보다 짧으면 직전 히트 시점부터 표시 (구간이 겹쳐서 한 번에 뭉치지 않도록)
+    float PrevHitTime = 0.0f;
+    for (const float HitTime : HitTimes)
+    {
+        TelegraphWindows.Add(FVector2D(FMath::Max(HitTime - LeadTime, PrevHitTime), HitTime));
+        PrevHitTime = HitTime;
+    }
+
+    if (TelegraphWindows.Num() == 0)
+    {
+        return;
+    }
+
+    TelegraphMontage = Montage;
+    TelegraphMaterial = DecalMaterial;
+    TelegraphBoxExtent = BoxExtent;
+    TelegraphForwardOffset = ForwardOffset;
+    UpdateAttackTelegraph();
+}
+
+void ARLCharacter::StopAttackTelegraph()
+{
+    TelegraphMontage = nullptr;
+    TelegraphMaterial = nullptr;
+    TelegraphWindows.Reset();
+
+    if (bTelegraphVisible)
+    {
+        HideAttackIndicator();
+        bTelegraphVisible = false;
+    }
+}
+
+void ARLCharacter::UpdateAttackTelegraph()
+{
+    if (!TelegraphMontage)
+    {
+        return;
+    }
+
+    UAnimInstance* AnimInstance = GetMesh() ? GetMesh()->GetAnimInstance() : nullptr;
+    if (!AnimInstance || !AnimInstance->Montage_IsPlaying(TelegraphMontage))
+    {
+        StopAttackTelegraph();
+        return;
+    }
+
+    const float Position = AnimInstance->Montage_GetPosition(TelegraphMontage);
+
+    bool bShouldShow = false;
+    for (const FVector2D& Window : TelegraphWindows)
+    {
+        if (Position >= Window.X && Position < Window.Y)
+        {
+            bShouldShow = true;
+            break;
+        }
+    }
+
+    if (bShouldShow && !bTelegraphVisible)
+    {
+        // 표시 시작 순간의 위치/정면 방향으로 고정 (판정도 그 방향으로 나감)
+        ShowBoxAttackIndicator(TelegraphBoxExtent, TelegraphForwardOffset, TelegraphMaterial);
+    }
+    else if (!bShouldShow && bTelegraphVisible)
+    {
+        HideAttackIndicator();
+    }
+    bTelegraphVisible = bShouldShow;
+}
+
 void ARLCharacter::TestAttack()
 {
     FRLDamageData AttackData;
@@ -489,6 +615,9 @@ void ARLCharacter::StartDashMovement(FVector TargetLocation, float Duration)
 void ARLCharacter::Tick(float DeltaTime)
 {
     Super::Tick(DeltaTime);
+
+    // ★ Box 공격 예고 데칼 표시/소멸 (아래 로직의 early return보다 먼저 처리)
+    UpdateAttackTelegraph();
 
     // ★ 대시 진행 중이면 매 프레임 부드럽게 이동
     if (bIsDashing)
