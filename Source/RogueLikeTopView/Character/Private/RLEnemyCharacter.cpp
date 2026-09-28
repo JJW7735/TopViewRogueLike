@@ -116,27 +116,40 @@ void ARLEnemyCharacter::HandleDeath()
 
 	const FVector MyLoc = GetActorLocation();
 
+	// 보스 여부 판정 (bIsBoss 체크 여부 또는 클래스/액터 이름에 "Boss"가 포함되어 있으면 자동 보스 판정)
+	const bool bIsActualBoss = bIsBoss || GetClass()->GetName().Contains(TEXT("Boss"), ESearchCase::IgnoreCase) || GetName().Contains(TEXT("Boss"), ESearchCase::IgnoreCase);
+
 	// 2. 보스 처치: 100% 확정 보상 상자 + 대량 골드 드롭
-	if (bIsBoss)
+	if (bIsActualBoss)
 	{
-		// 보상 상자 100% 확정 스폰
-		if (DropChestClass)
+		// 보상 상자 클래스 확보 (MyRLRewardChest 에셋이 있으면 메시/이펙트가 들어간 블루프린트로 스폰)
+		TSubclassOf<ARLRewardChest> TargetChestClass = DropChestClass;
+		if (!TargetChestClass || TargetChestClass == ARLRewardChest::StaticClass())
+		{
+			TargetChestClass = LoadClass<ARLRewardChest>(nullptr, TEXT("/Game/Blueprint/MyRLRewardChest.MyRLRewardChest_C"));
+			if (!TargetChestClass)
+			{
+				TargetChestClass = ARLRewardChest::StaticClass();
+			}
+		}
+
+		if (TargetChestClass)
 		{
 			FVector SpawnLoc = MyLoc + ChestSpawnOffset;
 			if (UCapsuleComponent* Capsule = GetCapsuleComponent())
 			{
-				SpawnLoc.Z -= Capsule->GetScaledCapsuleHalfHeight();
+				SpawnLoc.Z -= (Capsule->GetScaledCapsuleHalfHeight() - 10.0f);
 			}
 
 			FActorSpawnParameters SpawnParams;
 			SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
 
-			GetWorld()->SpawnActor<ARLRewardChest>(DropChestClass, SpawnLoc, FRotator::ZeroRotator, SpawnParams);
+			GetWorld()->SpawnActor<ARLRewardChest>(TargetChestClass, SpawnLoc, FRotator::ZeroRotator, SpawnParams);
 
 			if (GEngine)
 			{
-				GEngine->AddOnScreenDebugMessage(-1, 3.5f, FColor::Yellow,
-					FString::Printf(TEXT("🏆 [보스 처치!] 보상 상자가 생성되었습니다!")));
+				GEngine->AddOnScreenDebugMessage(-1, 5.0f, FColor::Yellow,
+					FString::Printf(TEXT("🏆 [보스 처치!] %s 보상 상자가 생성되었습니다!"), *TargetChestClass->GetName()));
 			}
 		}
 
