@@ -44,6 +44,18 @@ public:
     // ForwardOffset을 넘기면 데칼 중심이 실제 판정 박스 중심과 일치합니다.
     void UpdateBoxTransform(const FVector& OriginLocation, float ForwardOffset, float YawDegrees);
 
+    // ★ 근접 박스가 아니라 소유자 "자기 자신"을 중심으로 한 부채꼴(전방위) 판정
+    // (ARLCharacter::CreateSectorHitbox) 예고용 데칼. Radius는 CreateSectorHitbox와 동일한 반지름,
+    // SafeZoneAngleDegrees도 정면 기준 뒤쪽 안전지대 폭(도)으로 동일합니다.
+    // 실제 부채꼴(안전지대 쐐기 제외) 모양 자체는 머티리얼에서 UV 각도를 계산해서 마스킹합니다 —
+    // 여기서는 데칼을 원형 풋프린트로 깔아두고, 머티리얼이 "SafeZoneAngleDeg"라는 이름의
+    // Scalar Parameter를 갖고 있으면 그 값을 넘겨줍니다(없는 머티리얼이면 그냥 무시됨).
+    void SetupSectorIndicator(float Radius, float SafeZoneAngleDegrees, UMaterialInterface* Material = nullptr);
+
+    // ★ 부채꼴 데칼을 소유자의 현재 위치 + 정면 방향(YawDegrees)에 맞춰 재배치합니다.
+    // (ForwardOffset이 없는 이유: Box와 달리 Sector는 소유자 위치가 곧 부채꼴의 중심입니다)
+    void UpdateSectorTransform(const FVector& OriginLocation, float YawDegrees);
+
     virtual FVector GetTargetLocation(AActor* RequestedBy = nullptr) const override { return CurrentTargetLocation; }
 
 protected:

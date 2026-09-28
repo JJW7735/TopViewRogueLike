@@ -2,6 +2,7 @@
 #include "Components/DecalComponent.h"
 #include "Components/SceneComponent.h"
 #include "UObject/ConstructorHelpers.h"
+#include "Materials/MaterialInstanceDynamic.h"
 
 ARLDecalIndicator::ARLDecalIndicator()
 {
@@ -121,6 +122,47 @@ void ARLDecalIndicator::UpdateBoxTransform(const FVector& OriginLocation, float 
     CurrentTargetLocation = Center;
 
     DecalComp->SetWorldLocation(Center);
+    DecalComp->SetWorldRotation(FRotator(-90.f, YawDegrees, 0.f));
+}
+
+void ARLDecalIndicator::SetupSectorIndicator(float Radius, float SafeZoneAngleDegrees, UMaterialInterface* Material)
+{
+    CurrentType = EIndicatorType::Cone;
+
+    // ★ Circle과 똑같이 반지름 기준 정사각형 풋프린트로 깔아둡니다. "부채꼴 모양으로 잘라내는" 건
+    // 여기(C++)가 아니라 머티리얼에서 UV 각도로 처리합니다 — 이유: 데칼 컴포넌트 자체는 사각형/원형
+    // 볼륨만 표현할 수 있고, 임의의 각도로 잘린 모양은 셰이더의 픽셀 단위 마스킹으로만 가능합니다.
+    constexpr float VerticalThickness = 200.f;
+    DecalComp->DecalSize = FVector(VerticalThickness, Radius, Radius);
+    RangeDecalComp->SetVisibility(false);
+
+    if (!Material)
+    {
+        return;
+    }
+
+    // ★ 머티리얼에 "SafeZoneAngleDeg"라는 이름의 Scalar Parameter를 만들어두면, 그 값을 이 함수가
+    // 매번 갱신해서 넘겨줍니다(패턴마다 안전지대 폭이 달라도 같은 머티리얼 재사용 가능). 그러려면
+    // 원본 UMaterialInterface가 아니라 MID(Material Instance Dynamic)를 만들어서 써야 합니다 —
+    // 원본 머티리얼 애셋에 직접 SetScalarParameterValue를 호출하면 에디터에서 저장된 애셋 자체가
+    // 바뀌어버리기 때문입니다. 머티리얼에 그 이름의 파라미터가 없으면 이 호출은 조용히 무시됩니다.
+    UMaterialInstanceDynamic* MID = UMaterialInstanceDynamic::Create(Material, this);
+    if (MID)
+    {
+        MID->SetScalarParameterValue(FName("SafeZoneAngleDeg"), SafeZoneAngleDegrees);
+        DecalComp->SetDecalMaterial(MID);
+    }
+    else
+    {
+        DecalComp->SetDecalMaterial(Material);
+    }
+}
+
+void ARLDecalIndicator::UpdateSectorTransform(const FVector& OriginLocation, float YawDegrees)
+{
+    CurrentTargetLocation = OriginLocation;
+
+    DecalComp->SetWorldLocation(OriginLocation);
     DecalComp->SetWorldRotation(FRotator(-90.f, YawDegrees, 0.f));
 }
 

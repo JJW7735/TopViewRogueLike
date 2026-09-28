@@ -15,7 +15,7 @@ enum class ERLTeam : uint8
 };
 
 // ★ 공격 판정 형태. BTT_Attack이 이 값을 보고 ARLCharacter::CreateBoxHitbox / CreateLocationHitbox /
-// SpawnProjectileAttack 중 어느 것을 호출할지 결정합니다.
+// SpawnProjectileAttack / CreateSectorHitbox 중 어느 것을 호출할지 결정합니다.
 // Box/Location 판정의 실제 크기는 별도 필드를 두지 않고 FRLMonsterPatternData의
 // IndicatorDecalSize(X=ForwardOffset/깊이, Y·Z=Box 절반폭 또는 Radius)와 IndicatorOffset을 그대로 재사용합니다.
 UENUM(BlueprintType)
@@ -23,7 +23,9 @@ enum class ERLAttackShape : uint8
 {
 	Box,        // 정면 박스 판정 (근접, 예: SwingCombo, Subjugation)
 	Location,   // 특정 지점 중심 구체 판정 (광역/바닥찍기, 예: GroundSlam)
-	Projectile  // 투사체 발사 (bIsRangedAttack == true인 패턴, 예: SoulPull)
+	Projectile, // 투사체 발사 (bIsRangedAttack == true인 패턴, 예: SoulPull)
+	Sector      // ★ 보스 자신 중심의 부채꼴(전방위) 판정. AttackRange를 반지름으로, SectorSafeZoneAngle을
+	            // "정면 기준 뒤쪽 안전지대 폭(도)"으로 써서 그 쐐기 밖 전체를 한 번에 타격합니다 (예: BigSwing)
 };
 
 // 공격 판정 및 데미지 정보를 담는 공용 구조체
@@ -107,10 +109,16 @@ struct FRLMonsterPatternData
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Indicator", meta = (EditCondition = "bUseIndicator"))
 	FVector IndicatorOffset = FVector::ZeroVector;
 
-	// ★ Box 예고 데칼을 각 Notify_Hit보다 몇 초 먼저 띄울지 (ARLCharacter::StartBoxAttackTelegraph에 전달).
-	// 콤보라서 히트 간격이 이 값보다 짧으면 직전 히트 직후부터 표시됩니다.
+	// ★ 예고 데칼을 각 Notify_Hit보다 몇 초 먼저 띄울지 (ARLCharacter::StartBoxAttackTelegraph /
+	// StartSectorAttackTelegraph에 전달. Box/Sector 공용). 콤보라서 히트 간격이 이 값보다 짧으면
+	// 직전 히트 직후부터 표시됩니다.
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Indicator", meta = (ClampMin = "0.0"))
 	float IndicatorLeadTime = 0.7f;
+
+	// ★ Sector(부채꼴) 판정 전용: 보스 정면 기준 "뒤쪽" 안전지대의 폭(도). 예: 90이면 정면 기준 좌우
+	// 135도씩(총 270도)이 위험지대, 바로 뒤 90도만 안전지대. AttackShape가 Sector일 때만 사용됩니다.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Pattern|Sector", meta = (EditCondition = "AttackShape == ERLAttackShape::Sector", ClampMin = "0.0", ClampMax = "359.0"))
+	float SectorSafeZoneAngle = 90.0f;
 
 	// ★ 원거리(투사체) 패턴 여부. true면 이 패턴은 근접 히트박스 대신 투사체를 발사합니다.
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Pattern|Projectile")
