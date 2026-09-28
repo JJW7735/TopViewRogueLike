@@ -73,4 +73,9 @@ protected:
 
     UPROPERTY()
     FVector CurrentTargetLocation = FVector::ZeroVector;
+
+    // ★ 사거리 링(RangeDecalComp)을 쓰는 인디케이터인지. Setup* 함수들이 세팅하고,
+    // SetIndicatorVisibility(true)는 이 값이 true일 때만 링을 켭니다.
+    // (Box/Sector에서 링이 켜지면 액터 원점(0,0,0)에 흰 원이 뜨는 버그 방지)
+    bool bUseRangeRing = false;
 };

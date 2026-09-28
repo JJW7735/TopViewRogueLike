@@ -24,7 +24,7 @@ enum class ERLAttackShape : uint8
 	Box,        // 정면 박스 판정 (근접, 예: SwingCombo, Subjugation)
 	Location,   // 특정 지점 중심 구체 판정 (광역/바닥찍기, 예: GroundSlam)
 	Projectile, // 투사체 발사 (bIsRangedAttack == true인 패턴, 예: SoulPull)
-	Sector      // ★ 보스 자신 중심의 부채꼴(전방위) 판정. AttackRange를 반지름으로, SectorSafeZoneAngle을
+	Sector      // ★ 보스 자신 중심의 부채꼴(전방위) 판정. IndicatorDecalSize.Y를 반지름으로(데칼/판정 공용), SectorSafeZoneAngle을
 	            // "정면 기준 뒤쪽 안전지대 폭(도)"으로 써서 그 쐐기 밖 전체를 한 번에 타격합니다 (예: BigSwing)
 };
 

@@ -37,6 +37,7 @@ ARLDecalIndicator::ARLDecalIndicator()
 void ARLDecalIndicator::SetupIndicator(EIndicatorType Type, float Radius, float MaxRange)
 {
     CurrentType = Type;
+    bUseRangeRing = (CurrentType == EIndicatorType::Circle && MaxRange > 0.0f);
 
     if (CurrentType == EIndicatorType::Circle)
     {
@@ -89,6 +90,7 @@ void ARLDecalIndicator::UpdateIndicatorTransform(const FVector& OriginLocation, 
 void ARLDecalIndicator::SetupBoxIndicator(const FVector& BoxExtent, UMaterialInterface* Material)
 {
     CurrentType = EIndicatorType::Box;
+    bUseRangeRing = false;
 
     // ★ DecalComponent는 생성자에서 RelativeRotation = (Pitch -90, Yaw 0, Roll 0)으로 "바닥을 내려다보는"
     // 상태입니다. 여기에 UpdateBoxTransform에서 소유자 Yaw를 추가로 곱해주면(아래 함수 참고),
@@ -128,6 +130,7 @@ void ARLDecalIndicator::UpdateBoxTransform(const FVector& OriginLocation, float 
 void ARLDecalIndicator::SetupSectorIndicator(float Radius, float SafeZoneAngleDegrees, UMaterialInterface* Material)
 {
     CurrentType = EIndicatorType::Cone;
+    bUseRangeRing = false;
 
     // ★ Circle과 똑같이 반지름 기준 정사각형 풋프린트로 깔아둡니다. "부채꼴 모양으로 잘라내는" 건
     // 여기(C++)가 아니라 머티리얼에서 UV 각도로 처리합니다 — 이유: 데칼 컴포넌트 자체는 사각형/원형
@@ -170,7 +173,7 @@ void ARLDecalIndicator::SetIndicatorVisibility(bool bVisible)
 {
     SetActorHiddenInGame(!bVisible);
     DecalComp->SetVisibility(bVisible);
-    RangeDecalComp->SetVisibility(bVisible);
+    RangeDecalComp->SetVisibility(bVisible && bUseRangeRing);
 }
 
 void ARLDecalIndicator::LockTargetLocation(const FVector& LockedLocation)
