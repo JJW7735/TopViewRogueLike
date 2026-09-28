@@ -116,11 +116,29 @@ void ARLEnemyCharacter::HandleDeath()
 
 	const FVector MyLoc = GetActorLocation();
 
-	// 2. 보스 처치: 100% 확정 보상 상자 + 대량 골드/아이템 드롭
+	// 2. 보스 처치: 100% 확정 보상 상자 + 대량 골드 드롭
 	if (bIsBoss)
 	{
-		bDropChestOnDeath = true;
-		DropChance = 1.0f;
+		// 보상 상자 100% 확정 스폰
+		if (DropChestClass)
+		{
+			FVector SpawnLoc = MyLoc + ChestSpawnOffset;
+			if (UCapsuleComponent* Capsule = GetCapsuleComponent())
+			{
+				SpawnLoc.Z -= Capsule->GetScaledCapsuleHalfHeight();
+			}
+
+			FActorSpawnParameters SpawnParams;
+			SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
+
+			GetWorld()->SpawnActor<ARLRewardChest>(DropChestClass, SpawnLoc, FRotator::ZeroRotator, SpawnParams);
+
+			if (GEngine)
+			{
+				GEngine->AddOnScreenDebugMessage(-1, 3.5f, FColor::Yellow,
+					FString::Printf(TEXT("🏆 [보스 처치!] 보상 상자가 생성되었습니다!")));
+			}
+		}
 
 		// 보스 주변에 대량의 골드 드롭 3개 스폰
 		if (ItemDropClass)
@@ -139,7 +157,7 @@ void ARLEnemyCharacter::HandleDeath()
 			}
 		}
 	}
-	// 3. 일반 몬스터: 확률에 따른 필드 아이템/골드 드롭
+	// 3. 일반 몬스터: 보상 상자 X, 35% 확률로 바닥에 필드 아이템/골드만 드롭
 	else if (ItemDropClass && FMath::FRand() <= ItemDropChance)
 	{
 		FActorSpawnParameters SpawnParams;
@@ -162,30 +180,6 @@ void ARLEnemyCharacter::HandleDeath()
 			// 랜덤한 방향으로 퐁 튀어나오는 포물선 발사
 			const FVector RandomDir = FVector(FMath::FRandRange(-1.f, 1.f), FMath::FRandRange(-1.f, 1.f), 0.f).GetSafeNormal();
 			DropActor->LaunchDrop(RandomDir * FMath::FRandRange(100.f, 200.f) + FVector(0.f, 0.f, FMath::FRandRange(280.f, 380.f)));
-		}
-	}
-
-	// 4. 보상 상자 드롭 (보스는 확정, 일반 몬스터는 설정된 경우)
-	if (bDropChestOnDeath && DropChestClass)
-	{
-		if (FMath::FRand() <= DropChance)
-		{
-			FVector SpawnLoc = MyLoc + ChestSpawnOffset;
-			if (UCapsuleComponent* Capsule = GetCapsuleComponent())
-			{
-				SpawnLoc.Z -= Capsule->GetScaledCapsuleHalfHeight();
-			}
-
-			FActorSpawnParameters SpawnParams;
-			SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
-
-			GetWorld()->SpawnActor<ARLRewardChest>(DropChestClass, SpawnLoc, FRotator::ZeroRotator, SpawnParams);
-
-			if (GEngine)
-			{
-				GEngine->AddOnScreenDebugMessage(-1, 3.5f, FColor::Yellow,
-					FString::Printf(TEXT("🎁 [%s] 처치! 보상 상자가 생성되었습니다!"), *GetName()));
-			}
 		}
 	}
 }
