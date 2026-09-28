@@ -85,8 +85,10 @@ public:
 	// [히트 - LeadTime, 히트) 구간 동안 Box 예고 데칼을 자동으로 켜고 끕니다 (3연타면 3번 표시/소멸).
 	// 몽타주 재생 위치 기준으로 Tick에서 판단하므로 재생 속도/히트스톱과 어긋나지 않고,
 	// 몽타주가 끝나거나 끊기면 자동으로 정리됩니다.
+	// FaceTarget을 넘기면 히트 사이 구간에는 TurnSpeed(도/초)로 대상을 향해 돌고,
+	// 데칼이 뜨는 순간 대상을 정면으로 맞춘 뒤 그 방향으로 고정합니다 (콤보 중 방향 전환).
 	UFUNCTION(BlueprintCallable, Category = "Combat|Indicator")
-	void StartBoxAttackTelegraph(UAnimMontage* Montage, FName HitNotifyName, float LeadTime, FVector BoxExtent, float ForwardOffset, UMaterialInterface* DecalMaterial = nullptr);
+	void StartBoxAttackTelegraph(UAnimMontage* Montage, FName HitNotifyName, float LeadTime, FVector BoxExtent, float ForwardOffset, UMaterialInterface* DecalMaterial = nullptr, AActor* FaceTarget = nullptr, float TurnSpeed = 540.0f);
 
 	UFUNCTION(BlueprintCallable, Category = "Combat|Indicator")
 	void StopAttackTelegraph();
@@ -235,8 +237,13 @@ protected:
 	FVector TelegraphBoxExtent = FVector::ZeroVector;
 	float TelegraphForwardOffset = 0.0f;
 	bool bTelegraphVisible = false;
+	TWeakObjectPtr<AActor> TelegraphFaceTarget;
+	float TelegraphTurnSpeed = 0.0f;
 
-	void UpdateAttackTelegraph();
+	void UpdateAttackTelegraph(float DeltaTime);
+
+	// DeltaTime < 0이면 즉시 정면으로 맞추고, 아니면 TelegraphTurnSpeed로 조금씩 회전
+	void FaceTelegraphTarget(float DeltaTime);
 
 public:
 	virtual void Tick(float DeltaTime) override;

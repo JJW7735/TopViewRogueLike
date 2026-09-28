@@ -1,4 +1,4 @@
-// Fill out your copyright notice in the Description page of Project Settings.
+﻿// Fill out your copyright notice in the Description page of Project Settings.
 
 #include "RLCharacter.h"
 #include "GameFramework/SpringArmComponent.h"
@@ -429,7 +429,7 @@ void ARLCharacter::HideAttackIndicator()
     }
 }
 
-void ARLCharacter::StartBoxAttackTelegraph(UAnimMontage* Montage, FName HitNotifyName, float LeadTime, FVector BoxExtent, float ForwardOffset, UMaterialInterface* DecalMaterial)
+void ARLCharacter::StartBoxAttackTelegraph(UAnimMontage* Montage, FName HitNotifyName, float LeadTime, FVector BoxExtent, float ForwardOffset, UMaterialInterface* DecalMaterial, AActor* FaceTarget, float TurnSpeed)
 {
     StopAttackTelegraph();
 
@@ -469,13 +469,16 @@ void ARLCharacter::StartBoxAttackTelegraph(UAnimMontage* Montage, FName HitNotif
     TelegraphMaterial = DecalMaterial;
     TelegraphBoxExtent = BoxExtent;
     TelegraphForwardOffset = ForwardOffset;
-    UpdateAttackTelegraph();
+    TelegraphFaceTarget = FaceTarget;
+    TelegraphTurnSpeed = TurnSpeed;
+    UpdateAttackTelegraph(0.0f);
 }
 
 void ARLCharacter::StopAttackTelegraph()
 {
     TelegraphMontage = nullptr;
     TelegraphMaterial = nullptr;
+    TelegraphFaceTarget = nullptr;
     TelegraphWindows.Reset();
 
     if (bTelegraphVisible)
@@ -485,7 +488,7 @@ void ARLCharacter::StopAttackTelegraph()
     }
 }
 
-void ARLCharacter::UpdateAttackTelegraph()
+void ARLCharacter::UpdateAttackTelegraph(float DeltaTime)
 {
     if (!TelegraphMontage)
     {
@@ -513,14 +516,41 @@ void ARLCharacter::UpdateAttackTelegraph()
 
     if (bShouldShow && !bTelegraphVisible)
     {
-        // 표시 시작 순간의 위치/정면 방향으로 고정 (판정도 그 방향으로 나감)
+        // 대상을 정면으로 맞춘 뒤 그 위치/방향으로 데칼 고정 (판정도 그 방향으로 나감)
+        FaceTelegraphTarget(-1.0f);
         ShowBoxAttackIndicator(TelegraphBoxExtent, TelegraphForwardOffset, TelegraphMaterial);
     }
     else if (!bShouldShow && bTelegraphVisible)
     {
         HideAttackIndicator();
     }
+    else if (!bShouldShow && Position < TelegraphWindows.Last().Y)
+    {
+        // 히트 사이 구간: 다음 히트를 위해 대상 쪽으로 회전
+        FaceTelegraphTarget(DeltaTime);
+    }
     bTelegraphVisible = bShouldShow;
+}
+
+void ARLCharacter::FaceTelegraphTarget(float DeltaTime)
+{
+    const AActor* Target = TelegraphFaceTarget.Get();
+    if (!Target)
+    {
+        return;
+    }
+
+    const FVector ToTarget = Target->GetActorLocation() - GetActorLocation();
+    if (ToTarget.IsNearlyZero())
+    {
+        return;
+    }
+
+    const float TargetYaw = ToTarget.Rotation().Yaw;
+    const float CurrentYaw = GetActorRotation().Yaw;
+    const float NewYaw = DeltaTime < 0.0f ? TargetYaw : FMath::FixedTurn(CurrentYaw, TargetYaw, TelegraphTurnSpeed * DeltaTime);
+
+    SetActorRotation(FRotator(0.0f, NewYaw, 0.0f));
 }
 
 void ARLCharacter::TestAttack()
@@ -617,7 +647,7 @@ void ARLCharacter::Tick(float DeltaTime)
     Super::Tick(DeltaTime);
 
     // ★ Box 공격 예고 데칼 표시/소멸 (아래 로직의 early return보다 먼저 처리)
-    UpdateAttackTelegraph();
+    UpdateAttackTelegraph(DeltaTime);
 
     // ★ 대시 진행 중이면 매 프레임 부드럽게 이동
     if (bIsDashing)
