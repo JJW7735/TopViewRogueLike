@@ -1,4 +1,4 @@
-// Fill out your copyright notice in the Description page of Project Settings.
+﻿// Fill out your copyright notice in the Description page of Project Settings.
 #pragma once
 
 #include "CoreMinimal.h"
@@ -64,6 +64,12 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Combat")
 	void CreateLocationHitbox(FVector TargetLocation, float Radius, const FRLDamageData& DamageData, bool bDrawDebug = true);
 
+	// ★ 보스 "자기 자신"을 중심으로 한 부채꼴(전방위) 판정. Radius 안에 있는 대상 중, 정면 기준
+	// 뒤쪽 SafeZoneAngleDegrees도 안(안전지대)에 있는 대상만 제외하고 나머지 전부에게 한 번에 데미지를
+	// 줍니다. 예: SafeZoneAngleDegrees=90 → 정면 기준 좌우 135도씩(총 270도)이 위험지대.
+	UFUNCTION(BlueprintCallable, Category = "Combat")
+	void CreateSectorHitbox(float Radius, float SafeZoneAngleDegrees, const FRLDamageData& DamageData, bool bDrawDebug = true);
+
 	// ★ 원거리 공격: 정면 방향으로 투사체(ARLProjectile 파생 클래스)를 스폰합니다.
 	// URLSkillComponent의 ESkillCastType::Projectile 처리 로직과 동일한 방식으로 동작합니다.
 	UFUNCTION(BlueprintCallable, Category = "Combat")
@@ -81,6 +87,11 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Combat|Indicator")
 	void HideAttackIndicator();
 
+	// ★ CreateSectorHitbox와 같은 규격(Radius/SafeZoneAngleDegrees)의 부채꼴 예고 데칼을 표시합니다.
+	// ShowBoxAttackIndicator의 부채꼴 버전 — 자기 자신 중심이라 ForwardOffset이 없습니다.
+	UFUNCTION(BlueprintCallable, Category = "Combat|Indicator")
+	void ShowSectorAttackIndicator(float Radius, float SafeZoneAngleDegrees, UMaterialInterface* DecalMaterial = nullptr);
+
 	// ★ 몽타주 재생 직후 한 번 호출하면, 몽타주 안의 HitNotifyName 노티파이마다
 	// [히트 - LeadTime, 히트) 구간 동안 Box 예고 데칼을 자동으로 켜고 끕니다 (3연타면 3번 표시/소멸).
 	// 몽타주 재생 위치 기준으로 Tick에서 판단하므로 재생 속도/히트스톱과 어긋나지 않고,
@@ -89,6 +100,13 @@ public:
 	// 데칼이 뜨는 순간 대상을 정면으로 맞춘 뒤 그 방향으로 고정합니다 (콤보 중 방향 전환).
 	UFUNCTION(BlueprintCallable, Category = "Combat|Indicator")
 	void StartBoxAttackTelegraph(UAnimMontage* Montage, FName HitNotifyName, float LeadTime, FVector BoxExtent, float ForwardOffset, UMaterialInterface* DecalMaterial = nullptr, AActor* FaceTarget = nullptr, float TurnSpeed = 540.0f);
+
+	// ★ StartBoxAttackTelegraph의 부채꼴(Sector) 버전. 사용법은 동일(HitNotifyName마다 [히트-LeadTime, 히트)
+	// 구간에 자동으로 표시/소멸, 콤보면 그 횟수만큼 반복)하고, Box 대신 CreateSectorHitbox와 같은 규격의
+	// Radius/SafeZoneAngleDegrees 부채꼴 데칼을 띄웁니다. 예: BigSwing처럼 "선딜레이 후 자기 주변
+	// 전방위(뒤쪽 일부 제외)를 한 번에 타격"하는 패턴에 씁니다.
+	UFUNCTION(BlueprintCallable, Category = "Combat|Indicator")
+	void StartSectorAttackTelegraph(UAnimMontage* Montage, FName HitNotifyName, float LeadTime, float Radius, float SafeZoneAngleDegrees, UMaterialInterface* DecalMaterial = nullptr, AActor* FaceTarget = nullptr, float TurnSpeed = 540.0f);
 
 	UFUNCTION(BlueprintCallable, Category = "Combat|Indicator")
 	void StopAttackTelegraph();
@@ -235,6 +253,16 @@ protected:
 	UPROPERTY()
 	ARLDecalIndicator* AttackIndicator = nullptr;
 
+	// ★ 텔레그래프(예고 데칼)가 Box 판정용인지 Sector 판정용인지 구분. StartBoxAttackTelegraph /
+	// StartSectorAttackTelegraph가 각각 세팅하고, UpdateAttackTelegraph가 이 값으로 분기해서
+	// ShowBoxAttackIndicator / ShowSectorAttackIndicator 중 알맞은 쪽을 호출합니다.
+	// (BlueprintType이 아닌 내부 전용 enum이라 UENUM 없이 plain enum class로 선언합니다.)
+	enum class ETelegraphShape : uint8
+	{
+		Box,
+		Sector
+	};
+
 	// ★ StartBoxAttackTelegraph 상태. TelegraphWindows는 몽타주 시간(초) 기준 [X=표시 시작, Y=히트) 구간 목록.
 	UPROPERTY()
 	UAnimMontage* TelegraphMontage = nullptr;
@@ -243,8 +271,11 @@ protected:
 	UMaterialInterface* TelegraphMaterial = nullptr;
 
 	TArray<FVector2D> TelegraphWindows;
+	ETelegraphShape TelegraphShape = ETelegraphShape::Box;
 	FVector TelegraphBoxExtent = FVector::ZeroVector;
 	float TelegraphForwardOffset = 0.0f;
+	float TelegraphRadius = 0.0f;
+	float TelegraphSafeZoneAngle = 0.0f;
 	bool bTelegraphVisible = false;
 	TWeakObjectPtr<AActor> TelegraphFaceTarget;
 	float TelegraphTurnSpeed = 0.0f;
@@ -253,6 +284,12 @@ protected:
 
 	// DeltaTime < 0이면 즉시 정면으로 맞추고, 아니면 TelegraphTurnSpeed로 조금씩 회전
 	void FaceTelegraphTarget(float DeltaTime);
+
+	// ★ StartBoxAttackTelegraph/StartSectorAttackTelegraph 공용 헬퍼. Montage의 노티파이 트랙을 스캔해서
+	// HitNotifyName과 이름이 일치하는 모든 노티파이의 발동 시각(초)을 찾고, 각각에 대해
+	// [max(히트 - LeadTime, 직전 히트 시각), 히트) 구간을 TelegraphWindows 형식으로 반환합니다.
+	// (콤보처럼 히트 간격이 LeadTime보다 짧으면 직전 히트 직후부터 바로 다음 표시 구간이 시작됩니다.)
+	TArray<FVector2D> ComputeTelegraphWindows(const UAnimMontage* Montage, FName HitNotifyName, float LeadTime) const;
 
 public:
 	virtual void Tick(float DeltaTime) override;

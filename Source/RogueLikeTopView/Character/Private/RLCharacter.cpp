@@ -1,4 +1,4 @@
-// Fill out your copyright notice in the Description page of Project Settings.
+﻿// Fill out your copyright notice in the Description page of Project Settings.
 
 #include "RLCharacter.h"
 #include "GameFramework/SpringArmComponent.h"
@@ -445,6 +445,29 @@ void ARLCharacter::ShowBoxAttackIndicator(FVector BoxExtent, float ForwardOffset
     AttackIndicator->SetIndicatorVisibility(true);
 }
 
+void ARLCharacter::ShowSectorAttackIndicator(float Radius, float SafeZoneAngleDegrees, UMaterialInterface* DecalMaterial)
+{
+    // ShowBoxAttackIndicator와 완전히 같은 지연 스폰(lazy-spawn) 패턴 — AttackIndicator 액터를
+    // Box/Sector 상관없이 하나만 두고 재사용합니다 (한 캐릭터가 한 번에 하나의 예고만 표시하므로 충분).
+    if (!AttackIndicator)
+    {
+        FActorSpawnParameters Params;
+        Params.Owner = this;
+        Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+
+        AttackIndicator = GetWorld()->SpawnActor<ARLDecalIndicator>(ARLDecalIndicator::StaticClass(), FVector::ZeroVector, FRotator::ZeroRotator, Params);
+    }
+
+    if (!AttackIndicator)
+    {
+        return;
+    }
+
+    AttackIndicator->SetupSectorIndicator(Radius, SafeZoneAngleDegrees, DecalMaterial);
+    AttackIndicator->UpdateSectorTransform(GetActorLocation(), GetActorRotation().Yaw);
+    AttackIndicator->SetIndicatorVisibility(true);
+}
+
 void ARLCharacter::HideAttackIndicator()
 {
     if (AttackIndicator)
@@ -453,17 +476,18 @@ void ARLCharacter::HideAttackIndicator()
     }
 }
 
-void ARLCharacter::StartBoxAttackTelegraph(UAnimMontage* Montage, FName HitNotifyName, float LeadTime, FVector BoxExtent, float ForwardOffset, UMaterialInterface* DecalMaterial, AActor* FaceTarget, float TurnSpeed)
+// ★ StartBoxAttackTelegraph/StartSectorAttackTelegraph 공용 헬퍼로 분리한 노티파이 스캔 로직.
+// Montage Notify(AnimNotify_PlayMontageNotify)는 Notify->GetNotifyName()이 Notify Name 값을 돌려주고,
+// 스켈레톤 노티파이는 Notify가 null이고 이벤트의 NotifyName에 이름이 들어있어서 둘 다 확인합니다.
+TArray<FVector2D> ARLCharacter::ComputeTelegraphWindows(const UAnimMontage* Montage, FName HitNotifyName, float LeadTime) const
 {
-    StopAttackTelegraph();
+    TArray<FVector2D> Windows;
 
     if (!Montage)
     {
-        return;
+        return Windows;
     }
 
-    // Montage Notify(AnimNotify_PlayMontageNotify)는 Notify->GetNotifyName()이 Notify Name 값을 돌려주고,
-    // 스켈레톤 노티파이는 Notify가 null이고 이벤트의 NotifyName에 이름이 들어있어서 둘 다 확인합니다.
     const FString HitName = HitNotifyName.ToString();
     TArray<float> HitTimes;
     for (const FAnimNotifyEvent& Event : Montage->Notifies)
@@ -480,19 +504,48 @@ void ARLCharacter::StartBoxAttackTelegraph(UAnimMontage* Montage, FName HitNotif
     float PrevHitTime = 0.0f;
     for (const float HitTime : HitTimes)
     {
-        TelegraphWindows.Add(FVector2D(FMath::Max(HitTime - LeadTime, PrevHitTime), HitTime));
+        Windows.Add(FVector2D(FMath::Max(HitTime - LeadTime, PrevHitTime), HitTime));
         PrevHitTime = HitTime;
     }
 
+    return Windows;
+}
+
+void ARLCharacter::StartBoxAttackTelegraph(UAnimMontage* Montage, FName HitNotifyName, float LeadTime, FVector BoxExtent, float ForwardOffset, UMaterialInterface* DecalMaterial, AActor* FaceTarget, float TurnSpeed)
+{
+    StopAttackTelegraph();
+
+    TelegraphWindows = ComputeTelegraphWindows(Montage, HitNotifyName, LeadTime);
     if (TelegraphWindows.Num() == 0)
     {
         return;
     }
 
+    TelegraphShape = ETelegraphShape::Box;
     TelegraphMontage = Montage;
     TelegraphMaterial = DecalMaterial;
     TelegraphBoxExtent = BoxExtent;
     TelegraphForwardOffset = ForwardOffset;
+    TelegraphFaceTarget = FaceTarget;
+    TelegraphTurnSpeed = TurnSpeed;
+    UpdateAttackTelegraph(0.0f);
+}
+
+void ARLCharacter::StartSectorAttackTelegraph(UAnimMontage* Montage, FName HitNotifyName, float LeadTime, float Radius, float SafeZoneAngleDegrees, UMaterialInterface* DecalMaterial, AActor* FaceTarget, float TurnSpeed)
+{
+    StopAttackTelegraph();
+
+    TelegraphWindows = ComputeTelegraphWindows(Montage, HitNotifyName, LeadTime);
+    if (TelegraphWindows.Num() == 0)
+    {
+        return;
+    }
+
+    TelegraphShape = ETelegraphShape::Sector;
+    TelegraphMontage = Montage;
+    TelegraphMaterial = DecalMaterial;
+    TelegraphRadius = Radius;
+    TelegraphSafeZoneAngle = SafeZoneAngleDegrees;
     TelegraphFaceTarget = FaceTarget;
     TelegraphTurnSpeed = TurnSpeed;
     UpdateAttackTelegraph(0.0f);
@@ -542,7 +595,15 @@ void ARLCharacter::UpdateAttackTelegraph(float DeltaTime)
     {
         // 대상을 정면으로 맞춘 뒤 그 위치/방향으로 데칼 고정 (판정도 그 방향으로 나감)
         FaceTelegraphTarget(-1.0f);
-        ShowBoxAttackIndicator(TelegraphBoxExtent, TelegraphForwardOffset, TelegraphMaterial);
+
+        if (TelegraphShape == ETelegraphShape::Sector)
+        {
+            ShowSectorAttackIndicator(TelegraphRadius, TelegraphSafeZoneAngle, TelegraphMaterial);
+        }
+        else
+        {
+            ShowBoxAttackIndicator(TelegraphBoxExtent, TelegraphForwardOffset, TelegraphMaterial);
+        }
     }
     else if (!bShouldShow && bTelegraphVisible)
     {
@@ -762,6 +823,95 @@ void ARLCharacter::CreateLocationHitbox(FVector TargetLocation, float Radius, co
             }
         }
     }
+}
+
+// ★ 보스 "자기 자신"을 중심으로 한 부채꼴(전방위) 판정. CreateLocationHitbox와 거의 동일하게
+// SphereTraceMultiForObjects로 Radius 안의 Pawn을 전부 모은 뒤, 그중 "정면 기준 뒤쪽
+// SafeZoneAngleDegrees도 폭"의 안전지대 쐐기 안에 있는 대상만 걸러내고 나머지 전부에게 한 번에
+// 데미지를 줍니다. 예: SafeZoneAngleDegrees=90 → 정면 기준 좌우 135도씩(총 270도)이 위험지대이고,
+// 바로 뒤 90도(좌우 45도씩)만 안전지대입니다.
+void ARLCharacter::CreateSectorHitbox(float Radius, float SafeZoneAngleDegrees, const FRLDamageData& DamageData, bool bDrawDebug)
+{
+    const FVector Origin = GetActorLocation();
+    const FVector ForwardDir = GetActorForwardVector().GetSafeNormal2D();
+
+    TArray<AActor*> ActorsToIgnore;
+    ActorsToIgnore.Add(this);
+
+    TArray<FHitResult> HitResults;
+    TArray<TEnumAsByte<EObjectTypeQuery>> ObjectTypes;
+    ObjectTypes.Add(UEngineTypes::ConvertToObjectType(ECollisionChannel::ECC_Pawn));
+
+    EDrawDebugTrace::Type DebugTrace = bDrawDebug ? EDrawDebugTrace::ForDuration : EDrawDebugTrace::None;
+
+    // 원 전체(Radius)를 우선 스윕으로 다 모으고, 아래에서 각도로 안전지대만 걸러냅니다.
+    // (BoxTrace/ConeTrace 같은 부채꼴 전용 트레이스가 엔진에 없어서, 원형 스윕 + 각도 필터링 방식을 씁니다)
+    bool bHit = UKismetSystemLibrary::SphereTraceMultiForObjects(
+        GetWorld(),
+        Origin,
+        Origin + FVector(0.f, 0.f, 1.f),
+        Radius,
+        ObjectTypes,
+        false,
+        ActorsToIgnore,
+        DebugTrace,
+        HitResults,
+        true,
+        FLinearColor::Red,
+        FLinearColor::Green,
+        1.5f
+    );
+
+    if (bHit)
+    {
+        // 안전지대 쐐기의 절반 폭(정면 기준이 아니라 "정면의 반대 방향(Backward)" 기준 좌우 폭이라
+        // Acos로 구한 "정면과의 각도"는 180도에 가까울수록 안전지대에 가깝습니다).
+        const float SafeHalfAngle = SafeZoneAngleDegrees * 0.5f;
+
+        TSet<AActor*> DamagedActors;
+        for (const FHitResult& Hit : HitResults)
+        {
+            AActor* HitActor = Hit.GetActor();
+            if (!HitActor || DamagedActors.Contains(HitActor))
+            {
+                continue;
+            }
+
+            // 보스와 거의 같은 위치(방향 정의 불가)면 안전지대 검사 없이 맞는 걸로 취급
+            const FVector ToTarget2D = (HitActor->GetActorLocation() - Origin).GetSafeNormal2D();
+            if (!ToTarget2D.IsNearlyZero())
+            {
+                const float AngleFromForward = FMath::RadiansToDegrees(FMath::Acos(FVector::DotProduct(ForwardDir, ToTarget2D)));
+
+                // 정면과의 각도가 (180 - SafeHalfAngle) 이상이면 "뒤쪽 안전지대 쐐기" 안에 있는 것 → 제외
+                if (AngleFromForward >= (180.0f - SafeHalfAngle))
+                {
+                    continue;
+                }
+            }
+
+            DamagedActors.Add(HitActor);
+            if (ARLCharacter* TargetChar = Cast<ARLCharacter>(HitActor))
+            {
+                FRLDamageData FinalDamage = DamageData;
+                FinalDamage.DamageCauser = this;
+                TargetChar->ReceiveCustomDamage(FinalDamage, Hit);
+            }
+        }
+    }
+
+#if ENABLE_DRAW_DEBUG
+    if (bDrawDebug)
+    {
+        // 안전지대 쐐기의 좌/우 경계선을 디버그 라인으로 그려서(Backward 방향 기준 ±SafeHalfAngle),
+        // 실제로 어디까지가 안전지대인지 눈으로 확인할 수 있게 합니다.
+        const FVector BackwardDir = -ForwardDir;
+        const FVector LeftBoundary = BackwardDir.RotateAngleAxis(-(SafeZoneAngleDegrees * 0.5f), FVector::UpVector);
+        const FVector RightBoundary = BackwardDir.RotateAngleAxis(SafeZoneAngleDegrees * 0.5f, FVector::UpVector);
+        DrawDebugLine(GetWorld(), Origin, Origin + LeftBoundary * Radius, FColor::Blue, false, 1.5f, 0, 3.0f);
+        DrawDebugLine(GetWorld(), Origin, Origin + RightBoundary * Radius, FColor::Blue, false, 1.5f, 0, 3.0f);
+    }
+#endif
 }
 
 // ★ 원거리 공격: RLSkillComponent의 ESkillCastType::Projectile 분기와 동일한 로직입니다.
