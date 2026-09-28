@@ -1,4 +1,4 @@
-// Fill out your copyright notice in the Description page of Project Settings.
+﻿// Fill out your copyright notice in the Description page of Project Settings.
 #pragma once
 
 #include "CoreMinimal.h"
@@ -14,6 +14,8 @@ class URLSkillData;
 class URLStatComponent;
 class ARLPortal;
 class ARLRewardChest;
+class ARLDecalIndicator;
+class UMaterialInterface;
 
 UCLASS()
 class ROGUELIKETOPVIEW_API ARLCharacter : public ACharacter
@@ -62,6 +64,28 @@ public:
 	// URLSkillComponent의 ESkillCastType::Projectile 처리 로직과 동일한 방식으로 동작합니다.
 	UFUNCTION(BlueprintCallable, Category = "Combat")
 	void SpawnProjectileAttack(TSubclassOf<AActor> ProjectileClass, float ForwardOffset, float ProjectileSpeed, const FRLDamageData& DamageData);
+
+	// ★ 근접 박스 공격 예고(텔레그래프) 데칼을 표시합니다. CreateBoxHitbox와 같은 규격의
+	// BoxExtent/ForwardOffset을 넘기면, 실제 판정 박스와 정확히 같은 자리/크기에 사각형 데칼이 뜹니다.
+	// 보통 BTT_Attack에서 "몽타주 재생 시작" 시점(선딜레이 구간)에 호출해서 플레이어에게 미리 경고하고,
+	// Notify_Hit(실제 판정 시점)에 HideAttackIndicator를 호출해 감춰주는 식으로 씁니다.
+	// DecalMaterial을 비워두면(nullptr) 이전에 설정돼 있던 머티리얼을 그대로 재사용합니다.
+	UFUNCTION(BlueprintCallable, Category = "Combat|Indicator")
+	void ShowBoxAttackIndicator(FVector BoxExtent, float ForwardOffset, UMaterialInterface* DecalMaterial = nullptr);
+
+	// ★ ShowBoxAttackIndicator로 띄운 예고 데칼을 숨깁니다. (액터 자체를 파괴하진 않고 다음 공격 때 재사용합니다)
+	UFUNCTION(BlueprintCallable, Category = "Combat|Indicator")
+	void HideAttackIndicator();
+
+	// ★ 몽타주 재생 직후 한 번 호출하면, 몽타주 안의 HitNotifyName 노티파이마다
+	// [히트 - LeadTime, 히트) 구간 동안 Box 예고 데칼을 자동으로 켜고 끕니다 (3연타면 3번 표시/소멸).
+	// 몽타주 재생 위치 기준으로 Tick에서 판단하므로 재생 속도/히트스톱과 어긋나지 않고,
+	// 몽타주가 끝나거나 끊기면 자동으로 정리됩니다.
+	UFUNCTION(BlueprintCallable, Category = "Combat|Indicator")
+	void StartBoxAttackTelegraph(UAnimMontage* Montage, FName HitNotifyName, float LeadTime, FVector BoxExtent, float ForwardOffset, UMaterialInterface* DecalMaterial = nullptr);
+
+	UFUNCTION(BlueprintCallable, Category = "Combat|Indicator")
+	void StopAttackTelegraph();
 
 	UFUNCTION(BlueprintCallable, Category = "Action")
 	void Dodge(FVector CursorLocation);
@@ -176,6 +200,25 @@ protected:
 
 	UPROPERTY()
 	ARLRewardChest* NearbyChest = nullptr;
+
+	// ★ ShowBoxAttackIndicator 호출 시 처음 한 번만 스폰되고 이후로는 재사용되는 예고 데칼 액터.
+	// (URLSkillComponent::DecalIndicator와 같은 지연 스폰 패턴)
+	UPROPERTY()
+	ARLDecalIndicator* AttackIndicator = nullptr;
+
+	// ★ StartBoxAttackTelegraph 상태. TelegraphWindows는 몽타주 시간(초) 기준 [X=표시 시작, Y=히트) 구간 목록.
+	UPROPERTY()
+	UAnimMontage* TelegraphMontage = nullptr;
+
+	UPROPERTY()
+	UMaterialInterface* TelegraphMaterial = nullptr;
+
+	TArray<FVector2D> TelegraphWindows;
+	FVector TelegraphBoxExtent = FVector::ZeroVector;
+	float TelegraphForwardOffset = 0.0f;
+	bool bTelegraphVisible = false;
+
+	void UpdateAttackTelegraph();
 
 public:
 	virtual void Tick(float DeltaTime) override;

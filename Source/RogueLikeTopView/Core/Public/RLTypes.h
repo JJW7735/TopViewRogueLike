@@ -107,6 +107,11 @@ struct FRLMonsterPatternData
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Indicator", meta = (EditCondition = "bUseIndicator"))
 	FVector IndicatorOffset = FVector::ZeroVector;
 
+	// ★ Box 예고 데칼을 각 Notify_Hit보다 몇 초 먼저 띄울지 (ARLCharacter::StartBoxAttackTelegraph에 전달).
+	// 콤보라서 히트 간격이 이 값보다 짧으면 직전 히트 직후부터 표시됩니다.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Indicator", meta = (ClampMin = "0.0"))
+	float IndicatorLeadTime = 0.7f;
+
 	// ★ 원거리(투사체) 패턴 여부. true면 이 패턴은 근접 히트박스 대신 투사체를 발사합니다.
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Pattern|Projectile")
 	bool bIsRangedAttack = false;
