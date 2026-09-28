@@ -23,6 +23,37 @@ void URLStatComponent::BeginPlay()
 	
 }
 
+void URLStatComponent::AddExp(float Amount)
+{
+	if (Amount <= 0.0f)
+	{
+		return;
+	}
+
+	CurrentExp += Amount;
+
+	// 레벨업 체크 (경험치가 여러 레벨을 넘길 경우 반복)
+	bool bLeveledUp = false;
+	while (MaxExp > 0.0f && CurrentExp >= MaxExp)
+	{
+		CurrentExp -= MaxExp;
+		CurrentLevel++;
+		MaxExp = FMath::RoundToFloat(MaxExp * ExpGrowthMultiplier);
+		bLeveledUp = true;
+
+		if (GEngine)
+		{
+			GEngine->AddOnScreenDebugMessage(-1, 4.0f, FColor::Cyan,
+				FString::Printf(TEXT("🎉 [LEVEL UP!] 레벨 %d 달성! (다음 필요 경험치: %.0f)"), CurrentLevel, MaxExp));
+		}
+
+		OnLevelUp.Broadcast(CurrentLevel);
+	}
+
+	const float Percent = MaxExp > 0.0f ? FMath::Clamp(CurrentExp / MaxExp, 0.0f, 1.0f) : 0.0f;
+	OnExpChanged.Broadcast(CurrentExp, MaxExp, Percent);
+}
+
 float URLStatComponent::EvaluateDamage(float InRawDamage, bool& bOutIsCritical) const
 {
 	bOutIsCritical = false;

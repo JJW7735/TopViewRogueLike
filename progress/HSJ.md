@@ -2,6 +2,21 @@
 > 최종 갱신: 2026-09-28
 
 ## 완료
+- **경험치/레벨업 & 필드 드롭 & 몬스터 차등 파밍 시스템 구축** (`Source/RogueLikeTopView/`):
+  - **경험치 및 레벨업 시스템 (`URLStatComponent.h / .cpp`)**:
+    - `CurrentLevel`, `CurrentExp`, `MaxExp`, 점진적 요구 경험치 배율(`ExpGrowthMultiplier` = 1.25)
+    - `AddExp(Amount)`: 경험치 누적 및 다중 레벨업 루프 판정
+    - 델리게이트 2종: `OnExpChanged(Current, Max, Percent)`, `OnLevelUp(NewLevel)`
+    - 캐릭터 연동(`ARLCharacter::HandleLevelUp`): 레벨업 시 체력 100% 회복 + 3지선다 보상 카드 팝업(`TestOpenRewardUI`) + 연출 훅(`OnCharacterLevelUp`)
+    - 즉시 테스트 치트: `TestAddExp [Amount]`
+  - **필드 드롭 및 자석 루팅 액터 (`ARLItemDrop.h / .cpp`)**:
+    - 몬스터 사망/상자 개봉 시 퐁 튀어나오는 포물선 점프 연출(`LaunchDrop`)
+    - 바닥 안착 후 둥둥 떠서 제자리 회전 연출
+    - 자석 시스템(`MagnetSphere`): 플레이어 접근 시 가속하여 날아와 인벤토리에 자동 흡수(`AddGold` / `AddItem`)
+  - **몬스터 처치 보상 및 드롭 차등화 (`ARLEnemyCharacter.h / .cpp`)**:
+    - 처치 시 플레이어에게 경험치(`ExpReward`) 자동 지급 (일반몹: 30, 보스: 350)
+    - **보스 몬스터(`bIsBoss = true`)**: 100% 확정 보상 상자(`ARLRewardChest`) 스폰 + 대량 골드 드롭 확정 분출
+    - **일반 몬스터**: `ItemDropChance`(기본 35%) 확률 주사위 기반 필드 골드/아이템(`ARLItemDrop`) 스폰
 - **인벤토리 및 아이템 시스템 백엔드(Inventory & Item Backend) 구축** (`Source/RogueLikeTopView/Inventory`):
   - **아이템 타입 및 슬롯 구조 정의 (`RLItemTypes.h`)**:
     - 5종 아이템 분류(`ERLItemType`): 패시브 유물(Passive), 소비 아이템(Consumable), 장비(Equipment), 재료/열쇠(Material), 재화(Currency)

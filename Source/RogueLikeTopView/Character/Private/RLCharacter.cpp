@@ -1,4 +1,4 @@
-﻿// Fill out your copyright notice in the Description page of Project Settings.
+// Fill out your copyright notice in the Description page of Project Settings.
 
 #include "RLCharacter.h"
 #include "GameFramework/SpringArmComponent.h"
@@ -85,6 +85,7 @@ void ARLCharacter::BeginPlay()
     if (StatComp)
     {
         StatComp->OnStatsChanged.AddDynamic(this, &ARLCharacter::HandleStatsChanged);
+        StatComp->OnLevelUp.AddDynamic(this, &ARLCharacter::HandleLevelUp);
         if (GetCharacterMovement())
         {
             GetCharacterMovement()->MaxWalkSpeed = StatComp->MoveSpeed;
@@ -178,6 +179,21 @@ void ARLCharacter::HandleStatsChanged()
     {
         GetCharacterMovement()->MaxWalkSpeed = StatComp->MoveSpeed;
     }
+}
+
+void ARLCharacter::HandleLevelUp(int32 NewLevel)
+{
+    // 1. 레벨업 시 체력 완전 회복
+    if (HealthComp)
+    {
+        HealthComp->Heal(HealthComp->MaxHealth);
+    }
+
+    // 2. 블루프린트 연출 훅 호출
+    OnCharacterLevelUp(NewLevel);
+
+    // 3. 3지선다 보상 카드 선택창 자동 팝업
+    TestOpenRewardUI();
 }
 
 void ARLCharacter::SetNearbyPortal(ARLPortal* Portal)
@@ -347,6 +363,14 @@ void ARLCharacter::TestAddGold(int32 Amount)
     if (InventoryComp)
     {
         InventoryComp->AddGold(Amount);
+    }
+}
+
+void ARLCharacter::TestAddExp(float Amount)
+{
+    if (StatComp)
+    {
+        StatComp->AddExp(Amount);
     }
 }
 

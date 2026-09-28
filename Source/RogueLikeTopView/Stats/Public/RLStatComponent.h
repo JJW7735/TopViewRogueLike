@@ -5,6 +5,8 @@
 #include "RLStatComponent.generated.h"
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnStatsChangedSignature);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FOnExpChangedSignature, float, CurrentExp, float, MaxExp, float, ExpPercent);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnLevelUpSignature, int32, NewLevel);
 
 UCLASS(ClassGroup = (Custom), meta = (BlueprintSpawnableComponent))
 class ROGUELIKETOPVIEW_API URLStatComponent : public UActorComponent
@@ -18,8 +20,43 @@ public:
 	UPROPERTY(BlueprintAssignable, Category = "Stats")
 	FOnStatsChangedSignature OnStatsChanged;
 
+	// 경험치 변경 시 호출 (현재 경험치, 최대 경험치, 비율 0.0~1.0)
+	UPROPERTY(BlueprintAssignable, Category = "Stats|Level")
+	FOnExpChangedSignature OnExpChanged;
+
+	// 레벨업 시 호출 (새로운 레벨)
+	UPROPERTY(BlueprintAssignable, Category = "Stats|Level")
+	FOnLevelUpSignature OnLevelUp;
+
 	UFUNCTION(BlueprintCallable, Category = "Stats")
 	void NotifyStatsChanged();
+
+	// ==========================================
+	// ★ 레벨 & 경험치
+	// ==========================================
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stats|Level", meta = (ClampMin = "1"))
+	int32 CurrentLevel = 1;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stats|Level", meta = (ClampMin = "0.0"))
+	float CurrentExp = 0.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stats|Level", meta = (ClampMin = "1.0"))
+	float MaxExp = 100.0f;
+
+	// 레벨업 시 다음 필요 경험치 증가 배율 (기본 1.25배 = 25% 증가)
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stats|Level", meta = (ClampMin = "1.0"))
+	float ExpGrowthMultiplier = 1.25f;
+
+	/** 경험치 획득 및 레벨업 판정 */
+	UFUNCTION(BlueprintCallable, Category = "Stats|Level")
+	void AddExp(float Amount);
+
+	UFUNCTION(BlueprintPure, Category = "Stats|Level")
+	int32 GetCurrentLevel() const { return CurrentLevel; }
+
+	UFUNCTION(BlueprintPure, Category = "Stats|Level")
+	float GetExpPercent() const { return MaxExp > 0.0f ? FMath::Clamp(CurrentExp / MaxExp, 0.0f, 1.0f) : 0.0f; }
 
 	// ==========================================
 	// ★ 핵심 스탯 4가지

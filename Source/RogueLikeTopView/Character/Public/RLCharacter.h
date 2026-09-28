@@ -1,4 +1,4 @@
-﻿// Fill out your copyright notice in the Description page of Project Settings.
+// Fill out your copyright notice in the Description page of Project Settings.
 #pragma once
 
 #include "CoreMinimal.h"
@@ -152,6 +152,9 @@ public:
 	UFUNCTION(BlueprintCallable, Exec, Category = "Cheat|Inventory")
 	void TestAddGold(int32 Amount = 100);
 
+	UFUNCTION(BlueprintCallable, Exec, Category = "Cheat|Stats")
+	void TestAddExp(float Amount = 100.0f);
+
 	UFUNCTION(BlueprintImplementableEvent, Category = "Interaction")
 	void OnNearbyPortalChanged(bool bInRange);
 
@@ -212,8 +215,14 @@ protected:
 	UFUNCTION()
 	void HandleStatsChanged();
 
+	UFUNCTION()
+	void HandleLevelUp(int32 NewLevel);
+
 	UFUNCTION(BlueprintImplementableEvent, Category = "Death")
 	void OnCharacterDeath();
+
+	UFUNCTION(BlueprintImplementableEvent, Category = "Level")
+	void OnCharacterLevelUp(int32 NewLevel);
 
 	UPROPERTY()
 	ARLPortal* NearbyPortal = nullptr;

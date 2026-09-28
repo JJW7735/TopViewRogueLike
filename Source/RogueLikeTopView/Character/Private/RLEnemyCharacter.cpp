@@ -1,15 +1,20 @@
 #include "RLEnemyCharacter.h"
 #include "RLHealthComponent.h"
+#include "RLStatComponent.h"
 #include "RLRewardChest.h"
+#include "RLItemDrop.h"
+#include "RLItemDataAsset.h"
 #include "AIController.h"
 #include "BehaviorTree/BlackboardComponent.h"
 #include "BrainComponent.h"
 #include "Components/CapsuleComponent.h"
 #include "Engine/World.h"
+#include "Kismet/GameplayStatics.h"
 
 ARLEnemyCharacter::ARLEnemyCharacter()
 {
 	DropChestClass = ARLRewardChest::StaticClass();
+	ItemDropClass = ARLItemDrop::StaticClass();
 }
 
 void ARLEnemyCharacter::BeginPlay()
@@ -97,15 +102,75 @@ void ARLEnemyCharacter::HandleDeath()
 		}
 	}
 
+	// 1. 플레이어에게 처치 경험치 지급
+	if (ARLCharacter* PlayerChar = Cast<ARLCharacter>(UGameplayStatics::GetPlayerCharacter(this, 0)))
+	{
+		if (URLStatComponent* PlayerStats = PlayerChar->GetStatComponent())
+		{
+			PlayerStats->AddExp(ExpReward);
+		}
+	}
+
 	// 몬스터 사망 델리게이트 방송 (방 관리자 / 웨이브 시스템 연동)
 	OnEnemyDied.Broadcast(this);
 
-	// ★ 사망 시 보상 상자 드롭
+	const FVector MyLoc = GetActorLocation();
+
+	// 2. 보스 처치: 100% 확정 보상 상자 + 대량 골드/아이템 드롭
+	if (bIsBoss)
+	{
+		bDropChestOnDeath = true;
+		DropChance = 1.0f;
+
+		// 보스 주변에 대량의 골드 드롭 3개 스폰
+		if (ItemDropClass)
+		{
+			for (int32 i = 0; i < 3; ++i)
+			{
+				FActorSpawnParameters SpawnParams;
+				SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+				if (ARLItemDrop* GoldDrop = GetWorld()->SpawnActor<ARLItemDrop>(ItemDropClass, MyLoc, FRotator::ZeroRotator, SpawnParams))
+				{
+					GoldDrop->InitializeGoldDrop(FMath::RandRange(40, 70));
+					const float Angle = (360.0f / 3.0f) * i;
+					const FVector Dir = FRotator(0.f, Angle, 0.f).Vector();
+					GoldDrop->LaunchDrop(Dir * 200.0f + FVector(0.f, 0.f, 400.f));
+				}
+			}
+		}
+	}
+	// 3. 일반 몬스터: 확률에 따른 필드 아이템/골드 드롭
+	else if (ItemDropClass && FMath::FRand() <= ItemDropChance)
+	{
+		FActorSpawnParameters SpawnParams;
+		SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+
+		if (ARLItemDrop* DropActor = GetWorld()->SpawnActor<ARLItemDrop>(ItemDropClass, MyLoc, FRotator::ZeroRotator, SpawnParams))
+		{
+			// 아이템 후보 풀이 있고 50% 확률이면 아이템 드롭, 아니면 골드 드롭
+			if (PossibleItemDrops.Num() > 0 && FMath::RandBool())
+			{
+				const int32 RandomIdx = FMath::RandRange(0, PossibleItemDrops.Num() - 1);
+				DropActor->InitializeItemDrop(PossibleItemDrops[RandomIdx], 1);
+			}
+			else
+			{
+				const int32 RolledGold = FMath::RandRange(MinGoldDrop, MaxGoldDrop);
+				DropActor->InitializeGoldDrop(RolledGold);
+			}
+
+			// 랜덤한 방향으로 퐁 튀어나오는 포물선 발사
+			const FVector RandomDir = FVector(FMath::FRandRange(-1.f, 1.f), FMath::FRandRange(-1.f, 1.f), 0.f).GetSafeNormal();
+			DropActor->LaunchDrop(RandomDir * FMath::FRandRange(100.f, 200.f) + FVector(0.f, 0.f, FMath::FRandRange(280.f, 380.f)));
+		}
+	}
+
+	// 4. 보상 상자 드롭 (보스는 확정, 일반 몬스터는 설정된 경우)
 	if (bDropChestOnDeath && DropChestClass)
 	{
 		if (FMath::FRand() <= DropChance)
 		{
-			FVector SpawnLoc = GetActorLocation() + ChestSpawnOffset;
+			FVector SpawnLoc = MyLoc + ChestSpawnOffset;
 			if (UCapsuleComponent* Capsule = GetCapsuleComponent())
 			{
 				SpawnLoc.Z -= Capsule->GetScaledCapsuleHalfHeight();

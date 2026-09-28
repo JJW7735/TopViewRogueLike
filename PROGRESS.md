@@ -42,6 +42,9 @@
 ### 🎒 인벤토리 & 아이템 (Inventory & Item)
 - [x] **`URLInventoryComponent`**: 슬롯 기반(기본 20칸) 아이템 보관, 스택 병합, 골드 관리
 - [x] **`URLItemDataAsset`**: 5종 아이템 분류(패시브 유물, 소비, 장비, 재료, 재화), 체력 회복 및 패시브 스탯 자동 연동
+- [x] **경험치 및 레벨업 시스템 (`URLStatComponent`)**: 처치 경험치 획득, 레벨업 시 체력 100% 회복 및 3지선다 보상 창 자동 팝업
+- [x] **필드 드롭 액터 (`ARLItemDrop`)**: 포물선 점프, 바닥 안착 후 둥둥 떠서 회전, 자석(Magnet) 플레이어 흡수 루팅
+- [x] **몬스터 처치 보상 차등화 (`ARLEnemyCharacter`)**: 일반 몬스터 확률 드롭(35%) vs 보스 100% 확정 보상 상자 + 대량 골드 드롭
 - [x] **UI 연동 델리게이트 4종**: `OnInventoryUpdated`, `OnSlotUpdated`, `OnGoldChanged`, `OnItemUsed`
 - [x] **인벤토리 UI 연동 가이드 문서화**: [`progress/UI_INVENTORY_GUIDE.md`](progress/UI_INVENTORY_GUIDE.md)
 

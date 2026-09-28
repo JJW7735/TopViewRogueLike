@@ -19,6 +19,8 @@
 // - AI(BT) 정지 로직도 여기 둔 이유: 플레이어 캐릭터는 AIController/BehaviorTree가 없으니
 //   ARLCharacter에 두면 의미가 없고, 몬스터 전용 계층에 두는 게 맞습니다.
 class ARLRewardChest;
+class ARLItemDrop;
+class URLItemDataAsset;
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnEnemyDeathEvent, ARLEnemyCharacter*, DeadEnemy);
 
@@ -35,10 +37,45 @@ public:
 	FOnEnemyDeathEvent OnEnemyDied;
 
 	// ==========================================
+	// ★ 경험치 & 보스 설정
+	// ==========================================
+
+	// 보스 몬스터 여부 (보스는 100% 확정 보상 상자 + 대량 경험치 드롭)
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Enemy|Reward")
+	bool bIsBoss = false;
+
+	// 처치 시 플레이어에게 지급할 경험치 (일반 몬스터 기본 30, 보스 350)
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Enemy|Reward", meta = (ClampMin = "0.0"))
+	float ExpReward = 30.0f;
+
+	// ==========================================
+	// ★ 필드 아이템 / 골드 드롭 설정
+	// ==========================================
+
+	// 사망 시 일반 아이템/골드 드롭 확률 (0.0f ~ 1.0f, 일반몹 기본 35% = 0.35f, 보스는 1.0f)
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Enemy|Reward", meta = (ClampMin = "0.0", ClampMax = "1.0"))
+	float ItemDropChance = 0.35f;
+
+	// 드롭할 수 있는 아이템 후보 풀
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Enemy|Reward")
+	TArray<TObjectPtr<URLItemDataAsset>> PossibleItemDrops;
+
+	// 드롭될 골드 범위
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Enemy|Reward", meta = (ClampMin = "1"))
+	int32 MinGoldDrop = 5;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Enemy|Reward", meta = (ClampMin = "1"))
+	int32 MaxGoldDrop = 20;
+
+	// 스폰할 필드 드롭 액터 클래스 (기본값: ARLItemDrop)
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Enemy|Reward")
+	TSubclassOf<ARLItemDrop> ItemDropClass;
+
+	// ==========================================
 	// ★ 보상 상자 드롭 설정
 	// ==========================================
 
-	// 사망 시 보상 상자를 스폰할지 여부 (보스나 엘리트 몬스터의 경우 체크)
+	// 사망 시 보상 상자를 스폰할지 여부 (보스는 자동 true)
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Enemy|Reward")
 	bool bDropChestOnDeath = false;
 
