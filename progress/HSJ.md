@@ -1,7 +1,33 @@
 # HSJ
-> 최종 갱신: 2026-09-23
+> 최종 갱신: 2026-09-28
 
 ## 완료
+- **인벤토리 및 아이템 시스템 백엔드(Inventory & Item Backend) 구축** (`Source/RogueLikeTopView/Inventory`):
+  - **아이템 타입 및 슬롯 구조 정의 (`RLItemTypes.h`)**:
+    - 5종 아이템 분류(`ERLItemType`): 패시브 유물(Passive), 소비 아이템(Consumable), 장비(Equipment), 재료/열쇠(Material), 재화(Currency)
+    - 인벤토리 슬롯 구조체(`FRLInventorySlot`): `ItemData`, `Quantity`, 유효성 검사(`IsValid`), 초기화(`Clear`)
+  - **아이템 데이터 에셋 (`RLItemDataAsset.h / .cpp`)**:
+    - `UPrimaryDataAsset` 기반 아이템 정의 (아이디, 이름, 설명, 아이콘, 희귀도, 최대 스택 수, 골드 가치)
+    - 소비 아이템 효과(즉시 체력 회복 `InstantHealAmount`, 퍼센트 회복 `PercentHealAmount`, 사용 시 1개 소모 `bConsumeOnUse`)
+    - 패시브 스탯 보너스(`TArray<FRLStatBonus>`) 지원
+    - 가상 함수 및 블루프린트 확장 지원 (`UseItem` BlueprintNativeEvent)
+  - **인벤토리 컴포넌트 (`RLInventoryComponent.h / .cpp`)**:
+    - `UActorComponent` 기반 인벤토리 & 재화 매니저
+    - 아이템 추가(`AddItem`): 최대 스택(`MaxStackSize`) 기반 기존 슬롯 자동 병합 + 빈 슬롯 자동 배치
+    - 아이템 제거(`RemoveItemAtIndex`, `RemoveItemByID`)
+    - 아이템 사용(`UseItemAtIndex`): 효과 발동 및 소모 처리
+    - 슬롯 위치 교환(`SwapSlots`): UI 드래그 앤 드롭 지원
+    - 재화 관리(`AddGold`, `SpendGold`, `GetGold`)
+    - 패시브 아이템 자동 연동: 패시브 아이템 획득/제거 시 `URLStatComponent` 및 `URLHealthComponent`에 스탯 즉시 가감 및 이동속도 동기화
+    - UI 연동용 델리게이트 4종: `OnInventoryUpdated`, `OnSlotUpdated`, `OnGoldChanged`, `OnItemUsed`
+  - **캐릭터 연동 및 즉시 테스트 치트 (`RLCharacter.h / .cpp`)**:
+    - `ARLCharacter` 기본 컴포넌트로 `InventoryComp` 부착 및 `GetInventoryComponent()` 게터 추가
+    - 즉시 테스트용 콘솔 치트 3종 탑재:
+      - `TestGiveTestItems`: 소비 물약(5개), 공격력 반지(1개), 신속 장화(1개), 루비(3개), 300 골드 즉시 지급
+      - `TestUseItemSlot [SlotIndex]`: 특정 슬롯 아이템 사용 테스트
+      - `TestAddGold [Amount]`: 골드 증감 테스트
+  - **빌드 설정 (`RogueLikeTopView.Build.cs`)**:
+    - `Inventory/Public` 인클루드 경로 등록 및 미사용 템플릿 경로 정리
 - **로그라이크 3지선다 보상 시스템(Reward System) 구축** (`Source/RogueLikeTopView/Reward`):
   - **보상 데이터 구조 및 희귀도 시스템 (`RLRewardTypes.h`)**:
     - 4단계 희귀도: 일반(Common), 희귀(Rare), 영웅(Epic), 전설(Legendary) 및 희귀도별 고유 컬러(Slate, Blue, Purple, Gold) 지원

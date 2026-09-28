@@ -1,6 +1,6 @@
 # 🎮 RLTV (RogueLikeTopView) 개발 진행 상황 & 프로젝트 가이드
 
-> **최종 갱신일:** 2026-09-23  
+> **최종 갱신일:** 2026-09-28  
 > **프로젝트 성격:** 3인 포트폴리오/공모전 탑다운 로그라이크 액션  
 > **엔진 버전:** Unreal Engine 5.8  
 > **AI 어시스턴트 협업:** Gemini (Antigravity CLI), Claude (Claude Code)
@@ -38,6 +38,12 @@
 - [x] **`URLSkillComponent` & `URLSkillData`**: 데이터 기반 스킬 쿨다운, 시전 타입, 투사체/근접/장판 발동
 - [x] **AD/AP 스탯 스케일링 연동 버그 수정**: 대시 타격, 홀드 틱, 장판 스킬 등 모든 스킬 판정에 최종 계산 데미지(`CalculateFinalDamage`) 적용
 - [x] **`URLStatComponent`**: 공격력, 이동속도, 쿨다운 감소 등 런타임 스탯 관리
+
+### 🎒 인벤토리 & 아이템 (Inventory & Item)
+- [x] **`URLInventoryComponent`**: 슬롯 기반(기본 20칸) 아이템 보관, 스택 병합, 골드 관리
+- [x] **`URLItemDataAsset`**: 5종 아이템 분류(패시브 유물, 소비, 장비, 재료, 재화), 체력 회복 및 패시브 스탯 자동 연동
+- [x] **UI 연동 델리게이트 4종**: `OnInventoryUpdated`, `OnSlotUpdated`, `OnGoldChanged`, `OnItemUsed`
+- [x] **인벤토리 UI 연동 가이드 문서화**: [`progress/UI_INVENTORY_GUIDE.md`](progress/UI_INVENTORY_GUIDE.md)
 
 ### 🖥️ UI & 입력 (UI / UX)
 - [x] **`WBP_HUD`**: 기본 HUD 구성 및 상호작용(포탈) 안내 UI 연동
@@ -84,6 +90,7 @@
 
 | 일자 | 작업자 (도구) | 작업 내용 |
 | :--- | :--- | :--- |
+| 2026-09-28 | HSJ (Gemini) | 인벤토리 & 아이템 시스템 백엔드 구축 (`URLInventoryComponent`, `URLItemDataAsset`, 5종 아이템 분류, 골드 관리, 패시브 스탯 자동 연동, 테스트 치트 3종 탑재, UI 연동 가이드 문서화: `progress/UI_INVENTORY_GUIDE.md`) |
 | 2026-09-23 | JJW (Claude) | 보스 근접 공격이 항상 씹히는 버그 원인 추적: `AM_Boss_Swing` 몽타주가 재생 시작 ~1초 만에 `Montage.Stop`으로 강제 종료됨을 로그로 확인 (`Notify_Hit` 도달 전에 끊김). BT의 `OnCompleted`가 노티파이 여부와 무관하게 `FinishExecute(true)`로 연결돼있어 겉보기엔 정상 흐름처럼 보였던 것도 확인. BT observer 데코레이터(`BTDecorator_Blackboard`) 재평가로 인한 abort가 유력 용의자 — 라이브 BT 디버거로 공격 애니메이션 재생 "중" abort 여부 확인 필요 (진행중, 내일 이어서). 추가로 `BP_Boss`에 `AttackCollision_L`/`AttackCollision_R` + `AlreadyHitActors` 기반의 별도 무기 콜리전 데미지 시스템이 이미 존재함을 발견, `Notify_Hit`/`CreateBoxHitbox` 경로와의 관계 확인 필요 |
 | 2026-09-17 | JJW | 포탈 상호작용 시스템 구축 (`IA_Interact`, `ARLPlayerController` E키 바인딩, `ARLPortal` 수정, `WBP_HUD` 안내 연동) |
 | 2026-09-17 | JJW | 소서리스 캐릭터 리타게팅(`SK_Wizard`), 애니메이션 블루프린트(`wizard_ABP_RLCharacter`) 및 전용 스킬셋(Q, W, E, R) DataAsset/몽타주 연동 |

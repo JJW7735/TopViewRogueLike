@@ -1,0 +1,144 @@
+#pragma once
+
+#include "CoreMinimal.h"
+#include "Components/ActorComponent.h"
+#include "RLItemTypes.h"
+#include "RLInventoryComponent.generated.h"
+
+class URLItemDataAsset;
+class ARLCharacter;
+
+DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnInventoryUpdatedSignature);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnSlotUpdatedSignature, int32, SlotIndex, const FRLInventorySlot&, SlotData);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnGoldChangedSignature, int32, NewGold);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnItemUsedSignature, URLItemDataAsset*, ItemData, int32, SlotIndex);
+
+/**
+ * 캐릭터의 아이템, 유물, 골드 재화를 관리하는 인벤토리 컴포넌트
+ */
+UCLASS(ClassGroup = (Custom), meta = (BlueprintSpawnableComponent))
+class ROGUELIKETOPVIEW_API URLInventoryComponent : public UActorComponent
+{
+	GENERATED_BODY()
+
+public:
+	URLInventoryComponent();
+
+	virtual void BeginPlay() override;
+
+	// ==========================================
+	// 델리게이트 (UI 연동용)
+	// ==========================================
+
+	// 인벤토리 전체 갱신 시 호출
+	UPROPERTY(BlueprintAssignable, Category = "Inventory|Event")
+	FOnInventoryUpdatedSignature OnInventoryUpdated;
+
+	// 특정 슬롯이 갱신되었을 때 호출 (슬롯 인덱스, 변경된 슬롯 데이터)
+	UPROPERTY(BlueprintAssignable, Category = "Inventory|Event")
+	FOnSlotUpdatedSignature OnSlotUpdated;
+
+	// 골드 수량이 변경되었을 때 호출
+	UPROPERTY(BlueprintAssignable, Category = "Inventory|Event")
+	FOnGoldChangedSignature OnGoldChanged;
+
+	// 아이템을 사용했을 때 호출
+	UPROPERTY(BlueprintAssignable, Category = "Inventory|Event")
+	FOnItemUsedSignature OnItemUsed;
+
+	// ==========================================
+	// 아이템 조작 함수
+	// ==========================================
+
+	/**
+	 * 아이템을 인벤토리에 추가합니다.
+	 * 겹칠 수 있는 아이템은 기존 슬롯에 합치고, 남은 수량은 빈 슬롯에 배치합니다.
+	 * @return 실제로 인벤토리에 추가된 수량
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Inventory")
+	int32 AddItem(URLItemDataAsset* ItemData, int32 Amount = 1);
+
+	/**
+	 * 특정 슬롯의 아이템을 수량만큼 제거합니다.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Inventory")
+	bool RemoveItemAtIndex(int32 SlotIndex, int32 Amount = 1);
+
+	/**
+	 * 아이템 ID로 인벤토리 전체에서 해당 아이템을 수량만큼 찾아 제거합니다.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Inventory")
+	bool RemoveItemByID(FName ItemID, int32 Amount = 1);
+
+	/**
+	 * 특정 슬롯의 아이템을 사용합니다 (소비 아이템 등).
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Inventory")
+	bool UseItemAtIndex(int32 SlotIndex);
+
+	/**
+	 * 두 슬롯의 위치를 교환합니다 (UI 드래그 앤 드롭 지원).
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Inventory")
+	bool SwapSlots(int32 FromIndex, int32 ToIndex);
+
+	// ==========================================
+	// 조회 및 재화 함수
+	// ==========================================
+
+	/** 해당 ID를 가진 아이템의 총 보유 수량 반환 */
+	UFUNCTION(BlueprintPure, Category = "Inventory")
+	int32 GetItemTotalCount(FName ItemID) const;
+
+	/** 해당 ID의 아이템을 필요한 수량 이상 가지고 있는지 확인 */
+	UFUNCTION(BlueprintPure, Category = "Inventory")
+	bool HasItem(FName ItemID, int32 RequiredAmount = 1) const;
+
+	/** 특정 슬롯 정보 조회 */
+	UFUNCTION(BlueprintPure, Category = "Inventory")
+	bool GetSlotAt(int32 SlotIndex, FRLInventorySlot& OutSlot) const;
+
+	/** 전체 슬롯 목록 조회 (읽기 전용) */
+	UFUNCTION(BlueprintPure, Category = "Inventory")
+	const TArray<FRLInventorySlot>& GetSlots() const { return Slots; }
+
+	/** 골드 획득 */
+	UFUNCTION(BlueprintCallable, Category = "Inventory|Economy")
+	void AddGold(int32 Amount);
+
+	/** 골드 소비 (보유 골드가 부족하면 실패하고 false 반환) */
+	UFUNCTION(BlueprintCallable, Category = "Inventory|Economy")
+	bool SpendGold(int32 Amount);
+
+	/** 현재 보유 골드 반환 */
+	UFUNCTION(BlueprintPure, Category = "Inventory|Economy")
+	int32 GetGold() const { return Gold; }
+
+	/** 최대 슬롯 개수 반환 */
+	UFUNCTION(BlueprintPure, Category = "Inventory")
+	int32 GetMaxSlots() const { return MaxSlots; }
+
+	/** 첫 번째 빈 슬롯 인덱스 반환 (없으면 INDEX_NONE) */
+	UFUNCTION(BlueprintPure, Category = "Inventory")
+	int32 FindFirstEmptySlotIndex() const;
+
+protected:
+	// 기본 슬롯 개수 (기본 20칸)
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Inventory|Config", meta = (ClampMin = "1"))
+	int32 MaxSlots = 20;
+
+	// 실제 슬롯 배열
+	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = "Inventory")
+	TArray<FRLInventorySlot> Slots;
+
+	// 현재 보유 골드
+	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = "Inventory")
+	int32 Gold = 0;
+
+	// 시작 시 기본 지급 아이템 목록
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Inventory|Config")
+	TArray<FRLInventorySlot> DefaultStartingItems;
+
+	// 패시브 아이템 획득/제거 시 스탯 반영 헬퍼
+	void ApplyPassiveItemBonuses(URLItemDataAsset* ItemData, int32 Multiplier, bool bApply);
+};

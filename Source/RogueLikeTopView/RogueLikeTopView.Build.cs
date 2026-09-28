@@ -36,12 +36,7 @@ public class RogueLikeTopView : ModuleRules
 			"RogueLikeTopView/Core/Public",
 			"RogueLikeTopView/Player/Public",
 			"RogueLikeTopView/Reward/Public",
-			"RogueLikeTopView/Variant_Strategy",
-			"RogueLikeTopView/Variant_Strategy/UI",
-			"RogueLikeTopView/Variant_TwinStick",
-			"RogueLikeTopView/Variant_TwinStick/AI",
-			"RogueLikeTopView/Variant_TwinStick/Gameplay",
-			"RogueLikeTopView/Variant_TwinStick/UI"
+			"RogueLikeTopView/Inventory/Public"
 		});
 
 		// Uncomment if you are using Slate UI

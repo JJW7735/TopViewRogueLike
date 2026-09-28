@@ -12,6 +12,7 @@ class URLHealthComponent;
 class URLSkillComponent;
 class URLSkillData;
 class URLStatComponent;
+class URLInventoryComponent;
 class ARLPortal;
 class ARLRewardChest;
 
@@ -22,6 +23,9 @@ class ROGUELIKETOPVIEW_API ARLCharacter : public ACharacter
 
 public:
 	ARLCharacter();
+
+	UFUNCTION(BlueprintPure, Category = "Inventory")
+	URLInventoryComponent* GetInventoryComponent() const { return InventoryComp; }
 
 	// ★ 진영(팀) 구분. 같은 팀끼리는 ReceiveCustomDamage에서 서로 피해를 주지 않습니다.
 	// 플레이어 캐릭터 BP는 클래스 디폴트값에서 Player로 바꿔주고, 몬스터 BP는 기본값(Enemy)을 그대로 사용하면 됩니다.
@@ -112,6 +116,16 @@ public:
 	UFUNCTION(BlueprintCallable, Exec, Category = "Reward")
 	void TestOpenRewardUI();
 
+	// ★ 인벤토리 및 아이템 즉시 테스트용 콘솔 명령어
+	UFUNCTION(BlueprintCallable, Exec, Category = "Cheat|Inventory")
+	void TestGiveTestItems();
+
+	UFUNCTION(BlueprintCallable, Exec, Category = "Cheat|Inventory")
+	void TestUseItemSlot(int32 SlotIndex = 0);
+
+	UFUNCTION(BlueprintCallable, Exec, Category = "Cheat|Inventory")
+	void TestAddGold(int32 Amount = 100);
+
 	UFUNCTION(BlueprintImplementableEvent, Category = "Interaction")
 	void OnNearbyPortalChanged(bool bInRange);
 
@@ -136,6 +150,10 @@ protected:
 	// ★ 추가: 스탯 컴포넌트
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
 	class URLStatComponent* StatComp;
+
+	// ★ 추가: 인벤토리 컴포넌트
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
+	class URLInventoryComponent* InventoryComp;
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Skill|Default")
 	URLSkillData* DefaultSkill_Q;
