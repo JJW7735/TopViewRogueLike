@@ -40,6 +40,16 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Skill")
 	void StartDashMovement(FVector TargetLocation, float Duration);
 
+	// ★ StartDashMovement + "이동하는 동안 몸으로 부딪히면 데미지" 기능을 더한 버전. 돌진형 보스 패턴에서
+	// 사용합니다. 스윙 계열(CreateBoxHitbox 등)은 "정지 상태에서 특정 프레임 한 번" 판정이라 Notify_Hit
+	// 하나로 충분했지만, 돌진은 "이동 중 스쳐 지나가면 맞아야" 자연스러워서 매 틱 체크가 필요합니다.
+	// 내부적으로 StartDashMovement를 그대로 호출해 이동 로직은 100% 재사용하고, Tick()에서 이동 중일 때만
+	// 추가로 데미지 판정을 켭니다. 한 번의 돌진 동안 같은 대상은 한 번만 맞습니다(DashHitActors로 방지).
+	// 플레이어의 일반 회피(Dodge)는 데미지가 필요 없어서 기존 StartDashMovement를 그대로 쓰고, 이 함수는
+	// 완전히 분리했습니다 — 기존 Dodge/StartDashMovement 호출부에 영향 없음.
+	UFUNCTION(BlueprintCallable, Category = "Combat")
+	void StartDashAttack(FVector TargetLocation, float Duration, float HitRadius, const FRLDamageData& DamageData);
+
 	UFUNCTION(BlueprintCallable, Category = "Combat")
 	virtual void ReceiveCustomDamage(const FRLDamageData& DamageData, const FHitResult& HitInfo);
 
@@ -255,6 +265,16 @@ protected:
 	FVector DashTargetLocation;
 	float DashElapsedTime = 0.0f;
 	float DashDuration = 0.0f;
+
+	// ★ StartDashAttack 전용 상태. bDashDealsDamage가 true인 동안(=돌진 이동 중) Tick에서 매 틱
+	// PerformDashHitCheck()로 몸통 충돌을 체크합니다. Dodge/StartDashMovement로 시작한 일반 이동은
+	// 이 값이 false라서 데미지 판정이 전혀 실행되지 않습니다(기존 동작에 영향 없음).
+	bool bDashDealsDamage = false;
+	float DashHitRadius = 0.0f;
+	FRLDamageData DashDamageData;
+	TSet<TWeakObjectPtr<AActor>> DashHitActors; // 이번 돌진 동안 이미 맞힌 대상 (중복 타격 방지)
+
+	void PerformDashHitCheck();
 
 	// ★ 쿨타임 및 무적 타이머
 	FTimerHandle DashCooldownTimerHandle;

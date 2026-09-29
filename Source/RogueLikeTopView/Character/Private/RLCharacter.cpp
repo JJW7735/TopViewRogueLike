@@ -837,6 +837,67 @@ void ARLCharacter::StartDashMovement(FVector TargetLocation, float Duration)
     bIsSkillMoving = true; // Tick의 이동 억제 로직을 우회
 }
 
+// ★ 돌진형 보스 패턴용: StartDashMovement로 이동을 시작하고, 이동하는 동안 몸통 충돌 데미지 판정을 켭니다.
+void ARLCharacter::StartDashAttack(FVector TargetLocation, float Duration, float HitRadius, const FRLDamageData& DamageData)
+{
+    StartDashMovement(TargetLocation, Duration);
+
+    bDashDealsDamage = true;
+    DashHitRadius = HitRadius;
+    DashDamageData = DamageData;
+    DashHitActors.Reset();
+}
+
+// ★ StartDashAttack 전용. 보스의 "현재" 위치(=매 틱 이동한 새 위치) 기준으로 구체 스윕해서, 아직 안 맞은
+// 대상이 걸리면 CreateLocationHitbox와 같은 방식(ReceiveCustomDamage)으로 데미지를 줍니다.
+void ARLCharacter::PerformDashHitCheck()
+{
+    TArray<AActor*> ActorsToIgnore;
+    ActorsToIgnore.Add(this);
+
+    TArray<FHitResult> HitResults;
+    TArray<TEnumAsByte<EObjectTypeQuery>> ObjectTypes;
+    ObjectTypes.Add(UEngineTypes::ConvertToObjectType(ECollisionChannel::ECC_Pawn));
+
+    const FVector Location = GetActorLocation();
+
+    const bool bHit = UKismetSystemLibrary::SphereTraceMultiForObjects(
+        GetWorld(),
+        Location,
+        Location + FVector(0.f, 0.f, 1.f),
+        DashHitRadius,
+        ObjectTypes,
+        false,
+        ActorsToIgnore,
+        EDrawDebugTrace::None,
+        HitResults,
+        true
+    );
+
+    if (!bHit)
+    {
+        return;
+    }
+
+    for (const FHitResult& Hit : HitResults)
+    {
+        AActor* HitActor = Hit.GetActor();
+        if (!HitActor || DashHitActors.Contains(HitActor))
+        {
+            continue;
+        }
+
+        if (ARLCharacter* TargetChar = Cast<ARLCharacter>(HitActor))
+        {
+            DashHitActors.Add(HitActor);
+
+            FRLDamageData FinalDamage = DashDamageData;
+            FinalDamage.DamageCauser = this;
+            TargetChar->ReceiveCustomDamage(FinalDamage, Hit);
+        }
+    }
+}
+
 void ARLCharacter::Tick(float DeltaTime)
 {
     Super::Tick(DeltaTime);
@@ -852,10 +913,17 @@ void ARLCharacter::Tick(float DeltaTime)
         FVector NewLocation = FMath::Lerp(DashStartLocation, DashTargetLocation, Alpha);
         SetActorLocation(NewLocation, true);
 
+        // ★ StartDashAttack으로 시작된 돌진이면(bDashDealsDamage), 이동한 새 위치 기준으로 매 틱 충돌 체크
+        if (bDashDealsDamage)
+        {
+            PerformDashHitCheck();
+        }
+
         if (Alpha >= 1.0f)
         {
             bIsDashing = false;
             bIsSkillMoving = false; // 대시 끝나면 다시 이동 억제 로직 활성화
+            bDashDealsDamage = false; // 데미지 판정도 함께 종료
         }
         return; // 대시 중엔 아래 몽타주 이동 억제 로직 건너뜀
     }

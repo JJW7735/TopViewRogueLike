@@ -24,10 +24,13 @@ enum class ERLAttackShape : uint8
 	Box,        // 정면 박스 판정 (근접, 예: SwingCombo, Subjugation)
 	Location,   // 특정 지점 중심 구체 판정 (광역/바닥찍기, 예: GroundSlam)
 	Projectile, // 투사체 발사 (bIsRangedAttack == true인 패턴, 예: SoulPull)
-	Sector      // ★ 보스 자신 중심의 부채꼴(전방위) 판정. IndicatorDecalSize.Y를 반지름으로(데칼/판정 공용), SectorSafeZoneAngle을
+	Sector,     // ★ 보스 자신 중심의 부채꼴(전방위) 판정. IndicatorDecalSize.Y를 반지름으로(데칼/판정 공용), SectorSafeZoneAngle을
 	            // "정면 기준 뒤쪽 안전지대 폭(도)"으로 써서 그 쐐기 밖 전체를 한 번에 타격합니다 (예: BigSwing).
 	            // SectorSafeZoneAngle을 0으로 두면 안전지대가 사실상 없어져서 보스 주변 360도 전체 원형 판정으로도
 	            // 그대로 재사용할 수 있습니다 (예: SoulDrain — 사방의 영혼을 빨아들이는 연출)
+	Dash        // ★ 돌진. Notify_Hit 대신 Notify_DashStart에서 ARLCharacter::StartDashAttack으로 정면 방향 돌진,
+	            // 이동 중 몸통 충돌로 판정합니다. 예고 데칼은 Box와 같은 직사각형 레인(IndicatorDecalSize 재사용,
+	            // 돌진 거리 = IndicatorDecalSize.X * 2 = 레인 끝)을 Notify_DashStart 기준으로 띄웁니다 (예: DashAttack)
 };
 
 // 공격 판정 및 데미지 정보를 담는 공용 구조체
