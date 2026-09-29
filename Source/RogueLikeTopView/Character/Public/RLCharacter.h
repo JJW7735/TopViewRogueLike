@@ -75,6 +75,18 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Combat")
 	void SpawnProjectileAttack(TSubclassOf<AActor> ProjectileClass, float ForwardOffset, float ProjectileSpeed, const FRLDamageData& DamageData);
 
+	// ★ 자기(보스) 주변 SpawnRadius 반경 안의 무작위 지점에 지원군(잔몹)을 Count만큼 소환합니다.
+	// 정면 방향과 무관하게 사방에 흩뿌려지며, 네비메시가 있으면 그 위로 위치를 보정합니다(허공/벽 스폰 방지).
+	// 근접(Box 등) 판정과는 완전히 독립적으로 동작하므로, 몽타주의 아무 노티파이에서나(전용 Notify_Summon 등)
+	// 호출하면 "때리는 것과 별개로" 잔몹을 부르는 연출이 됩니다.
+	// 예: Subjugation 패턴 — Notify_Hit에서 CreateBoxHitbox(근접 타격), Notify_Summon에서 SummonMinions(지원군 소환).
+	// 참고: 여기서 소환한 액터는 ARLArenaManager의 ActiveEnemies/RemainingEnemies 카운트에 포함되지 않습니다
+	// (ArenaManager는 자기가 직접 스폰한 몬스터만 추적합니다). 즉 이 잔몹들은 "웨이브 클리어 조건"에 영향을
+	// 주지 않는 순수 보스전 지원군입니다 — 보통 의도한 동작이지만, 혹시 이 잔몹도 클리어 조건에 포함시키고
+	// 싶다면 별도로 ArenaManager 쪽 연동이 필요합니다.
+	UFUNCTION(BlueprintCallable, Category = "Combat|Summon")
+	void SummonMinions(TSubclassOf<AActor> MinionClass, int32 Count, float SpawnRadius);
+
 	// ★ 근접 박스 공격 예고(텔레그래프) 데칼을 표시합니다. CreateBoxHitbox와 같은 규격의
 	// BoxExtent/ForwardOffset을 넘기면, 실제 판정 박스와 정확히 같은 자리/크기에 사각형 데칼이 뜹니다.
 	// 보통 BTT_Attack에서 "몽타주 재생 시작" 시점(선딜레이 구간)에 호출해서 플레이어에게 미리 경고하고,
@@ -92,6 +104,12 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Combat|Indicator")
 	void ShowSectorAttackIndicator(float Radius, float SafeZoneAngleDegrees, UMaterialInterface* DecalMaterial = nullptr);
 
+	// ★ CreateLocationHitbox와 같은 규격(Radius)의 원형 예고 데칼을 지정된 위치(Location)에 표시합니다.
+	// Box/Sector와 달리 보스 자신이 아니라 임의의 월드 좌표가 중심입니다. 보통 직접 호출하지 않고
+	// StartLocationAttackTelegraph를 통해 매 프레임 자동으로 호출됩니다.
+	UFUNCTION(BlueprintCallable, Category = "Combat|Indicator")
+	void ShowLocationAttackIndicator(FVector Location, float Radius, UMaterialInterface* DecalMaterial = nullptr);
+
 	// ★ 몽타주 재생 직후 한 번 호출하면, 몽타주 안의 HitNotifyName 노티파이마다
 	// [히트 - LeadTime, 히트) 구간 동안 Box 예고 데칼을 자동으로 켜고 끕니다 (3연타면 3번 표시/소멸).
 	// 몽타주 재생 위치 기준으로 Tick에서 판단하므로 재생 속도/히트스톱과 어긋나지 않고,
@@ -107,6 +125,24 @@ public:
 	// 전방위(뒤쪽 일부 제외)를 한 번에 타격"하는 패턴에 씁니다.
 	UFUNCTION(BlueprintCallable, Category = "Combat|Indicator")
 	void StartSectorAttackTelegraph(UAnimMontage* Montage, FName HitNotifyName, float LeadTime, float Radius, float SafeZoneAngleDegrees, UMaterialInterface* DecalMaterial = nullptr, AActor* FaceTarget = nullptr, float TurnSpeed = 540.0f);
+
+	// ★ StartBoxAttackTelegraph의 "추적형" 버전. Box/Sector와 달리 보스 자신이 아니라 TrackTarget(보통
+	// 플레이어)의 현재 위치를 계속 따라다니는 원형 데칼입니다. 몽타주 재생 시작 직후 호출하면:
+	//   1) [표시 시작, 히트-LockLeadTime) 구간: 매 프레임 TrackTarget의 현재 위치로 데칼을 옮깁니다 (추적)
+	//   2) [히트-LockLeadTime, 히트) 구간: 그 시점의 위치에 고정하고 더 이상 움직이지 않습니다 (경고 후 확정)
+	// Notify_Hit 시점에는 GetTelegraphLockedLocation()으로 그 고정된 좌표를 읽어서
+	// CreateLocationHitbox(그 좌표, Radius, ...)를 호출하면, 플레이어가 마지막 0.5초 동안 본 자리에
+	// 정확히 판정이 생깁니다. LeadTime을 몽타주 전체 길이보다 크게 주면 "사전동작 시작부터" 계속 추적합니다.
+	// (예: SoulDrain — 손 꼼지락 사전동작 동안 플레이어 발밑을 따라다니다가, 타격 0.5초 전에 고정되어 터짐)
+	// bFaceTrackTarget이 true면 몽타주 동안 TurnSpeed(도/초)로 TrackTarget을 향해 계속 돌고,
+	// 위치가 고정된 뒤에는 그 고정 좌표를 바라봅니다.
+	UFUNCTION(BlueprintCallable, Category = "Combat|Indicator")
+	void StartLocationAttackTelegraph(UAnimMontage* Montage, FName HitNotifyName, float LeadTime, float LockLeadTime, float Radius, UMaterialInterface* DecalMaterial = nullptr, AActor* TrackTarget = nullptr, bool bFaceTrackTarget = true, float TurnSpeed = 540.0f);
+
+	// ★ StartLocationAttackTelegraph가 고정한(또는 아직 고정 전이면 현재 추적 중인) 좌표를 읽습니다.
+	// Notify_Hit에서 CreateLocationHitbox에 넘길 좌표로 씁니다.
+	UFUNCTION(BlueprintPure, Category = "Combat|Indicator")
+	FVector GetTelegraphLockedLocation() const { return TelegraphLockedLocation; }
 
 	UFUNCTION(BlueprintCallable, Category = "Combat|Indicator")
 	void StopAttackTelegraph();
@@ -260,7 +296,8 @@ protected:
 	enum class ETelegraphShape : uint8
 	{
 		Box,
-		Sector
+		Sector,
+		Location // ★ 보스 자신이 아니라 TelegraphTrackTarget의 위치를 따라다니다 고정되는 판정 (예: SoulDrain)
 	};
 
 	// ★ StartBoxAttackTelegraph 상태. TelegraphWindows는 몽타주 시간(초) 기준 [X=표시 시작, Y=히트) 구간 목록.
@@ -279,6 +316,12 @@ protected:
 	bool bTelegraphVisible = false;
 	TWeakObjectPtr<AActor> TelegraphFaceTarget;
 	float TelegraphTurnSpeed = 0.0f;
+
+	// ★ StartLocationAttackTelegraph(Location Shape) 전용 상태
+	TWeakObjectPtr<AActor> TelegraphTrackTarget; // 추적할 대상 (보통 플레이어)
+	float TelegraphLockLeadTime = 0.0f;          // 히트 몇 초 전에 위치를 고정할지
+	bool bTelegraphLocationLocked = false;       // 이번 표시 구간에서 이미 고정됐는지
+	FVector TelegraphLockedLocation = FVector::ZeroVector; // 고정된(또는 아직 고정 전이면 마지막으로 추적한) 좌표
 
 	void UpdateAttackTelegraph(float DeltaTime);
 

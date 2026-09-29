@@ -34,7 +34,7 @@ ARLDecalIndicator::ARLDecalIndicator()
     }
 }
 
-void ARLDecalIndicator::SetupIndicator(EIndicatorType Type, float Radius, float MaxRange)
+void ARLDecalIndicator::SetupIndicator(EIndicatorType Type, float Radius, float MaxRange, UMaterialInterface* Material)
 {
     CurrentType = Type;
     bUseRangeRing = (CurrentType == EIndicatorType::Circle && MaxRange > 0.0f);
@@ -57,6 +57,12 @@ void ARLDecalIndicator::SetupIndicator(EIndicatorType Type, float Radius, float 
     {
         RangeDecalComp->SetVisibility(false);
         DecalComp->DecalSize = FVector(250.f, MaxRange * 0.5f, Radius);
+    }
+
+    // ★ 전용 머티리얼이 넘어오면 교체 (안 넘기면 생성자 기본값/이전 값 유지)
+    if (Material)
+    {
+        DecalComp->SetDecalMaterial(Material);
     }
 }
 

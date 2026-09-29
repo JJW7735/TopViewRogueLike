@@ -25,7 +25,9 @@ enum class ERLAttackShape : uint8
 	Location,   // 특정 지점 중심 구체 판정 (광역/바닥찍기, 예: GroundSlam)
 	Projectile, // 투사체 발사 (bIsRangedAttack == true인 패턴, 예: SoulPull)
 	Sector      // ★ 보스 자신 중심의 부채꼴(전방위) 판정. IndicatorDecalSize.Y를 반지름으로(데칼/판정 공용), SectorSafeZoneAngle을
-	            // "정면 기준 뒤쪽 안전지대 폭(도)"으로 써서 그 쐐기 밖 전체를 한 번에 타격합니다 (예: BigSwing)
+	            // "정면 기준 뒤쪽 안전지대 폭(도)"으로 써서 그 쐐기 밖 전체를 한 번에 타격합니다 (예: BigSwing).
+	            // SectorSafeZoneAngle을 0으로 두면 안전지대가 사실상 없어져서 보스 주변 360도 전체 원형 판정으로도
+	            // 그대로 재사용할 수 있습니다 (예: SoulDrain — 사방의 영혼을 빨아들이는 연출)
 };
 
 // 공격 판정 및 데미지 정보를 담는 공용 구조체
@@ -53,6 +55,12 @@ struct FRLDamageData
 	// ★ 고정 피해 여부 (true면 피격자의 방어력/피해감소를 무시하고 100% 피해 적용)
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Damage")
 	bool bTrueDamage = false;
+
+	// ★ 흡혈 비율 (0~1). 0보다 크면 ARLCharacter::ReceiveCustomDamage에서 "실제로 적용된 데미지"(방어력
+	// 적용 후 최종 값) 중 이 비율만큼을 DamageCauser의 체력으로 되돌려줍니다. 예: 0.3 = 가한 데미지의
+	// 30%를 가해자가 회복 (예: 보스 SoulDrain 패턴)
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Damage", meta = (ClampMin = "0.0", ClampMax = "1.0"))
+	float LifestealRatio = 0.0f;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Damage")
 	AActor* DamageCauser = nullptr;
@@ -135,4 +143,22 @@ struct FRLMonsterPatternData
 	// 투사체 스폰 위치 오프셋 (캐릭터 정면 기준 앞으로 얼마나 띄워서 스폰할지)
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Pattern|Projectile", meta = (EditCondition = "bIsRangedAttack"))
 	float ProjectileSpawnForwardOffset = 80.0f;
+
+	// ★ 이 패턴 실행 중 잔몹(지원군)을 소환할지 여부. AttackShape의 근접/원거리 판정과는 완전히
+	// 독립적인 별도 효과라서, 예를 들어 Box 근접 판정 + 소환을 동시에 가진 패턴도 만들 수 있습니다
+	// (예: Subjugation — 몽타주 중 Notify_Hit에서 근접 타격, 별도의 Notify_Summon에서 잔몹 소환).
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Pattern|Summon")
+	bool bSummonsMinions = false;
+
+	// 소환할 잔몹 클래스 (예: BP_Enemy_Ranged)
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Pattern|Summon", meta = (EditCondition = "bSummonsMinions"))
+	TSubclassOf<AActor> SummonClass;
+
+	// 한 번에 소환할 잔몹 수
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Pattern|Summon", meta = (EditCondition = "bSummonsMinions", ClampMin = "1"))
+	int32 SummonCount = 2;
+
+	// 보스 중심 소환 반경 (이 범위 안의 무작위 지점에 흩뿌려 소환)
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Pattern|Summon", meta = (EditCondition = "bSummonsMinions", ClampMin = "0.0"))
+	float SummonRadius = 300.0f;
 };

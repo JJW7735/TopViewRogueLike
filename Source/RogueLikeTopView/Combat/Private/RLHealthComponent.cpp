@@ -1,4 +1,4 @@
-#include "RLHealthComponent.h"
+﻿#include "RLHealthComponent.h"
 #include "GameFramework/Actor.h"
 
 // 생성자: 기본 체력을 100으로 세팅합니다.
@@ -49,35 +49,48 @@ void URLHealthComponent::HandleTakeAnyDamage(AActor* DamagedActor, float Damage,
     }
 }
 
-void URLHealthComponent::Heal(float HealAmount)
+// ★ 체력 회복 (흡혈 등에서 사용). HandleTakeAnyDamage와 대칭되는 형태로 작성했습니다.
+void URLHealthComponent::Heal(float Amount)
 {
-    if (bIsDead || HealAmount <= 0.0f)
+    // 회복량이 없거나 이미 죽었다면 무시합니다 (죽은 뒤에 흡혈로 살아나는 걸 방지).
+    if (Amount <= 0.0f || bIsDead)
     {
         return;
     }
 
     const float OldHealth = CurrentHealth;
-    CurrentHealth = FMath::Clamp(CurrentHealth + HealAmount, 0.0f, MaxHealth);
-    const float ActualHealed = CurrentHealth - OldHealth;
+    CurrentHealth = FMath::Clamp(CurrentHealth + Amount, 0.0f, MaxHealth);
 
+    const float ActualHealed = CurrentHealth - OldHealth;
     if (ActualHealed > 0.0f)
     {
+        // 데미지 방송(HealthDelta 양수)과 구분하기 위해 회복은 음수로 방송합니다.
         OnHealthChanged.Broadcast(CurrentHealth, MaxHealth, -ActualHealed);
     }
 }
 
-void URLHealthComponent::IncreaseMaxHealth(float Amount, bool bHealCurrent)
+// ★ 최대 체력 증감 (패시브 아이템 장착/해제, 영구 보상 등). 헤더 주석 참고.
+void URLHealthComponent::IncreaseMaxHealth(float Delta, bool bApply)
 {
-    if (Amount <= 0.0f)
+    if (FMath::IsNearlyZero(Delta))
     {
         return;
     }
 
-    MaxHealth += Amount;
-    if (bHealCurrent)
+    // 최대 체력이 0 이하로 내려가지 않도록 최소 1은 보장합니다.
+    MaxHealth = FMath::Max(1.0f, MaxHealth + Delta);
+
+    if (bApply)
     {
-        CurrentHealth = FMath::Clamp(CurrentHealth + Amount, 0.0f, MaxHealth);
+        // 장착/획득으로 최대 체력이 늘어난 경우, 늘어난 만큼 현재 체력도 함께 채워줍니다.
+        CurrentHealth = FMath::Clamp(CurrentHealth + Delta, 0.0f, MaxHealth);
+    }
+    else
+    {
+        // 해제로 최대 체력이 줄어든 경우, 현재 체력을 직접 깎지 않고 새 최대치를 넘지 않게만 clamp합니다.
+        CurrentHealth = FMath::Clamp(CurrentHealth, 0.0f, MaxHealth);
     }
 
+    // 데미지/회복이 아닌 최대치 변경 이벤트이므로 HealthDelta는 0으로 방송합니다 (체력바 갱신용).
     OnHealthChanged.Broadcast(CurrentHealth, MaxHealth, 0.0f);
 }

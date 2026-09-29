@@ -26,7 +26,11 @@ public:
     ARLDecalIndicator();
 
     void UpdateIndicatorTransform(const FVector& OriginLocation, const FVector& TargetLocation, float MaxRange);
-    void SetupIndicator(EIndicatorType Type, float Radius, float MaxRange);
+
+    // ★ Material 파라미터 추가 (기본 nullptr = 기존 동작 그대로, 생성자에서 세팅된 기본 원형 머티리얼
+    // M_Decal_Circle 유지). 기존 호출부(URLSkillComponent, 플레이어 스킬 조준용)는 이 값을 안 넘기므로
+    // 영향 없음. 보스 등이 전용 색(위험 신호용 빨간 계열)을 쓰고 싶을 때만 넘기면 됩니다.
+    void SetupIndicator(EIndicatorType Type, float Radius, float MaxRange, UMaterialInterface* Material = nullptr);
     void SetIndicatorVisibility(bool bVisible);
 
     // ★ 이 함수 선언 추가!

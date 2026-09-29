@@ -24,6 +24,7 @@
 #include "RLInventoryComponent.h"
 #include "RLItemDataAsset.h"
 #include "RLDecalIndicator.h"
+#include "NavigationSystem.h"
 
 ARLCharacter::ARLCharacter()
 {
@@ -146,6 +147,20 @@ void ARLCharacter::ReceiveCustomDamage(const FRLDamageData& DamageData, const FH
 
     AController* InstigatorController = DamageData.DamageCauser ? DamageData.DamageCauser->GetInstigatorController() : nullptr;
     UGameplayStatics::ApplyDamage(this, FinalDamageAmount, InstigatorController, DamageData.DamageCauser, UDamageType::StaticClass());
+
+    // ★ 흡혈(라이프스틸): 방어력 적용 후 "실제로 들어간" 데미지(FinalDamageAmount) 기준으로 가해자를 회복시킵니다.
+    // BaseDamage(방어 전 원본)가 아니라 FinalDamageAmount를 기준으로 삼은 이유는, 방어력이 높은 대상을 때렸을 때
+    // 실제로 박히지도 않은 데미지만큼 회복되는 걸 막기 위해서입니다 (예: 보스 SoulDrain 패턴)
+    if (DamageData.LifestealRatio > 0.0f)
+    {
+        if (ARLCharacter* CauserCharacter = Cast<ARLCharacter>(DamageData.DamageCauser))
+        {
+            if (CauserCharacter->HealthComp)
+            {
+                CauserCharacter->HealthComp->Heal(FinalDamageAmount * DamageData.LifestealRatio);
+            }
+        }
+    }
 
     if (SkillComp && SkillComp->IsCasting())
     {
@@ -476,6 +491,31 @@ void ARLCharacter::HideAttackIndicator()
     }
 }
 
+// ★ CreateLocationHitbox와 같은 규격(Radius)의 원형 데칼을 임의의 월드 좌표(Location)에 띄웁니다.
+// Box/Sector의 Show*Indicator와 같은 지연 스폰(lazy-spawn) 패턴이지만, EIndicatorType::Circle은
+// URLSkillComponent(플레이어 스킬 조준)이 이미 쓰고 있던 타입을 그대로 재사용합니다. MaxRange는
+// "사거리 링" 기능인데 보스 판정에는 필요 없어서 항상 0(끔)으로 넘깁니다.
+void ARLCharacter::ShowLocationAttackIndicator(FVector Location, float Radius, UMaterialInterface* DecalMaterial)
+{
+    if (!AttackIndicator)
+    {
+        FActorSpawnParameters Params;
+        Params.Owner = this;
+        Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+
+        AttackIndicator = GetWorld()->SpawnActor<ARLDecalIndicator>(ARLDecalIndicator::StaticClass(), FVector::ZeroVector, FRotator::ZeroRotator, Params);
+    }
+
+    if (!AttackIndicator)
+    {
+        return;
+    }
+
+    AttackIndicator->SetupIndicator(EIndicatorType::Circle, Radius, 0.0f, DecalMaterial);
+    AttackIndicator->UpdateIndicatorTransform(Location, Location, 0.0f);
+    AttackIndicator->SetIndicatorVisibility(true);
+}
+
 // ★ StartBoxAttackTelegraph/StartSectorAttackTelegraph 공용 헬퍼로 분리한 노티파이 스캔 로직.
 // Montage Notify(AnimNotify_PlayMontageNotify)는 Notify->GetNotifyName()이 Notify Name 값을 돌려주고,
 // 스켈레톤 노티파이는 Notify가 null이고 이벤트의 NotifyName에 이름이 들어있어서 둘 다 확인합니다.
@@ -551,11 +591,38 @@ void ARLCharacter::StartSectorAttackTelegraph(UAnimMontage* Montage, FName HitNo
     UpdateAttackTelegraph(0.0f);
 }
 
+// ★ StartBoxAttackTelegraph/StartSectorAttackTelegraph와 같은 노티파이 스캔([히트-LeadTime, 히트) 구간
+// 계산)을 재사용하되, 데칼이 보스 자신이 아니라 TrackTarget의 위치를 따라다닌다는 점이 다릅니다.
+// LeadTime을 크게(몽타주 전체 길이 이상) 주면 사실상 "몽타주 재생 시작부터" 계속 표시/추적하게 됩니다.
+void ARLCharacter::StartLocationAttackTelegraph(UAnimMontage* Montage, FName HitNotifyName, float LeadTime, float LockLeadTime, float Radius, UMaterialInterface* DecalMaterial, AActor* TrackTarget, bool bFaceTrackTarget, float TurnSpeed)
+{
+    StopAttackTelegraph();
+
+    TelegraphWindows = ComputeTelegraphWindows(Montage, HitNotifyName, LeadTime);
+    if (TelegraphWindows.Num() == 0)
+    {
+        return;
+    }
+
+    TelegraphShape = ETelegraphShape::Location;
+    TelegraphMontage = Montage;
+    TelegraphMaterial = DecalMaterial;
+    TelegraphRadius = Radius;
+    TelegraphLockLeadTime = LockLeadTime;
+    TelegraphTrackTarget = TrackTarget;
+    TelegraphFaceTarget = bFaceTrackTarget ? TrackTarget : nullptr;
+    TelegraphTurnSpeed = TurnSpeed;
+    bTelegraphLocationLocked = false;
+    UpdateAttackTelegraph(0.0f);
+}
+
 void ARLCharacter::StopAttackTelegraph()
 {
     TelegraphMontage = nullptr;
     TelegraphMaterial = nullptr;
     TelegraphFaceTarget = nullptr;
+    TelegraphTrackTarget = nullptr;
+    bTelegraphLocationLocked = false;
     TelegraphWindows.Reset();
 
     if (bTelegraphVisible)
@@ -582,38 +649,78 @@ void ARLCharacter::UpdateAttackTelegraph(float DeltaTime)
     const float Position = AnimInstance->Montage_GetPosition(TelegraphMontage);
 
     bool bShouldShow = false;
+    FVector2D ActiveWindow = FVector2D::ZeroVector;
     for (const FVector2D& Window : TelegraphWindows)
     {
         if (Position >= Window.X && Position < Window.Y)
         {
             bShouldShow = true;
+            ActiveWindow = Window;
             break;
         }
     }
 
     if (bShouldShow && !bTelegraphVisible)
     {
-        // 대상을 정면으로 맞춘 뒤 그 위치/방향으로 데칼 고정 (판정도 그 방향으로 나감)
-        FaceTelegraphTarget(-1.0f);
-
-        if (TelegraphShape == ETelegraphShape::Sector)
+        if (TelegraphShape == ETelegraphShape::Location)
         {
-            ShowSectorAttackIndicator(TelegraphRadius, TelegraphSafeZoneAngle, TelegraphMaterial);
+            // ★ Location은 보스 자신이 아니라 TrackTarget 위치가 중심이라 데칼 배치에는 보스 방향이
+            // 필요 없습니다. (보스가 대상을 바라보는 건 아래에서 매 프레임 따로 처리)
+            bTelegraphLocationLocked = false;
+            const FVector StartLoc = TelegraphTrackTarget.IsValid() ? TelegraphTrackTarget->GetActorLocation() : GetActorLocation();
+            TelegraphLockedLocation = StartLoc;
+            ShowLocationAttackIndicator(StartLoc, TelegraphRadius, TelegraphMaterial);
         }
         else
         {
-            ShowBoxAttackIndicator(TelegraphBoxExtent, TelegraphForwardOffset, TelegraphMaterial);
+            // 대상을 정면으로 맞춘 뒤 그 위치/방향으로 데칼 고정 (판정도 그 방향으로 나감)
+            FaceTelegraphTarget(-1.0f);
+
+            if (TelegraphShape == ETelegraphShape::Sector)
+            {
+                ShowSectorAttackIndicator(TelegraphRadius, TelegraphSafeZoneAngle, TelegraphMaterial);
+            }
+            else
+            {
+                ShowBoxAttackIndicator(TelegraphBoxExtent, TelegraphForwardOffset, TelegraphMaterial);
+            }
         }
     }
     else if (!bShouldShow && bTelegraphVisible)
     {
         HideAttackIndicator();
     }
-    else if (!bShouldShow && Position < TelegraphWindows.Last().Y)
+    else if (!bShouldShow && Position < TelegraphWindows.Last().Y && TelegraphShape != ETelegraphShape::Location)
     {
-        // 히트 사이 구간: 다음 히트를 위해 대상 쪽으로 회전
+        // 히트 사이 구간: 다음 히트를 위해 대상 쪽으로 회전 (Location은 보스가 도는 것과 무관하므로 제외)
         FaceTelegraphTarget(DeltaTime);
     }
+
+    // ★ Location 텔레그래프는 Box/Sector처럼 뜰 때 한 번만 배치하고 끝나는 게 아니라, 보이는 동안
+    // 계속 대상 위치를 따라가야 합니다 (추적) — 고정 시각(ActiveWindow.Y - LockLeadTime) 전까지는
+    // 매 프레임 위치를 갱신하고, 그 시각을 지나면 그 순간 위치에 딱 한 번 고정합니다.
+    if (bShouldShow && TelegraphShape == ETelegraphShape::Location && AttackIndicator)
+    {
+        if (!bTelegraphLocationLocked && Position >= (ActiveWindow.Y - TelegraphLockLeadTime))
+        {
+            const FVector LockLoc = TelegraphTrackTarget.IsValid() ? TelegraphTrackTarget->GetActorLocation() : TelegraphLockedLocation;
+            TelegraphLockedLocation = LockLoc;
+            AttackIndicator->LockTargetLocation(LockLoc);
+            bTelegraphLocationLocked = true;
+        }
+        else if (!bTelegraphLocationLocked && TelegraphTrackTarget.IsValid())
+        {
+            TelegraphLockedLocation = TelegraphTrackTarget->GetActorLocation();
+            AttackIndicator->UpdateIndicatorTransform(GetActorLocation(), TelegraphLockedLocation, 0.0f);
+        }
+    }
+
+    // ★ Location: 마지막 히트 전까지 매 프레임 대상 쪽으로 회전 (고정 후에는 고정 좌표를 바라봄)
+    if (TelegraphShape == ETelegraphShape::Location && Position < TelegraphWindows.Last().Y)
+    {
+        FaceTelegraphTarget(DeltaTime);
+    }
+
     bTelegraphVisible = bShouldShow;
 }
 
@@ -625,7 +732,10 @@ void ARLCharacter::FaceTelegraphTarget(float DeltaTime)
         return;
     }
 
-    const FVector ToTarget = Target->GetActorLocation() - GetActorLocation();
+    const FVector TargetLocation = (TelegraphShape == ETelegraphShape::Location && bTelegraphLocationLocked)
+        ? TelegraphLockedLocation
+        : Target->GetActorLocation();
+    const FVector ToTarget = TargetLocation - GetActorLocation();
     if (ToTarget.IsNearlyZero())
     {
         return;
@@ -939,6 +1049,47 @@ void ARLCharacter::SpawnProjectileAttack(TSubclassOf<AActor> ProjectileClass, fl
         {
             SpawnedProjectile->MovementComp->Velocity = GetActorRotation().Vector() * ProjectileSpeed;
         }
+    }
+}
+
+// ★ 보스 주변에 지원군(잔몹)을 소환합니다. ARLArenaManager::GetSpawnLocation의 네비메시 보정 방식과
+// 같은 함수(ProjectPointToNavigation)를 재사용해서, 허공이나 벽 속에 스폰되지 않게 합니다.
+void ARLCharacter::SummonMinions(TSubclassOf<AActor> MinionClass, int32 Count, float SpawnRadius)
+{
+    if (!MinionClass || Count <= 0)
+    {
+        return;
+    }
+
+    UWorld* World = GetWorld();
+    if (!World)
+    {
+        return;
+    }
+
+    const FVector Origin = GetActorLocation();
+
+    for (int32 i = 0; i < Count; ++i)
+    {
+        // 보스 중심 원형 범위 내 무작위 지점 (XY 평면 랜덤, Z는 보스와 같은 높이에서 시작해 아래서 보정)
+        const FVector2D RandomOffset2D = FMath::RandPointInCircle(SpawnRadius);
+        FVector SpawnLocation = Origin + FVector(RandomOffset2D.X, RandomOffset2D.Y, 0.0f);
+
+        // 네비메시 위 안전한 지점으로 보정 (RLArenaManager::GetSpawnLocation과 같은 방식)
+        if (UNavigationSystemV1* NavSys = FNavigationSystem::GetCurrent<UNavigationSystemV1>(World))
+        {
+            FNavLocation NavLoc;
+            if (NavSys->ProjectPointToNavigation(SpawnLocation, NavLoc, FVector(SpawnRadius, SpawnRadius, 500.0f)))
+            {
+                SpawnLocation = NavLoc.Location;
+            }
+        }
+
+        FActorSpawnParameters SpawnParams;
+        SpawnParams.Owner = this;
+        SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
+
+        World->SpawnActor<AActor>(MinionClass, SpawnLocation, GetActorRotation(), SpawnParams);
     }
 }
 
