@@ -1,6 +1,6 @@
 # 🎮 RLTV (RogueLikeTopView) 개발 진행 상황 & 프로젝트 가이드
 
-> **최종 갱신일:** 2026-09-28  
+> **최종 갱신일:** 2026-09-29  
 > **프로젝트 성격:** 3인 포트폴리오/공모전 탑다운 로그라이크 액션  
 > **엔진 버전:** Unreal Engine 5.8  
 > **AI 어시스턴트 협업:** Gemini (Antigravity CLI), Claude (Claude Code)
@@ -8,6 +8,14 @@
 ---
 
 ## 📌 1. 현재 구현 현황 요약 (Current Implementation)
+
+### 🏟️ 아레나 & 웨이브 스폰 (Arena & Spawner)
+- [x] **`ARLArenaManager`**: 방 영역 진입 감지(`TriggerVolume`), 자동 전투 개시(`bAutoStartOnOverlap`)
+- [x] **웨이브 스폰 시스템**: 다중 웨이브 데이터(`FRLWaveData`), 개별 순차 스폰 간격(`SpawnInterval`), 웨이브 간 딜레이
+- [x] **처치 카운팅 및 연동**: `ARLEnemyCharacter::OnEnemyDied` 실시간 감지 및 남은 적 카운트
+- [x] **전투 구역 봉쇄/해제**: 전투 중 문 폐쇄(`LockBarriers`), 클리어 시 문 개방(`UnlockBarriers`)
+- [x] **클리어 보상 및 포탈 연동**: 모든 웨이브 완료 시 `ARLRewardChest` 확정 스폰 및 출구 `ARLPortal` 활성화/스폰
+- [x] **테스트 치트**: `TestStartArena`, `TestClearCurrentWave`, `TestKillAllEnemies`
 
 ### 🧑‍🚀 캐릭터 & 조작 (Character & Player)
 - [x] **`ARLCharacter`**: 탑다운 기본 이동, 대시/회피(`Dodge`, `StartDashMovement`)
@@ -91,8 +99,7 @@
 
 ## 📝 4. 작업 히스토리 (Work Log)
 
-| 일자 | 작업자 (도구) | 작업 내용 |
-| :--- | :--- | :--- |
+| 2026-09-29 | HSJ (Gemini) | 아레나/전투 구역 총괄 매니저 & 웨이브 스포너 구축 (`ARLArenaManager`: TriggerVolume 영역 감지, 다중 웨이브 및 순차 스폰 `FRLWaveData`, 문 폐쇄/개방 `BarrierActors`, 처치 카운팅 `OnEnemyDied` 연동, 클리어 시 `ARLRewardChest` & `ARLPortal` 자동 스폰, 테스트 치트 3종 탑재) |
 | 2026-09-28 | HSJ (Gemini) | 인벤토리 & 아이템 시스템 백엔드 구축 (`URLInventoryComponent`, `URLItemDataAsset`, 5종 아이템 분류, 골드 관리, 패시브 스탯 자동 연동, 테스트 치트 3종 탑재, UI 연동 가이드 문서화: `progress/UI_INVENTORY_GUIDE.md`) |
 | 2026-09-23 | JJW (Claude) | 보스 근접 공격이 항상 씹히는 버그 원인 추적: `AM_Boss_Swing` 몽타주가 재생 시작 ~1초 만에 `Montage.Stop`으로 강제 종료됨을 로그로 확인 (`Notify_Hit` 도달 전에 끊김). BT의 `OnCompleted`가 노티파이 여부와 무관하게 `FinishExecute(true)`로 연결돼있어 겉보기엔 정상 흐름처럼 보였던 것도 확인. BT observer 데코레이터(`BTDecorator_Blackboard`) 재평가로 인한 abort가 유력 용의자 — 라이브 BT 디버거로 공격 애니메이션 재생 "중" abort 여부 확인 필요 (진행중, 내일 이어서). 추가로 `BP_Boss`에 `AttackCollision_L`/`AttackCollision_R` + `AlreadyHitActors` 기반의 별도 무기 콜리전 데미지 시스템이 이미 존재함을 발견, `Notify_Hit`/`CreateBoxHitbox` 경로와의 관계 확인 필요 |
 | 2026-09-17 | JJW | 포탈 상호작용 시스템 구축 (`IA_Interact`, `ARLPlayerController` E키 바인딩, `ARLPortal` 수정, `WBP_HUD` 안내 연동) |

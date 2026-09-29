@@ -36,7 +36,8 @@ public class RogueLikeTopView : ModuleRules
 			"RogueLikeTopView/Core/Public",
 			"RogueLikeTopView/Player/Public",
 			"RogueLikeTopView/Reward/Public",
-			"RogueLikeTopView/Inventory/Public"
+			"RogueLikeTopView/Inventory/Public",
+			"RogueLikeTopView/Arena/Public"
 		});
 
 		// Uncomment if you are using Slate UI
