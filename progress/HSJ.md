@@ -5,13 +5,14 @@
 - **아레나/전투 구역 총괄 매니저 & 웨이브 스포너 시스템 구축** (`Source/RogueLikeTopView/Arena/`):
   - **C++ 코어 매니저 (`ARLArenaManager.h / .cpp`)**:
     - **전투 영역 감지**: `TriggerVolume`(BoxComponent)에 플레이어 진입 시 자동 전투 개시 (`bAutoStartOnOverlap`)
-    - **웨이브 & 동적 스폰 (`FRLWaveData`, `FRLMonsterSpawnEntry`)**:
+    - **웨이브 & 무작위 스폰 (`FRLWaveData`, `FRLMonsterSpawnEntry`, `ERLSpawnLocationMode`)**:
       - 다중 웨이브 순차 진행, 개별 몬스터 순차 스폰 간격(`SpawnInterval`), 웨이브 간 대기 딜레이(`DelayBeforeWave`) 지원
-      - 스폰 위치 풀(`SpawnPointActors`) 순환 분배 및 미지정 시 중심 기준 원형 자동 랜덤 스폰
+      - 전투 구역(`TriggerVolume`) 내 완전 무작위 스폰, 네비메시(NavMesh) 안전 바닥 안착, 플레이어 조준 스폰
     - **처치 카운팅 및 이벤트 연동**:
       - 몬스터 스폰 시 `ARLEnemyCharacter::OnEnemyDied` 델리게이트 자동 바인딩으로 잔여 몬스터 실시간 카운팅
-    - **문/장애물(Barrier) 제어**:
-      - 전투 시작 시 문 폐쇄(`LockBarriers`), 클리어 시 문 개방(`UnlockBarriers`) 및 BP 연출 훅(`BP_OnBarriersLocked / Unlocked`) 제공
+    - **자체 입구 차단벽 & 문(Barrier) 제어**:
+      - 자체 내장 `EntranceBarrier`(BoxComponent) 지원: 전투 전엔 통과 가능, 전투 시작 시 콜리전 ON(퇴로 차단), 클리어 시 콜리전 OFF(문 개방)
+      - 외부 문 액터 연동(`BarrierActors`) 및 BP 연출 훅(`BP_OnBarriersLocked / Unlocked`) 제공
     - **클리어 보상 및 포탈 연동**:
       - 모든 웨이브 클리어 시 [`ARLRewardChest`](file:///C:/Unreal%20Projects/TopViewRogueLike/Source/RogueLikeTopView/Reward/Public/RLRewardChest.h) 자동 스폰
       - 출구 [`ARLPortal`](file:///C:/Unreal%20Projects/TopViewRogueLike/Source/RogueLikeTopView/Combat/Public/RLPortal.h) 스폰 또는 기존 포탈 활성화

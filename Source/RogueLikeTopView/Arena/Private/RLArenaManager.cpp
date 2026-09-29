@@ -32,6 +32,39 @@ ARLArenaManager::ARLArenaManager()
 	ChestSpawnPoint->SetupAttachment(RootComponent);
 	ChestSpawnPoint->SetRelativeLocation(FVector(0.0f, 0.0f, 0.0f));
 
+	EntranceBarrier = CreateDefaultSubobject<UBoxComponent>(TEXT("EntranceBarrier"));
+	EntranceBarrier->SetupAttachment(RootComponent);
+	EntranceBarrier->SetRelativeLocation(FVector(0.0f, -600.0f, 100.0f));
+	EntranceBarrier->SetBoxExtent(FVector(50.0f, 250.0f, 150.0f));
+	EntranceBarrier->SetCollisionProfileName(TEXT("BlockAll"));
+	EntranceBarrier->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	EntranceBarrier->SetHiddenInGame(true);
+
+	// 사방 4면 테두리 자동 결계 벽 (TriggerVolume 둘레를 감싸 플레이어 이탈 방지)
+	BoundaryWall_North = CreateDefaultSubobject<UBoxComponent>(TEXT("BoundaryWall_North"));
+	BoundaryWall_North->SetupAttachment(TriggerVolume);
+	BoundaryWall_North->SetCollisionProfileName(TEXT("BlockAll"));
+	BoundaryWall_North->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	BoundaryWall_North->SetHiddenInGame(true);
+
+	BoundaryWall_South = CreateDefaultSubobject<UBoxComponent>(TEXT("BoundaryWall_South"));
+	BoundaryWall_South->SetupAttachment(TriggerVolume);
+	BoundaryWall_South->SetCollisionProfileName(TEXT("BlockAll"));
+	BoundaryWall_South->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	BoundaryWall_South->SetHiddenInGame(true);
+
+	BoundaryWall_East = CreateDefaultSubobject<UBoxComponent>(TEXT("BoundaryWall_East"));
+	BoundaryWall_East->SetupAttachment(TriggerVolume);
+	BoundaryWall_East->SetCollisionProfileName(TEXT("BlockAll"));
+	BoundaryWall_East->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	BoundaryWall_East->SetHiddenInGame(true);
+
+	BoundaryWall_West = CreateDefaultSubobject<UBoxComponent>(TEXT("BoundaryWall_West"));
+	BoundaryWall_West->SetupAttachment(TriggerVolume);
+	BoundaryWall_West->SetCollisionProfileName(TEXT("BlockAll"));
+	BoundaryWall_West->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	BoundaryWall_West->SetHiddenInGame(true);
+
 	// 기본 클래스 폴백 세팅
 	RewardChestClass = ARLRewardChest::StaticClass();
 	PortalClass = ARLPortal::StaticClass();
@@ -40,6 +73,25 @@ ARLArenaManager::ARLArenaManager()
 void ARLArenaManager::BeginPlay()
 {
 	Super::BeginPlay();
+
+	// 입구 차단벽 평상시(전투 전) 비활성화
+	if (EntranceBarrier)
+	{
+		EntranceBarrier->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+		EntranceBarrier->SetHiddenInGame(true);
+	}
+
+	// 4면 결계 벽 위치 초기화 및 비활성화
+	UpdateBoundaryWalls();
+	UBoxComponent* InitWalls[] = { BoundaryWall_North, BoundaryWall_South, BoundaryWall_East, BoundaryWall_West };
+	for (UBoxComponent* Wall : InitWalls)
+	{
+		if (Wall)
+		{
+			Wall->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+			Wall->SetHiddenInGame(true);
+		}
+	}
 
 	// 1. 블루프린트 내부에 배치된 스폰 포인트 화살표(SpawnPoint_Enemy1~5 등) 자동 수집
 	if (InternalSpawnPoints.IsEmpty())
@@ -62,9 +114,9 @@ void ARLArenaManager::BeginPlay()
 		}
 
 		// 이름 순 정렬 (SpawnPoint_Enemy1, SpawnPoint_Enemy2 ...)
-		InternalSpawnPoints.Sort([](const TObjectPtr<USceneComponent>& A, const TObjectPtr<USceneComponent>& B)
+		InternalSpawnPoints.Sort([](const USceneComponent& A, const USceneComponent& B)
 		{
-			return A->GetName() < B->GetName();
+			return A.GetName() < B.GetName();
 		});
 	}
 
@@ -99,6 +151,7 @@ void ARLArenaManager::EndPlay(const EEndPlayReason::Type EndPlayReason)
 	{
 		World->GetTimerManager().ClearTimer(WaveDelayTimerHandle);
 		World->GetTimerManager().ClearTimer(SpawnIntervalTimerHandle);
+		World->GetTimerManager().ClearTimer(BarrierCloseTimerHandle);
 	}
 
 	Super::EndPlay(EndPlayReason);
@@ -138,12 +191,21 @@ void ARLArenaManager::StartArena()
 	CurrentState = ERLArenaState::InProgress;
 	OnArenaStateChanged.Broadcast(CurrentState);
 
-	LockBarriers();
 	BP_OnArenaStarted();
 
 	if (GEngine)
 	{
 		GEngine->AddOnScreenDebugMessage(-1, 3.0f, FColor::Orange, FString::Printf(TEXT("[Arena] %s: 전투 시작! 총 %d개 웨이브"), *GetName(), Waves.Num()));
+	}
+
+	// 플레이어가 방 안으로 안전하게 진입한 후 결계 닫기 (벽 끼임 방지)
+	if (BarrierCloseDelay > 0.0f)
+	{
+		GetWorldTimerManager().SetTimer(BarrierCloseTimerHandle, this, &ARLArenaManager::LockBarriers, BarrierCloseDelay, false);
+	}
+	else
+	{
+		LockBarriers();
 	}
 
 	StartWave(0);
@@ -519,8 +581,93 @@ void ARLArenaManager::CompleteArena()
 	}
 }
 
+void ARLArenaManager::UpdateBoundaryWalls()
+{
+	if (!TriggerVolume)
+	{
+		return;
+	}
+
+	const FVector Extent = TriggerVolume->GetUnscaledBoxExtent();
+	const float WallThickness = 50.0f;
+	const float WallHeight = Extent.Z;
+
+	// +X (북쪽) - TriggerVolume 외곽에 배치
+	if (BoundaryWall_North)
+	{
+		BoundaryWall_North->SetRelativeLocation(FVector(Extent.X + WallThickness, 0.0f, 0.0f));
+		BoundaryWall_North->SetBoxExtent(FVector(WallThickness, Extent.Y + WallThickness * 2.0f, WallHeight));
+	}
+
+	// -X (남쪽)
+	if (BoundaryWall_South)
+	{
+		BoundaryWall_South->SetRelativeLocation(FVector(-(Extent.X + WallThickness), 0.0f, 0.0f));
+		BoundaryWall_South->SetBoxExtent(FVector(WallThickness, Extent.Y + WallThickness * 2.0f, WallHeight));
+	}
+
+	// +Y (동쪽)
+	if (BoundaryWall_East)
+	{
+		BoundaryWall_East->SetRelativeLocation(FVector(0.0f, Extent.Y + WallThickness, 0.0f));
+		BoundaryWall_East->SetBoxExtent(FVector(Extent.X + WallThickness * 2.0f, WallThickness, WallHeight));
+	}
+
+	// -Y (서쪽)
+	if (BoundaryWall_West)
+	{
+		BoundaryWall_West->SetRelativeLocation(FVector(0.0f, -(Extent.Y + WallThickness), 0.0f));
+		BoundaryWall_West->SetBoxExtent(FVector(Extent.X + WallThickness * 2.0f, WallThickness, WallHeight));
+	}
+}
+
 void ARLArenaManager::LockBarriers()
 {
+	// 1. 사방 4면 전체 결계 활성화 (벽 없는 맵/야외 투기장)
+	if (bEncloseEntireArena)
+	{
+		UpdateBoundaryWalls();
+		UBoxComponent* ActiveWalls[] = { BoundaryWall_North, BoundaryWall_South, BoundaryWall_East, BoundaryWall_West };
+		for (UBoxComponent* Wall : ActiveWalls)
+		{
+			if (Wall)
+			{
+				Wall->SetCollisionProfileName(TEXT("BlockAll"));
+				Wall->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
+				Wall->SetCollisionResponseToChannel(ECC_Pawn, ECR_Block);
+				Wall->SetHiddenInGame(false);
+			}
+		}
+	}
+
+	// 2. 자체 내장 입구 차단벽 활성화 (실내 룸 문 차단)
+	if (EntranceBarrier && bUseEntranceBarrier)
+	{
+		EntranceBarrier->SetCollisionProfileName(TEXT("BlockAll"));
+		EntranceBarrier->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
+		EntranceBarrier->SetCollisionResponseToChannel(ECC_Pawn, ECR_Block);
+		EntranceBarrier->SetHiddenInGame(false);
+	}
+
+	// 3. 결계가 닫힐 때 플레이어가 경계 벽에 겹쳐있다면 아레나 중심 방향으로 안전하게 살짝 밀어넣기 (벽 끼임 원천 방지)
+	if (ARLCharacter* Player = Cast<ARLCharacter>(UGameplayStatics::GetPlayerCharacter(this, 0)))
+	{
+		const FVector Center = GetActorLocation();
+		const FVector PlayerLoc = Player->GetActorLocation();
+		const FVector DirToCenter = (Center - PlayerLoc).GetSafeNormal2D();
+
+		UBoxComponent* AllCheckWalls[] = { BoundaryWall_North, BoundaryWall_South, BoundaryWall_East, BoundaryWall_West, EntranceBarrier };
+		for (UBoxComponent* CheckWall : AllCheckWalls)
+		{
+			if (CheckWall && CheckWall->IsOverlappingActor(Player))
+			{
+				Player->AddActorWorldOffset(DirToCenter * 150.0f, true);
+				break;
+			}
+		}
+	}
+
+	// 4. 외부 등록된 문/장애물 액터 활성화
 	for (AActor* Barrier : BarrierActors)
 	{
 		if (Barrier)
@@ -534,6 +681,30 @@ void ARLArenaManager::LockBarriers()
 
 void ARLArenaManager::UnlockBarriers()
 {
+	if (UWorld* World = GetWorld())
+	{
+		World->GetTimerManager().ClearTimer(BarrierCloseTimerHandle);
+	}
+
+	// 1. 사방 4면 전체 결계 비활성화
+	UBoxComponent* ActiveWalls[] = { BoundaryWall_North, BoundaryWall_South, BoundaryWall_East, BoundaryWall_West };
+	for (UBoxComponent* Wall : ActiveWalls)
+	{
+		if (Wall)
+		{
+			Wall->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+			Wall->SetHiddenInGame(true);
+		}
+	}
+
+	// 2. 자체 내장 입구 차단벽 비활성화 (통과 가능)
+	if (EntranceBarrier)
+	{
+		EntranceBarrier->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+		EntranceBarrier->SetHiddenInGame(true);
+	}
+
+	// 3. 외부 등록된 문/장애물 액터 비활성화
 	for (AActor* Barrier : BarrierActors)
 	{
 		if (Barrier)

@@ -13,7 +13,7 @@
 - [x] **`ARLArenaManager`**: 방 영역 진입 감지(`TriggerVolume`), 자동 전투 개시(`bAutoStartOnOverlap`)
 - [x] **웨이브 스폰 시스템**: 다중 웨이브 데이터(`FRLWaveData`), 개별 순차 스폰 간격(`SpawnInterval`), 웨이브 간 딜레이
 - [x] **처치 카운팅 및 연동**: `ARLEnemyCharacter::OnEnemyDied` 실시간 감지 및 남은 적 카운트
-- [x] **전투 구역 봉쇄/해제**: 전투 중 문 폐쇄(`LockBarriers`), 클리어 시 문 개방(`UnlockBarriers`)
+- [x] **전투 구역 봉쇄/해제**: 자체 `EntranceBarrier` 박스(전투 시작 시 퇴로 차단, 클리어 시 개방) 및 외부 문 액터 연동
 - [x] **클리어 보상 및 포탈 연동**: 모든 웨이브 완료 시 `ARLRewardChest` 확정 스폰 및 출구 `ARLPortal` 활성화/스폰
 - [x] **테스트 치트**: `TestStartArena`, `TestClearCurrentWave`, `TestKillAllEnemies`
 

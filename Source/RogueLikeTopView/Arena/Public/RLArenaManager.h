@@ -126,6 +126,23 @@ public:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
 	TObjectPtr<USceneComponent> ChestSpawnPoint;
 
+	// 전투 시작 시 입구를 막아줄 자체 차단벽 박스 (뷰포트에서 방 출입구로 이동/크기 조절)
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
+	TObjectPtr<UBoxComponent> EntranceBarrier;
+
+	// 전투 영역 4면 자동 결계 차단벽 (동, 서, 남, 북)
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
+	TObjectPtr<UBoxComponent> BoundaryWall_North;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
+	TObjectPtr<UBoxComponent> BoundaryWall_South;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
+	TObjectPtr<UBoxComponent> BoundaryWall_East;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
+	TObjectPtr<UBoxComponent> BoundaryWall_West;
+
 	// ==========================================
 	// 웨이브 & 스폰 설정
 	// ==========================================
@@ -167,7 +184,20 @@ public:
 	// 문/차단벽 (Barriers)
 	// ==========================================
 
-	// 전투 중 잠그고, 클리어 시 열어줄 문/장애물 액터 목록
+	// 전투 중 TriggerVolume 4면 테두리 전체에 결계를 쳐서 사방 어디로도 못 나가게 막을지 여부 (벽 없는 맵/야외 투기장 필수, 기본: true)
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Arena|Barriers")
+	bool bEncloseEntireArena = true;
+
+	// 플레이어 진입 후 결계가 닫히기까지의 딜레이 (초, 기본: 0.6초)
+	// 방 안으로 충분히 걸어 들어온 후 등 뒤에서 닫혀 벽에 끼이는 현상을 방지합니다.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Arena|Barriers", meta = (ClampMin = "0.0"))
+	float BarrierCloseDelay = 0.6f;
+
+	// 자체 EntranceBarrier 박스로 특정 입구를 자동 차단할지 여부 (실내 던전 룸에서 문만 막을 때 사용, 기본: true)
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Arena|Barriers")
+	bool bUseEntranceBarrier = true;
+
+	// 전투 중 잠그고, 클리어 시 열어줄 외부 문/장애물 액터 목록
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Arena|Barriers")
 	TArray<TObjectPtr<AActor>> BarrierActors;
 
@@ -293,6 +323,7 @@ protected:
 
 	void LockBarriers();
 	void UnlockBarriers();
+	void UpdateBoundaryWalls();
 
 	void CompleteCurrentWave();
 	void CompleteArena();
@@ -324,4 +355,5 @@ private:
 
 	FTimerHandle WaveDelayTimerHandle;
 	FTimerHandle SpawnIntervalTimerHandle;
+	FTimerHandle BarrierCloseTimerHandle;
 };
