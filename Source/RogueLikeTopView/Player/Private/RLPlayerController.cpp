@@ -1,5 +1,7 @@
 ﻿#include "RLPlayerController.h"
 #include "RLCharacter.h"
+#include "RLEnemyCharacter.h"
+#include "EngineUtils.h"
 #include "EnhancedInputComponent.h"
 #include "EnhancedInputSubsystems.h"
 #include "Blueprint/AIBlueprintHelperLibrary.h"
@@ -81,6 +83,32 @@ void ARLPlayerController::SetupInputComponent()
 		{
 			EnhancedInputComponent->BindAction(InteractAction, ETriggerEvent::Started, this, &ARLPlayerController::OnInteract_Started);
 		}
+	}
+
+#if !UE_BUILD_SHIPPING
+	// ★ 테스트용 치트 키 (패키징 Shipping 빌드에서는 제외)
+	InputComponent->BindKey(EKeys::K, IE_Pressed, this, &ARLPlayerController::KillAllEnemies);
+#endif
+}
+
+void ARLPlayerController::KillAllEnemies()
+{
+	int32 KilledCount = 0;
+	for (TActorIterator<ARLEnemyCharacter> It(GetWorld()); It; ++It)
+	{
+		ARLEnemyCharacter* Enemy = *It;
+		if (IsValid(Enemy) && Enemy != GetPawn())
+		{
+			if (Enemy->DebugKill())
+			{
+				++KilledCount;
+			}
+		}
+	}
+
+	if (GEngine)
+	{
+		GEngine->AddOnScreenDebugMessage(-1, 2.0f, FColor::Red, FString::Printf(TEXT("[Cheat] 적 %d마리 처치"), KilledCount));
 	}
 }
 
@@ -202,4 +230,4 @@ void ARLPlayerController::OnSkillE_Completed() { if (ARLCharacter* RLChar = Cast
 
 void ARLPlayerController::OnSkillR_Started() { if (ARLCharacter* RLChar = Cast<ARLCharacter>(GetPawn())) if (URLSkillComponent* SkillComp = RLChar->GetSkillComponent()) SkillComp->OnSkillInputStarted(ESkillSlot::Slot_R); }
 void ARLPlayerController::OnSkillR_Triggered() { if (ARLCharacter* RLChar = Cast<ARLCharacter>(GetPawn())) if (URLSkillComponent* SkillComp = RLChar->GetSkillComponent()) SkillComp->OnSkillInputTriggered(ESkillSlot::Slot_R); }
-void ARLPlayerController::OnSkillR_Completed() { if (ARLCharacter* RLChar = Cast<ARLCharacter>(GetPawn())) if (URLSkillComponent* SkillComp = RLChar->GetSkillComponent()) SkillComp->OnSkillInputCompleted(ESkillSlot::Slot_R); }
+void ARLPlayerController::OnSkillR_Completed() { if (ARLCharacter* RLChar = Cast<ARLCharacter>(GetPawn())) if (URLSkillComponent* SkillComp = RLChar->GetSkillComponent()) SkillComp->OnSkillInputCompleted(ESkillSlot::Slot_R); }

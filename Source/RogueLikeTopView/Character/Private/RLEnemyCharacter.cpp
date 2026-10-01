@@ -1,4 +1,4 @@
-#include "RLEnemyCharacter.h"
+﻿#include "RLEnemyCharacter.h"
 #include "RLHealthComponent.h"
 #include "RLStatComponent.h"
 #include "RLRewardChest.h"
@@ -8,7 +8,10 @@
 #include "BehaviorTree/BlackboardComponent.h"
 #include "BrainComponent.h"
 #include "Components/CapsuleComponent.h"
+#include "Components/SkeletalMeshComponent.h"
 #include "Engine/World.h"
+#include "GameFramework/DamageType.h"
+#include "TimerManager.h"
 #include "Kismet/GameplayStatics.h"
 
 ARLEnemyCharacter::ARLEnemyCharacter()
@@ -46,6 +49,17 @@ float ARLEnemyCharacter::GetHealthPercent() const
 		return 0.0f;
 	}
 	return HealthComp->CurrentHealth / HealthComp->MaxHealth;
+}
+
+bool ARLEnemyCharacter::DebugKill()
+{
+	if (!HealthComp || HealthComp->bIsDead)
+	{
+		return false;
+	}
+
+	UGameplayStatics::ApplyDamage(this, HealthComp->CurrentHealth, nullptr, nullptr, UDamageType::StaticClass());
+	return true;
 }
 
 void ARLEnemyCharacter::HandleEnemyHealthChanged(float NewCurrentHealth, float NewMaxHealth, float HealthDelta)
@@ -109,6 +123,19 @@ void ARLEnemyCharacter::HandleDeath()
 		if (UBrainComponent* Brain = AICon->GetBrainComponent())
 		{
 			Brain->StopLogic(TEXT("EnemyDied"));
+		}
+	}
+
+	// 사망 몽타주가 끝나갈 때쯤 페이드 + 가라앉기 시작 (끝나면 Destroy)
+	if (bUseDeathFade)
+	{
+		if (DeathFadeDelay > 0.0f)
+		{
+			GetWorldTimerManager().SetTimer(DeathFadeTimerHandle, this, &ARLEnemyCharacter::StartDeathFade, DeathFadeDelay, false);
+		}
+		else
+		{
+			StartDeathFade();
 		}
 	}
 
@@ -204,5 +231,54 @@ void ARLEnemyCharacter::HandleDeath()
 			const FVector RandomDir = FVector(FMath::FRandRange(-1.f, 1.f), FMath::FRandRange(-1.f, 1.f), 0.f).GetSafeNormal();
 			DropActor->LaunchDrop(RandomDir * FMath::FRandRange(100.f, 200.f) + FVector(0.f, 0.f, FMath::FRandRange(280.f, 380.f)));
 		}
+	}
+}
+
+void ARLEnemyCharacter::StartDeathFade()
+{
+	USkeletalMeshComponent* MeshComp = GetMesh();
+	if (!MeshComp)
+	{
+		Destroy();
+		return;
+	}
+
+	// BP OnDeath의 SetLifeSpan이 페이드 도중 액터를 지우지 않도록 해제 (페이드 종료 시 직접 Destroy)
+	SetLifeSpan(0.0f);
+
+	DeathFadeElapsed = 0.0f;
+	DeathFadeMeshStartLocation = MeshComp->GetRelativeLocation();
+
+	// 사망 직후 머티리얼이 페이드 파라미터를 받을 수 있게 초기값 0 세팅 (다이나믹 머티리얼 인스턴스 자동 생성)
+	MeshComp->SetScalarParameterValueOnMaterials(DeathFadeParamName, 0.0f);
+
+	OnDeathFadeStarted();
+
+	GetWorldTimerManager().SetTimer(DeathFadeTimerHandle, this, &ARLEnemyCharacter::TickDeathFade, 1.0f / 60.0f, true);
+}
+
+void ARLEnemyCharacter::TickDeathFade()
+{
+	USkeletalMeshComponent* MeshComp = GetMesh();
+	if (!MeshComp)
+	{
+		GetWorldTimerManager().ClearTimer(DeathFadeTimerHandle);
+		Destroy();
+		return;
+	}
+
+	DeathFadeElapsed += GetWorldTimerManager().GetTimerRate(DeathFadeTimerHandle);
+	const float Alpha = FMath::Clamp(DeathFadeElapsed / DeathFadeDuration, 0.0f, 1.0f);
+
+	MeshComp->SetScalarParameterValueOnMaterials(DeathFadeParamName, Alpha);
+
+	// 처음엔 천천히, 끝으로 갈수록 빠르게 가라앉도록 EaseIn
+	const float SinkAlpha = FMath::InterpEaseIn(0.0f, 1.0f, Alpha, 2.0f);
+	MeshComp->SetRelativeLocation(DeathFadeMeshStartLocation - FVector(0.0f, 0.0f, DeathSinkDistance * SinkAlpha));
+
+	if (Alpha >= 1.0f)
+	{
+		GetWorldTimerManager().ClearTimer(DeathFadeTimerHandle);
+		Destroy();
 	}
 }

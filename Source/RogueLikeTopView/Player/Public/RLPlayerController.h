@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include "CoreMinimal.h"
 #include "GameFramework/PlayerController.h"
@@ -16,6 +16,10 @@ class ROGUELIKETOPVIEW_API ARLPlayerController : public APlayerController
 
 public:
 	ARLPlayerController();
+
+	// 테스트용: 현재 레벨의 모든 적(플레이어 제외) 즉사. 키보드 K 또는 콘솔 "KillAllEnemies"
+	UFUNCTION(BlueprintCallable, Exec, Category = "Cheat|Enemy")
+	void KillAllEnemies();
 
 protected:
 	virtual void BeginPlay() override;
@@ -77,4 +81,4 @@ private:
 
 	void OnDodge_Started();
 	void OnInteract_Started();
-};
+};

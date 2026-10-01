@@ -1,4 +1,4 @@
-// Fill out your copyright notice in the Description page of Project Settings.
+﻿// Fill out your copyright notice in the Description page of Project Settings.
 #pragma once
 
 #include "CoreMinimal.h"
@@ -129,6 +129,35 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Enemy|Enrage")
 	float GetHealthPercent() const;
 
+	// 테스트용: 남은 체력만큼 데미지를 넣어 정상 사망 루트(OnDeath → 몽타주/보상/페이드)로 즉사시킵니다.
+	UFUNCTION(BlueprintCallable, Category = "Cheat|Enemy")
+	bool DebugKill();
+
+	// ==========================================
+	// ★ 사망 연출 (사르르 사라지기)
+	// ==========================================
+
+	// 사망 후 메시 머티리얼 페이드 + 바닥으로 가라앉기 연출 사용 여부
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Enemy|Death")
+	bool bUseDeathFade = true;
+
+	// 사망 시점부터 페이드 시작까지 대기 시간(초). 사망 몽타주가 거의 끝날 때쯤으로 맞추면 자연스럽습니다.
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Enemy|Death", meta = (ClampMin = "0.0", EditCondition = "bUseDeathFade"))
+	float DeathFadeDelay = 0.7f;
+
+	// 페이드가 0→1까지 진행되는 시간(초). 끝나면 액터가 제거됩니다.
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Enemy|Death", meta = (ClampMin = "0.1", EditCondition = "bUseDeathFade"))
+	float DeathFadeDuration = 1.5f;
+
+	// 0→1로 올릴 머티리얼 스칼라 파라미터 이름. Paragon 에셋(Sevarog 등)은 MF_DeathFade의 "FadeOut"을 사용합니다.
+	// 파라미터가 없는 머티리얼(마네킹 등)은 에러 없이 무시되고 가라앉기만 적용됩니다.
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Enemy|Death", meta = (EditCondition = "bUseDeathFade"))
+	FName DeathFadeParamName = FName("FadeOut");
+
+	// 페이드 동안 메시가 바닥 아래로 가라앉는 거리(cm). 0이면 가라앉지 않습니다.
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Enemy|Death", meta = (ClampMin = "0.0", EditCondition = "bUseDeathFade"))
+	float DeathSinkDistance = 120.0f;
+
 protected:
 	virtual void BeginPlay() override;
 
@@ -146,4 +175,16 @@ protected:
 	// BP에서 포효 모션/VFX/카메라 셰이크 등을 여기에 붙이세요.
 	UFUNCTION(BlueprintImplementableEvent, Category = "Enemy|Enrage")
 	void OnEnraged();
+
+	// ★ 사망 페이드가 시작될 때 호출되는 훅. BP에서 먼지/영혼 파티클, 사운드 등을 붙이세요.
+	UFUNCTION(BlueprintImplementableEvent, Category = "Enemy|Death")
+	void OnDeathFadeStarted();
+
+private:
+	void StartDeathFade();
+	void TickDeathFade();
+
+	FTimerHandle DeathFadeTimerHandle;
+	float DeathFadeElapsed = 0.0f;
+	FVector DeathFadeMeshStartLocation = FVector::ZeroVector;
 };
