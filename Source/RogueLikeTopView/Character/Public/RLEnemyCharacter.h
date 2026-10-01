@@ -44,6 +44,21 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Enemy|Reward")
 	bool bIsBoss = false;
 
+	// 엘리트 몬스터 여부 (보스처럼 플레이어 공격에 경직되지 않음)
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Enemy|Combat")
+	bool bIsElite = false;
+
+	// 일반 몬스터라도 개별적으로 경직 면역(슈퍼아머)을 주고 싶을 때 체크
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Enemy|Combat")
+	bool bImmuneToStagger = false;
+
+	// 보스 판정 (bIsBoss 체크 또는 클래스/액터 이름에 "Boss" 포함)
+	UFUNCTION(BlueprintPure, Category = "Enemy")
+	bool IsBossEnemy() const;
+
+	// 보스/엘리트/bImmuneToStagger면 false → 넉백, 피격 몽타주, 시전 취소 없음
+	virtual bool CanBeStaggered() const override;
+
 	// 처치 시 플레이어에게 지급할 경험치 (일반 몬스터 기본 30, 보스 350)
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Enemy|Reward", meta = (ClampMin = "0.0"))
 	float ExpReward = 30.0f;

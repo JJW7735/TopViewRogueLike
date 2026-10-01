@@ -138,7 +138,10 @@ void ARLCharacter::ReceiveCustomDamage(const FRLDamageData& DamageData, const FH
         GEngine->AddOnScreenDebugMessage(-1, 2.0f, FColor::Red, Msg);
     }
 
-    if (DamageData.KnockbackForce > 0.0f)
+    // 보스/엘리트처럼 경직 면역(CanBeStaggered == false)인 대상은 넉백으로 밀려나지 않습니다.
+    const bool bCanBeStaggered = CanBeStaggered();
+
+    if (bCanBeStaggered && DamageData.KnockbackForce > 0.0f)
     {
         float KnockbackMultiplier = DamageData.bIsCritical ? 1.25f : 1.0f;
         FVector KnockbackDir = (GetActorLocation() - HitInfo.ImpactPoint).GetSafeNormal2D();
@@ -162,7 +165,7 @@ void ARLCharacter::ReceiveCustomDamage(const FRLDamageData& DamageData, const FH
         }
     }
 
-    if (SkillComp && SkillComp->IsCasting())
+    if (bCanBeStaggered && SkillComp && SkillComp->IsCasting())
     {
         SkillComp->InterruptCasting(TEXT("피격으로 인한 시전 취소"));
     }

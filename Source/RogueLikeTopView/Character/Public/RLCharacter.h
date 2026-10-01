@@ -53,6 +53,12 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Combat")
 	virtual void ReceiveCustomDamage(const FRLDamageData& DamageData, const FHitResult& HitInfo);
 
+	// ★ 피격 시 경직(넉백 + 피격 몽타주 + 시전 취소)을 받을 수 있는지 여부.
+	// 기본은 true. ARLEnemyCharacter에서 보스/엘리트는 false를 돌려주도록 오버라이드합니다(슈퍼아머).
+	// ReceiveCustomDamage의 넉백/시전 취소가 이 값을 보고, BP_EnemyBase의 피격 몽타주 재생도 이 값으로 Branch 하세요.
+	UFUNCTION(BlueprintPure, Category = "Combat")
+	virtual bool CanBeStaggered() const { return true; }
+
 	// ★ 블루프린트에서 FHitResult를 직접 만들기 번거로우니(대부분의 필드가 BP에 노출 안 됨),
 	// 충격 위치(ImpactPoint)만 넘기면 내부에서 FHitResult를 만들어 ReceiveCustomDamage를 호출해주는 래퍼입니다.
 	// 인페르노/메테오처럼 GroundActorClass로 스폰되는 장판형 스킬 BP에서 이걸 쓰면 됩니다.

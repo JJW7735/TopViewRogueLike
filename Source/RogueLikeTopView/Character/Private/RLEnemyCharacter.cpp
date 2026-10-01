@@ -29,6 +29,16 @@ void ARLEnemyCharacter::BeginPlay()
 	}
 }
 
+bool ARLEnemyCharacter::IsBossEnemy() const
+{
+	return bIsBoss || GetClass()->GetName().Contains(TEXT("Boss"), ESearchCase::IgnoreCase) || GetName().Contains(TEXT("Boss"), ESearchCase::IgnoreCase);
+}
+
+bool ARLEnemyCharacter::CanBeStaggered() const
+{
+	return !(bImmuneToStagger || bIsElite || IsBossEnemy());
+}
+
 float ARLEnemyCharacter::GetHealthPercent() const
 {
 	if (!HealthComp || FMath::IsNearlyZero(HealthComp->MaxHealth))
@@ -117,7 +127,7 @@ void ARLEnemyCharacter::HandleDeath()
 	const FVector MyLoc = GetActorLocation();
 
 	// 보스 여부 판정 (bIsBoss 체크 여부 또는 클래스/액터 이름에 "Boss"가 포함되어 있으면 자동 보스 판정)
-	const bool bIsActualBoss = bIsBoss || GetClass()->GetName().Contains(TEXT("Boss"), ESearchCase::IgnoreCase) || GetName().Contains(TEXT("Boss"), ESearchCase::IgnoreCase);
+	const bool bIsActualBoss = IsBossEnemy();
 
 	// 2. 보스 처치: 100% 확정 보상 상자 + 대량 골드 드롭
 	if (bIsActualBoss)
