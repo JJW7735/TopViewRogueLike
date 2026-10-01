@@ -54,6 +54,10 @@ public:
 	UFUNCTION(BlueprintImplementableEvent, Category = "Reward|Chest")
 	void OnChestClaimed();
 
+	/** 플레이어가 범위에 들어왔을 때 HUD에 띄울 상호작용 안내 문구 (인스턴스별로 에디터에서 지정) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Interaction")
+	FText InteractPromptText;
+
 protected:
 	virtual void BeginPlay() override;
 

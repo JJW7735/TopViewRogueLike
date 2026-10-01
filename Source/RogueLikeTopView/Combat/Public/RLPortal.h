@@ -39,6 +39,10 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Portal")
     void SetLinkedChestToClean(AActor* InChest) { LinkedChestToClean = InChest; }
 
+    // 플레이어가 범위에 들어왔을 때 HUD에 띄울 상호작용 안내 문구 (인스턴스별로 에디터에서 지정)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Interaction")
+    FText InteractPromptText;
+
 private:
     // 이동 완료 후 포탈 자신을 파괴할지 여부 (일회성 전이 포탈 정리)
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Portal Setup", meta = (AllowPrivateAccess = "true"))

@@ -69,11 +69,6 @@ void ARLRewardChest::OnOverlapBegin(UPrimitiveComponent* OverlappedComp, AActor*
 	{
 		CurrentOverlappedPlayer = PlayerChar;
 		PlayerChar->SetNearbyChest(this);
-
-		if (GEngine)
-		{
-			GEngine->AddOnScreenDebugMessage(999, 3.0f, FColor::Yellow, TEXT("📦 보상 상자 근처입니다! [F] 키를 누르세요!"));
-		}
 	}
 }
 

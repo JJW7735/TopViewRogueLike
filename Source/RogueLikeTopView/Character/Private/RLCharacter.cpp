@@ -217,13 +217,30 @@ void ARLCharacter::HandleLevelUp(int32 NewLevel)
 void ARLCharacter::SetNearbyPortal(ARLPortal* Portal)
 {
     NearbyPortal = Portal;
-    OnNearbyPortalChanged(NearbyChest != nullptr || NearbyPortal != nullptr);
+    RefreshInteractPrompt();
 }
 
 void ARLCharacter::SetNearbyChest(ARLRewardChest* Chest)
 {
     NearbyChest = Chest;
-    OnNearbyPortalChanged(NearbyChest != nullptr || NearbyPortal != nullptr);
+    RefreshInteractPrompt();
+}
+
+void ARLCharacter::RefreshInteractPrompt()
+{
+    // TryInteract와 같은 우선순위: 상자가 있으면 상자 문구, 없으면 포탈 문구
+    if (NearbyChest)
+    {
+        OnInteractPromptChanged(true, NearbyChest->InteractPromptText);
+    }
+    else if (NearbyPortal)
+    {
+        OnInteractPromptChanged(true, NearbyPortal->InteractPromptText);
+    }
+    else
+    {
+        OnInteractPromptChanged(false, FText::GetEmpty());
+    }
 }
 
 void ARLCharacter::TryInteract()
