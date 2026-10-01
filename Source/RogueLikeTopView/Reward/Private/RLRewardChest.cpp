@@ -1,4 +1,4 @@
-#include "RLRewardChest.h"
+﻿#include "RLRewardChest.h"
 #include "RLRewardSubsystem.h"
 #include "RLRewardSelectWidget.h"
 #include "RLCharacter.h"
@@ -136,7 +136,7 @@ void ARLRewardChest::OpenChest(ARLCharacter* Interactor)
 		if (Widget)
 		{
 			Widget->AddToViewport(50);
-			Widget->InitializeWidget(Interactor, Rewards);
+			Widget->InitializeWidget(Interactor, Rewards, this);
 			return;
 		}
 	}
@@ -153,6 +153,40 @@ void ARLRewardChest::OpenChest(ARLCharacter* Interactor)
 
 		// 1번 카드를 플레이어에게 즉시 지급
 		Subsystem->ApplyReward(Interactor, Rewards[0]);
+		FinishAndDestroyChest();
+	}
+}
+
+void ARLRewardChest::FinishAndDestroyChest(float DelaySeconds)
+{
+	// 상호작용 및 물리 충돌 즉시 비활성화 (플레이어 이동 방해 제거)
+	SetActorEnableCollision(false);
+	if (ChestBaseMesh)
+	{
+		ChestBaseMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	}
+	if (InteractionSphere)
+	{
+		InteractionSphere->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	}
+
+	// 빛나는 나이아가라 이펙트 정지
+	if (ChestFX)
+	{
+		ChestFX->Deactivate();
+	}
+
+	// 블루프린트 연출 훅 호출 (소멸 VFX/SFX 등)
+	OnChestClaimed();
+
+	const float ActualDelay = (DelaySeconds >= 0.0f) ? DelaySeconds : DestroyDelay;
+	if (ActualDelay <= 0.0f)
+	{
+		Destroy();
+	}
+	else
+	{
+		SetLifeSpan(ActualDelay);
 	}
 }
 

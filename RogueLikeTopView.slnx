@@ -10,14 +10,14 @@
     <Platform Name="Win64-arm64ec" />
   </Configurations>
   <Folder Name="/Engine/">
-    <Project Path="Intermediate/ProjectFiles/UE5.vcxproj" Id="c38e02bc-22ec-38e8-a7cc-16efd1687e1b">
+    <Project Path="Intermediate/ProjectFiles/UE5.vcxproj" Id="0a213027-1fc8-3fac-9313-7b8cbd6e2572">
       <BuildType Project="BuiltWithUnrealBuildTool" />
       <Platform Project="Win64" />
       <Build Project="false" />
     </Project>
   </Folder>
   <Folder Name="/Games/">
-    <Project Path="Intermediate/ProjectFiles/RogueLikeTopView.vcxproj" Id="afd89115-6015-36f1-b702-beba03940905">
+    <Project Path="Intermediate/ProjectFiles/RogueLikeTopView.vcxproj" Id="b4777960-1682-3113-aca0-f9cfa858545a">
       <BuildType Solution="DebugGame Editor|Win64" Project="DebugGame_Editor" />
       <BuildType Solution="DebugGame Editor|Win64-arm64" Project="Win64_arm64_DebugGame_Editor" />
       <BuildType Solution="DebugGame Editor|Win64-arm64ec" Project="Win64_arm64ec_DebugGame_Editor" />

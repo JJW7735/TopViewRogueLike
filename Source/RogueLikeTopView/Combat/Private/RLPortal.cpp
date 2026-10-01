@@ -73,6 +73,18 @@ void ARLPortal::OnLevelLoaded()
         FLatentActionInfo UnloadInfo;
         UGameplayStatics::UnloadStreamLevel(this, LevelToUnload, UnloadInfo, false);
     }
+
+    // 7. 이전 아레나에서 혹시 남아있던 보상 상자가 있다면 안전하게 소멸
+    if (LinkedChestToClean.IsValid())
+    {
+        LinkedChestToClean->Destroy();
+    }
+
+    // 8. 일회성 전이 포탈인 경우, 다음 맵에 남지 않도록 포탈 자신도 파괴
+    if (bDestroyOnUse)
+    {
+        Destroy();
+    }
 }
 
 

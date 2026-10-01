@@ -154,6 +154,8 @@ void ARLArenaManager::EndPlay(const EEndPlayReason::Type EndPlayReason)
 		World->GetTimerManager().ClearTimer(BarrierCloseTimerHandle);
 	}
 
+	CleanupArenaSpawnedActors();
+
 	Super::EndPlay(EndPlayReason);
 }
 
@@ -536,7 +538,7 @@ void ARLArenaManager::CompleteArena()
 				FActorSpawnParameters SpawnParams;
 				SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
 
-				World->SpawnActor<ARLRewardChest>(TargetChestClass, ChestLoc, ChestRot, SpawnParams);
+				SpawnedRewardChest = World->SpawnActor<ARLRewardChest>(TargetChestClass, ChestLoc, ChestRot, SpawnParams);
 			}
 		}
 
@@ -545,6 +547,13 @@ void ARLArenaManager::CompleteArena()
 		{
 			ExistingPortalActor->SetActorHiddenInGame(false);
 			ExistingPortalActor->SetActorEnableCollision(true);
+			if (ARLPortal* Portal = Cast<ARLPortal>(ExistingPortalActor))
+			{
+				if (SpawnedRewardChest.IsValid())
+				{
+					Portal->SetLinkedChestToClean(SpawnedRewardChest.Get());
+				}
+			}
 		}
 		else if (bSpawnPortalOnClear)
 		{
@@ -566,7 +575,15 @@ void ARLArenaManager::CompleteArena()
 				FActorSpawnParameters SpawnParams;
 				SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
 
-				World->SpawnActor<ARLPortal>(TargetPortalClass, PortalLoc, PortalRot, SpawnParams);
+				ARLPortal* NewPortal = World->SpawnActor<ARLPortal>(TargetPortalClass, PortalLoc, PortalRot, SpawnParams);
+				if (NewPortal)
+				{
+					SpawnedPortal = NewPortal;
+					if (SpawnedRewardChest.IsValid())
+					{
+						NewPortal->SetLinkedChestToClean(SpawnedRewardChest.Get());
+					}
+				}
 			}
 		}
 	}
@@ -734,6 +751,8 @@ void ARLArenaManager::ResetArena()
 	ActiveEnemies.Empty();
 	SpawnQueue.Empty();
 
+	CleanupArenaSpawnedActors();
+
 	CurrentWaveIndex = -1;
 	RemainingEnemies = 0;
 	TotalWaveEnemies = 0;
@@ -741,6 +760,21 @@ void ARLArenaManager::ResetArena()
 
 	UnlockBarriers();
 	OnArenaStateChanged.Broadcast(CurrentState);
+}
+
+void ARLArenaManager::CleanupArenaSpawnedActors()
+{
+	if (SpawnedRewardChest.IsValid())
+	{
+		SpawnedRewardChest->Destroy();
+		SpawnedRewardChest = nullptr;
+	}
+
+	if (SpawnedPortal.IsValid())
+	{
+		SpawnedPortal->Destroy();
+		SpawnedPortal = nullptr;
+	}
 }
 
 void ARLArenaManager::TestStartArena()

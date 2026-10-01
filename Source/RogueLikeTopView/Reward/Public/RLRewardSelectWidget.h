@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include "CoreMinimal.h"
 #include "Blueprint/UserWidget.h"
@@ -6,6 +6,7 @@
 #include "RLRewardSelectWidget.generated.h"
 
 class ARLCharacter;
+class ARLRewardChest;
 
 /**
  * 3지선다 보상 카드 선택 팝업 UI의 C++ 베이스 클래스
@@ -20,7 +21,7 @@ public:
 	 * 위젯 생성 직후 호출되어 플레이어 정보와 3개의 카드 데이터를 설정하고 게임을 일시정지합니다.
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Reward")
-	void InitializeWidget(ARLCharacter* InPlayer, const TArray<FRLRewardData>& InRewards);
+	void InitializeWidget(ARLCharacter* InPlayer, const TArray<FRLRewardData>& InRewards, ARLRewardChest* InSourceChest = nullptr);
 
 	/**
 	 * 플레이어가 특정 카드(0, 1, 2번)를 클릭했을 때 호출됩니다.
@@ -40,6 +41,10 @@ public:
 
 	UPROPERTY(BlueprintReadOnly, Category = "Reward")
 	TWeakObjectPtr<ARLCharacter> TargetPlayer;
+
+	/** 보상을 제공한 원본 상자 (선택 완료 후 소멸 연출용) */
+	UPROPERTY(BlueprintReadOnly, Category = "Reward")
+	TWeakObjectPtr<ARLRewardChest> SourceChest;
 
 protected:
 	/**

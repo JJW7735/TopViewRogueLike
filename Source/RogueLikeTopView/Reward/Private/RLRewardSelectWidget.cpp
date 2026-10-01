@@ -1,13 +1,15 @@
-#include "RLRewardSelectWidget.h"
+﻿#include "RLRewardSelectWidget.h"
 #include "RLRewardSubsystem.h"
+#include "RLRewardChest.h"
 #include "RLCharacter.h"
 #include "GameFramework/PlayerController.h"
 #include "Kismet/GameplayStatics.h"
 
-void URLRewardSelectWidget::InitializeWidget(ARLCharacter* InPlayer, const TArray<FRLRewardData>& InRewards)
+void URLRewardSelectWidget::InitializeWidget(ARLCharacter* InPlayer, const TArray<FRLRewardData>& InRewards, ARLRewardChest* InSourceChest)
 {
 	TargetPlayer = InPlayer;
 	RewardOptions = InRewards;
+	SourceChest = InSourceChest;
 
 	// 게임 일시정지 (안전하게 보상 선택할 수 있도록)
 	UGameplayStatics::SetGamePaused(this, true);
@@ -39,6 +41,12 @@ void URLRewardSelectWidget::SelectReward(int32 OptionIndex)
 		}
 
 		OnRewardChosen(OptionIndex);
+	}
+
+	// 보상 제공 상자 소멸 처리 (이펙트 끄고 딜레이 후 파괴)
+	if (SourceChest.IsValid())
+	{
+		SourceChest->FinishAndDestroyChest();
 	}
 
 	CloseWidget();

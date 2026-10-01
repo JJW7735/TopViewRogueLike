@@ -225,6 +225,18 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Arena|Rewards")
 	TObjectPtr<AActor> ExistingPortalActor;
 
+	// 동적으로 스폰된 보상 상자 참조
+	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = "Arena|Spawned")
+	TWeakObjectPtr<ARLRewardChest> SpawnedRewardChest;
+
+	// 동적으로 스폰된 출구 포탈 참조
+	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = "Arena|Spawned")
+	TWeakObjectPtr<ARLPortal> SpawnedPortal;
+
+	// 아레나에서 동적으로 생성했던 보상 상자 및 포탈을 강제 정리
+	UFUNCTION(BlueprintCallable, Category = "Arena")
+	void CleanupArenaSpawnedActors();
+
 	// ==========================================
 	// 이벤트 델리게이트 (UI/사운드/BP 연동용)
 	// ==========================================

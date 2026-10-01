@@ -1,6 +1,6 @@
 # 🎮 RLTV (RogueLikeTopView) 개발 진행 상황 & 프로젝트 가이드
 
-> **최종 갱신일:** 2026-09-29  
+> **최종 갱신일:** 2026-10-01  
 > **프로젝트 성격:** 3인 포트폴리오/공모전 탑다운 로그라이크 액션  
 > **엔진 버전:** Unreal Engine 5.8  
 > **AI 어시스턴트 협업:** Gemini (Antigravity CLI), Claude (Claude Code)
@@ -99,6 +99,7 @@
 
 ## 📝 4. 작업 히스토리 (Work Log)
 
+| 2026-10-01 | HSJ (Gemini) | 보상 상자 수령 시 소멸 라이프사이클 및 포탈 전이 시 잔여 액터 자동 정리 구현 (카드 선택 시 `ARLRewardChest` 콜리전/FX 즉시 차단 및 지연 Destroy, 포탈 이동 시 이전 아레나 상자 및 포탈 자체 파괴 처리, `ARLArenaManager` 생성 액터 추적 및 정리 함수 추가) |
 | 2026-09-29 | HSJ (Gemini) | 아레나/전투 구역 총괄 매니저 & 웨이브 스포너 구축 (`ARLArenaManager`: TriggerVolume 영역 감지, 다중 웨이브 및 순차 스폰 `FRLWaveData`, 문 폐쇄/개방 `BarrierActors`, 처치 카운팅 `OnEnemyDied` 연동, 클리어 시 `ARLRewardChest` & `ARLPortal` 자동 스폰, 테스트 치트 3종 탑재) |
 | 2026-09-28 | HSJ (Gemini) | 인벤토리 & 아이템 시스템 백엔드 구축 (`URLInventoryComponent`, `URLItemDataAsset`, 5종 아이템 분류, 골드 관리, 패시브 스탯 자동 연동, 테스트 치트 3종 탑재, UI 연동 가이드 문서화: `progress/UI_INVENTORY_GUIDE.md`) |
 | 2026-09-23 | JJW (Claude) | 보스 근접 공격이 항상 씹히는 버그 원인 추적: `AM_Boss_Swing` 몽타주가 재생 시작 ~1초 만에 `Montage.Stop`으로 강제 종료됨을 로그로 확인 (`Notify_Hit` 도달 전에 끊김). BT의 `OnCompleted`가 노티파이 여부와 무관하게 `FinishExecute(true)`로 연결돼있어 겉보기엔 정상 흐름처럼 보였던 것도 확인. BT observer 데코레이터(`BTDecorator_Blackboard`) 재평가로 인한 abort가 유력 용의자 — 라이브 BT 디버거로 공격 애니메이션 재생 "중" abort 여부 확인 필요 (진행중, 내일 이어서). 추가로 `BP_Boss`에 `AttackCollision_L`/`AttackCollision_R` + `AlreadyHitActors` 기반의 별도 무기 콜리전 데미지 시스템이 이미 존재함을 발견, `Notify_Hit`/`CreateBoxHitbox` 경로와의 관계 확인 필요 |

@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
@@ -39,12 +39,20 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Reward|Chest")
 	void ResetChest();
 
+	/** 보상 선택이 완료되었을 때 호출되어 이펙트를 끄고 연출 후 상자를 소멸시키는 함수 */
+	UFUNCTION(BlueprintCallable, Category = "Reward|Chest")
+	void FinishAndDestroyChest(float DelaySeconds = -1.0f);
+
 	UFUNCTION(BlueprintPure, Category = "Reward|Chest")
 	bool IsOpen() const { return bIsOpen; }
 
 	/** 상자가 열렸을 때 BP에서 연출(VFX, SFX, 애니메이션)할 수 있는 이벤트 */
 	UFUNCTION(BlueprintImplementableEvent, Category = "Reward|Chest")
 	void OnChestOpened(ARLCharacter* Interactor);
+
+	/** 상자 보상 수령 완료 시 BP에서 소멸 연출(VFX, SFX, 페이드아웃)할 수 있는 이벤트 */
+	UFUNCTION(BlueprintImplementableEvent, Category = "Reward|Chest")
+	void OnChestClaimed();
 
 protected:
 	virtual void BeginPlay() override;
@@ -75,6 +83,10 @@ protected:
 	/** 상호작용 유효 반경 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Reward|Chest")
 	float InteractionRadius = 220.0f;
+
+	/** 보상 선택 후 상자가 완전히 소멸(Destroy)되기까지의 지연 시간 (초) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Reward|Chest")
+	float DestroyDelay = 0.5f;
 
 	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = "Reward|Chest")
 	bool bIsOpen = false;

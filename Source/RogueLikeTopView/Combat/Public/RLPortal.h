@@ -36,7 +36,18 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Portal")
     void ActivatePortal(ARLCharacter* PlayerChar);
 
+    UFUNCTION(BlueprintCallable, Category = "Portal")
+    void SetLinkedChestToClean(AActor* InChest) { LinkedChestToClean = InChest; }
+
 private:
+    // 이동 완료 후 포탈 자신을 파괴할지 여부 (일회성 전이 포탈 정리)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Portal Setup", meta = (AllowPrivateAccess = "true"))
+    bool bDestroyOnUse = true;
+
+    // 포탈 이동 시 함께 정리할 보상 상자 (플레이어가 상자를 열지 않고 넘어갔을 때 대비)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Portal Setup", meta = (AllowPrivateAccess = "true"))
+    TWeakObjectPtr<AActor> LinkedChestToClean;
+
     // 포탈의 충돌 영역 (이 범위에 닿으면 작동)
     UPROPERTY(VisibleAnywhere, Category = "Portal")
     UBoxComponent* PortalCollision;

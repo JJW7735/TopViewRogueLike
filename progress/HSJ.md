@@ -1,7 +1,17 @@
 # HSJ
-> 최종 갱신: 2026-09-29
+> 최종 갱신: 2026-10-01
 
 ## 완료
+- **보상 상자 수령 라이프사이클 및 포탈 이동 잔여물 정리 구축** (`Source/RogueLikeTopView/`):
+  - **보상 상자 수령 후 소멸 (`ARLRewardChest.h / .cpp`)**:
+    - `FinishAndDestroyChest(DelaySeconds)`: 콜리전 즉시 차단(이동 방해 해소), 나이아가라 이펙트 정지, `OnChestClaimed` BP 연출 이벤트 방송 및 `SetLifeSpan` 지연 `Destroy()`
+    - `OpenChest()` 시 `URLRewardSelectWidget`에 상자 인스턴스(`this`) 전달 및 위젯 없는 Fallback 환경에서도 자동 소멸 처리
+  - **보상 선택 위젯 연동 (`URLRewardSelectWidget.h / .cpp`)**:
+    - `SourceChest` 약참조(`TWeakObjectPtr<ARLRewardChest>`) 필드 추가
+    - `SelectReward()`에서 카드 선택 완료 시 `SourceChest->FinishAndDestroyChest()` 호출 연동
+  - **포탈 이동 및 아레나 잔여물 자동 정리 (`RLPortal.h / .cpp`, `ARLArenaManager.h / .cpp`)**:
+    - `ARLPortal`: `LinkedChestToClean` 연결 및 `OnLevelLoaded` 시 혹시 남아있는 상자 자동 파괴, `bDestroyOnUse` 옵션으로 전이 완료 후 포탈 자신도 자동 파괴하여 다음 맵(보스방) 잔존 방지
+    - `ARLArenaManager`: 클리어 시 스폰된 상자와 포탈 포인터(`SpawnedRewardChest`, `SpawnedPortal`) 추적, 포탈에 상자 링크 전달, `CleanupArenaSpawnedActors()` 신설 및 `ResetArena()`, `EndPlay()` 연동
 - **아레나/전투 구역 총괄 매니저 & 웨이브 스포너 시스템 구축** (`Source/RogueLikeTopView/Arena/`):
   - **C++ 코어 매니저 (`ARLArenaManager.h / .cpp`)**:
     - **전투 영역 감지**: `TriggerVolume`(BoxComponent)에 플레이어 진입 시 자동 전투 개시 (`bAutoStartOnOverlap`)
