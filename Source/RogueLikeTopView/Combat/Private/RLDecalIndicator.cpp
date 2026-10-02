@@ -133,7 +133,7 @@ void ARLDecalIndicator::UpdateBoxTransform(const FVector& OriginLocation, float 
     DecalComp->SetWorldRotation(FRotator(-90.f, YawDegrees, 0.f));
 }
 
-void ARLDecalIndicator::SetupSectorIndicator(float Radius, float SafeZoneAngleDegrees, UMaterialInterface* Material)
+void ARLDecalIndicator::SetupSectorIndicator(float Radius, float SafeZoneAngleDegrees, UMaterialInterface* Material, float InnerSafeRadius)
 {
     CurrentType = EIndicatorType::Cone;
     bUseRangeRing = false;
@@ -159,6 +159,8 @@ void ARLDecalIndicator::SetupSectorIndicator(float Radius, float SafeZoneAngleDe
     if (MID)
     {
         MID->SetScalarParameterValue(FName("SafeZoneAngleDeg"), SafeZoneAngleDegrees);
+        // ★ 안쪽 안전 반경 비율(0~1). 머티리얼에 "InnerSafeRatio" 파라미터가 있으면 안쪽 원을 비워 그립니다.
+        MID->SetScalarParameterValue(FName("InnerSafeRatio"), Radius > 0.0f ? FMath::Clamp(InnerSafeRadius / Radius, 0.0f, 1.0f) : 0.0f);
         DecalComp->SetDecalMaterial(MID);
     }
     else

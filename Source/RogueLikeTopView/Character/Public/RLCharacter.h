@@ -84,7 +84,7 @@ public:
 	// 뒤쪽 SafeZoneAngleDegrees도 안(안전지대)에 있는 대상만 제외하고 나머지 전부에게 한 번에 데미지를
 	// 줍니다. 예: SafeZoneAngleDegrees=90 → 정면 기준 좌우 135도씩(총 270도)이 위험지대.
 	UFUNCTION(BlueprintCallable, Category = "Combat")
-	void CreateSectorHitbox(float Radius, float SafeZoneAngleDegrees, const FRLDamageData& DamageData, bool bDrawDebug = true);
+	void CreateSectorHitbox(float Radius, float SafeZoneAngleDegrees, const FRLDamageData& DamageData, bool bDrawDebug = true, float InnerSafeRadius = 0.0f);
 
 	// ★ 원거리 공격: 정면 방향으로 투사체(ARLProjectile 파생 클래스)를 스폰합니다.
 	// URLSkillComponent의 ESkillCastType::Projectile 처리 로직과 동일한 방식으로 동작합니다.
@@ -118,7 +118,7 @@ public:
 	// ★ CreateSectorHitbox와 같은 규격(Radius/SafeZoneAngleDegrees)의 부채꼴 예고 데칼을 표시합니다.
 	// ShowBoxAttackIndicator의 부채꼴 버전 — 자기 자신 중심이라 ForwardOffset이 없습니다.
 	UFUNCTION(BlueprintCallable, Category = "Combat|Indicator")
-	void ShowSectorAttackIndicator(float Radius, float SafeZoneAngleDegrees, UMaterialInterface* DecalMaterial = nullptr);
+	void ShowSectorAttackIndicator(float Radius, float SafeZoneAngleDegrees, UMaterialInterface* DecalMaterial = nullptr, float InnerSafeRadius = 0.0f);
 
 	// ★ CreateLocationHitbox와 같은 규격(Radius)의 원형 예고 데칼을 지정된 위치(Location)에 표시합니다.
 	// Box/Sector와 달리 보스 자신이 아니라 임의의 월드 좌표가 중심입니다. 보통 직접 호출하지 않고
@@ -140,7 +140,7 @@ public:
 	// Radius/SafeZoneAngleDegrees 부채꼴 데칼을 띄웁니다. 예: BigSwing처럼 "선딜레이 후 자기 주변
 	// 전방위(뒤쪽 일부 제외)를 한 번에 타격"하는 패턴에 씁니다.
 	UFUNCTION(BlueprintCallable, Category = "Combat|Indicator")
-	void StartSectorAttackTelegraph(UAnimMontage* Montage, FName HitNotifyName, float LeadTime, float Radius, float SafeZoneAngleDegrees, UMaterialInterface* DecalMaterial = nullptr, AActor* FaceTarget = nullptr, float TurnSpeed = 540.0f);
+	void StartSectorAttackTelegraph(UAnimMontage* Montage, FName HitNotifyName, float LeadTime, float Radius, float SafeZoneAngleDegrees, UMaterialInterface* DecalMaterial = nullptr, AActor* FaceTarget = nullptr, float TurnSpeed = 540.0f, float InnerSafeRadius = 0.0f);
 
 	// ★ StartBoxAttackTelegraph의 "추적형" 버전. Box/Sector와 달리 보스 자신이 아니라 TrackTarget(보통
 	// 플레이어)의 현재 위치를 계속 따라다니는 원형 데칼입니다. 몽타주 재생 시작 직후 호출하면:
@@ -343,6 +343,7 @@ protected:
 	float TelegraphForwardOffset = 0.0f;
 	float TelegraphRadius = 0.0f;
 	float TelegraphSafeZoneAngle = 0.0f;
+	float TelegraphInnerSafeRadius = 0.0f;
 	bool bTelegraphVisible = false;
 	TWeakObjectPtr<AActor> TelegraphFaceTarget;
 	float TelegraphTurnSpeed = 0.0f;

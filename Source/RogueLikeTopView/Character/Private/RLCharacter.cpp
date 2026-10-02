@@ -480,7 +480,7 @@ void ARLCharacter::ShowBoxAttackIndicator(FVector BoxExtent, float ForwardOffset
     AttackIndicator->SetIndicatorVisibility(true);
 }
 
-void ARLCharacter::ShowSectorAttackIndicator(float Radius, float SafeZoneAngleDegrees, UMaterialInterface* DecalMaterial)
+void ARLCharacter::ShowSectorAttackIndicator(float Radius, float SafeZoneAngleDegrees, UMaterialInterface* DecalMaterial, float InnerSafeRadius)
 {
     // ShowBoxAttackIndicator와 완전히 같은 지연 스폰(lazy-spawn) 패턴 — AttackIndicator 액터를
     // Box/Sector 상관없이 하나만 두고 재사용합니다 (한 캐릭터가 한 번에 하나의 예고만 표시하므로 충분).
@@ -498,7 +498,7 @@ void ARLCharacter::ShowSectorAttackIndicator(float Radius, float SafeZoneAngleDe
         return;
     }
 
-    AttackIndicator->SetupSectorIndicator(Radius, SafeZoneAngleDegrees, DecalMaterial);
+    AttackIndicator->SetupSectorIndicator(Radius, SafeZoneAngleDegrees, DecalMaterial, InnerSafeRadius);
     AttackIndicator->UpdateSectorTransform(GetActorLocation(), GetActorRotation().Yaw);
     AttackIndicator->SetIndicatorVisibility(true);
 }
@@ -591,7 +591,7 @@ void ARLCharacter::StartBoxAttackTelegraph(UAnimMontage* Montage, FName HitNotif
     UpdateAttackTelegraph(0.0f);
 }
 
-void ARLCharacter::StartSectorAttackTelegraph(UAnimMontage* Montage, FName HitNotifyName, float LeadTime, float Radius, float SafeZoneAngleDegrees, UMaterialInterface* DecalMaterial, AActor* FaceTarget, float TurnSpeed)
+void ARLCharacter::StartSectorAttackTelegraph(UAnimMontage* Montage, FName HitNotifyName, float LeadTime, float Radius, float SafeZoneAngleDegrees, UMaterialInterface* DecalMaterial, AActor* FaceTarget, float TurnSpeed, float InnerSafeRadius)
 {
     StopAttackTelegraph();
 
@@ -606,6 +606,7 @@ void ARLCharacter::StartSectorAttackTelegraph(UAnimMontage* Montage, FName HitNo
     TelegraphMaterial = DecalMaterial;
     TelegraphRadius = Radius;
     TelegraphSafeZoneAngle = SafeZoneAngleDegrees;
+    TelegraphInnerSafeRadius = InnerSafeRadius;
     TelegraphFaceTarget = FaceTarget;
     TelegraphTurnSpeed = TurnSpeed;
     UpdateAttackTelegraph(0.0f);
@@ -698,7 +699,7 @@ void ARLCharacter::UpdateAttackTelegraph(float DeltaTime)
 
             if (TelegraphShape == ETelegraphShape::Sector)
             {
-                ShowSectorAttackIndicator(TelegraphRadius, TelegraphSafeZoneAngle, TelegraphMaterial);
+                ShowSectorAttackIndicator(TelegraphRadius, TelegraphSafeZoneAngle, TelegraphMaterial, TelegraphInnerSafeRadius);
             }
             else
             {
@@ -1028,7 +1029,7 @@ void ARLCharacter::CreateLocationHitbox(FVector TargetLocation, float Radius, co
 // SafeZoneAngleDegrees도 폭"의 안전지대 쐐기 안에 있는 대상만 걸러내고 나머지 전부에게 한 번에
 // 데미지를 줍니다. 예: SafeZoneAngleDegrees=90 → 정면 기준 좌우 135도씩(총 270도)이 위험지대이고,
 // 바로 뒤 90도(좌우 45도씩)만 안전지대입니다.
-void ARLCharacter::CreateSectorHitbox(float Radius, float SafeZoneAngleDegrees, const FRLDamageData& DamageData, bool bDrawDebug)
+void ARLCharacter::CreateSectorHitbox(float Radius, float SafeZoneAngleDegrees, const FRLDamageData& DamageData, bool bDrawDebug, float InnerSafeRadius)
 {
     const FVector Origin = GetActorLocation();
     const FVector ForwardDir = GetActorForwardVector().GetSafeNormal2D();
@@ -1071,6 +1072,12 @@ void ARLCharacter::CreateSectorHitbox(float Radius, float SafeZoneAngleDegrees, 
         {
             AActor* HitActor = Hit.GetActor();
             if (!HitActor || DamagedActors.Contains(HitActor))
+            {
+                continue;
+            }
+
+            // ★ 안쪽 안전 반경(거리 기준 안전지대) 안이면 제외. 예: Subjugation 균열 강화판(보스 가까이가 안전)
+            if (InnerSafeRadius > 0.0f && FVector::Dist2D(HitActor->GetActorLocation(), Origin) < InnerSafeRadius)
             {
                 continue;
             }
