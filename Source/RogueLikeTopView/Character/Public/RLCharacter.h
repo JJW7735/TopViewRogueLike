@@ -209,6 +209,10 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Interaction")
 	void TryInteract();
 
+	// TryInteract와 같은 우선순위(상자 > 포탈)로 표시할 안내 문구를 골라 OnInteractPromptChanged로 알림
+	UFUNCTION(BlueprintCallable, Category = "Interaction")
+	void RefreshInteractPrompt();
+
 	UFUNCTION(BlueprintCallable, Exec, Category = "Reward")
 	void TestOpenRewardUI();
 
@@ -226,7 +230,7 @@ public:
 	void TestAddExp(float Amount = 100.0f);
 
 	UFUNCTION(BlueprintImplementableEvent, Category = "Interaction")
-	void OnNearbyPortalChanged(bool bInRange);
+	void OnInteractPromptChanged(bool bVisible, const FText& Prompt);
 
 protected:
 	virtual void BeginPlay() override;
