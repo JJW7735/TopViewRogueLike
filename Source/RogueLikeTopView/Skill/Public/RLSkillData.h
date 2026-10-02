@@ -76,6 +76,11 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Skill|Combat")
 	float APScaling = 0.0f; // 마법 데미지 계수
 
+	// ★ 보스 균열 강화판 패턴 중 올바른 타이밍/구역에서 맞히면 영혼의 균열(Soul Crack) 스택을 쌓는 스킬인지.
+	// CastType과 무관한 독립 플래그라 기존 스킬 아무거나 지정 가능합니다.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Skill|Combat")
+	bool bCanTriggerSoulCrack = false;
+
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Skill|Hitbox")
 	FVector HitboxExtent = FVector(120.f, 80.f, 60.f);
 

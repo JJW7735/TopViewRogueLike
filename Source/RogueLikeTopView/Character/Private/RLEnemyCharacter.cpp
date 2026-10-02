@@ -13,6 +13,9 @@
 #include "GameFramework/DamageType.h"
 #include "TimerManager.h"
 #include "Kismet/GameplayStatics.h"
+#include "Animation/AnimInstance.h"
+#include "Animation/AnimMontage.h"
+#include "GameFramework/CharacterMovementComponent.h"
 
 ARLEnemyCharacter::ARLEnemyCharacter()
 {
@@ -117,6 +120,12 @@ void ARLEnemyCharacter::HandleDeath()
 	Super::HandleDeath();
 
 	bIsEnraged = false;
+
+	// 균열 관련 타이머가 사망 후 BT를 재시작하지 않도록 정리
+	EndSoulCrackPattern();
+	bSoulCrackAIStopped = false;
+	GetWorldTimerManager().ClearTimer(SoulCrackAITimerHandle);
+	GetWorldTimerManager().ClearTimer(SoulShatterDebuffTimerHandle);
 
 	if (AAIController* AICon = Cast<AAIController>(GetController()))
 	{
@@ -232,6 +241,321 @@ void ARLEnemyCharacter::HandleDeath()
 			DropActor->LaunchDrop(RandomDir * FMath::FRandRange(100.f, 200.f) + FVector(0.f, 0.f, FMath::FRandRange(280.f, 380.f)));
 		}
 	}
+}
+
+// ==========================================
+// ★ 영혼의 균열 (Soul Crack)
+// ==========================================
+
+void ARLEnemyCharacter::Tick(float DeltaTime)
+{
+	Super::Tick(DeltaTime);
+
+	// ★ 균열 경직 중인데 BT가 다시 돌고 있으면(다른 경로에서 재시작된 경우) 원인 로그를 남기고 다시 멈춤
+	if (bSoulCrackAIStopped)
+	{
+		if (AAIController* AICon = Cast<AAIController>(GetController()))
+		{
+			UBrainComponent* Brain = AICon->GetBrainComponent();
+			if (Brain && Brain->IsRunning())
+			{
+				UE_LOG(LogTemp, Warning, TEXT("[SoulCrack] %s: 경직 중(%.1f초 남음)인데 BT가 다시 실행 중 → 재정지"),
+					*GetName(), SoulCrackAIStopEndTime - GetWorld()->GetTimeSeconds());
+				Brain->StopLogic(TEXT("SoulCrack"));
+				AICon->StopMovement();
+			}
+		}
+	}
+
+	// 강화판 몽타주가 끝났거나 끊겼으면 자동 정리 (녹색 아우라 OFF)
+	if (SoulCrackMontage)
+	{
+		UAnimInstance* AnimInstance = GetMesh() ? GetMesh()->GetAnimInstance() : nullptr;
+		if (!AnimInstance || !AnimInstance->Montage_IsPlaying(SoulCrackMontage))
+		{
+			EndSoulCrackPattern();
+		}
+	}
+}
+
+bool ARLEnemyCharacter::BeginSoulCrackPattern(const FRLMonsterPatternData& Pattern, FName HitNotifyName)
+{
+	if (!Pattern.bSoulCrackVariant || !Pattern.AttackMontage || (HealthComp && HealthComp->bIsDead))
+	{
+		return false;
+	}
+
+	// 텔레그래프와 같은 노티파이 스캔을 재사용해서 각 히트의 [히트 - LeadTime, 히트) 구간을 구하고, 그중 하나만 균열 구간으로 씀
+	const TArray<FVector2D> Windows = ComputeTelegraphWindows(Pattern.AttackMontage, HitNotifyName, Pattern.SoulCrackWindowLeadTime);
+	if (Windows.Num() == 0)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[SoulCrack] %s: 몽타주 %s에서 히트 노티파이 '%s'를 찾지 못해 균열 구간을 열 수 없습니다."),
+			*GetName(), *Pattern.AttackMontage->GetName(), *HitNotifyName.ToString());
+		return false;
+	}
+
+	EndSoulCrackPattern();
+
+	const int32 Index = Pattern.SoulCrackHitIndex < 0 ? Windows.Num() - 1 : FMath::Min(Pattern.SoulCrackHitIndex, Windows.Num() - 1);
+	SoulCrackMontage = Pattern.AttackMontage;
+	SoulCrackWindow = Windows[Index];
+	SoulCrackFrontAngle = Pattern.SoulCrackFrontAngle;
+	SoulCrackBackAngle = Pattern.SoulCrackBackAngle;
+	bSoulCrackConsumed = false;
+
+	OnSoulCrackVariantStarted();
+	return true;
+}
+
+void ARLEnemyCharacter::EndSoulCrackPattern()
+{
+	if (!SoulCrackMontage)
+	{
+		return;
+	}
+
+	SoulCrackMontage = nullptr;
+	SoulCrackWindow = FVector2D::ZeroVector;
+	bSoulCrackConsumed = false;
+
+	OnSoulCrackVariantEnded();
+}
+
+bool ARLEnemyCharacter::IsSoulCrackWindowOpen() const
+{
+	if (!SoulCrackMontage || bSoulCrackConsumed)
+	{
+		return false;
+	}
+
+	const UAnimInstance* AnimInstance = GetMesh() ? GetMesh()->GetAnimInstance() : nullptr;
+	if (!AnimInstance || !AnimInstance->Montage_IsPlaying(SoulCrackMontage))
+	{
+		return false;
+	}
+
+	const float Position = AnimInstance->Montage_GetPosition(SoulCrackMontage);
+	return Position >= SoulCrackWindow.X && Position < SoulCrackWindow.Y;
+}
+
+// ★ CreateSectorHitbox와 같은 각도 계산 (보스 forward vs 공격자 방향). 0도 = 정면, 180도 = 정후방
+bool ARLEnemyCharacter::IsInSoulCrackZone(const AActor* Attacker) const
+{
+	if (!Attacker)
+	{
+		return false;
+	}
+
+	const FVector ToAttacker2D = (Attacker->GetActorLocation() - GetActorLocation()).GetSafeNormal2D();
+	if (ToAttacker2D.IsNearlyZero())
+	{
+		return true;
+	}
+
+	const FVector ForwardDir = GetActorForwardVector().GetSafeNormal2D();
+	const float AngleFromForward = FMath::RadiansToDegrees(FMath::Acos(FMath::Clamp(FVector::DotProduct(ForwardDir, ToAttacker2D), -1.0f, 1.0f)));
+
+	const bool bInFront = SoulCrackFrontAngle > 0.0f && AngleFromForward <= SoulCrackFrontAngle * 0.5f;
+	const bool bInBack = SoulCrackBackAngle > 0.0f && (180.0f - AngleFromForward) <= SoulCrackBackAngle * 0.5f;
+	return bInFront || bInBack;
+}
+
+void ARLEnemyCharacter::ReceiveCustomDamage(const FRLDamageData& DamageData, const FHitResult& HitInfo)
+{
+	const bool bWasDead = HealthComp && HealthComp->bIsDead;
+
+	Super::ReceiveCustomDamage(DamageData, HitInfo);
+
+	if (bWasDead || !DamageData.bCanTriggerSoulCrack || (HealthComp && HealthComp->bIsDead))
+	{
+		return;
+	}
+
+	// Super에서 무시된 피격(같은 팀 / 무적)은 균열도 무시
+	if (const ARLCharacter* CauserCharacter = Cast<ARLCharacter>(DamageData.DamageCauser))
+	{
+		if (CauserCharacter->TeamID == TeamID)
+		{
+			return;
+		}
+	}
+	if (bIsInvulnerable && !DamageData.bIgnoreInvincibility)
+	{
+		return;
+	}
+
+	if (IsSoulCrackWindowOpen() && IsInSoulCrackZone(DamageData.DamageCauser))
+	{
+		TriggerSoulCrackHit();
+	}
+}
+
+void ARLEnemyCharacter::TriggerSoulCrackHit()
+{
+	if (HealthComp && HealthComp->bIsDead)
+	{
+		return;
+	}
+
+	EndSoulCrackPattern();
+	StopAttackTelegraph();
+
+	if (!bHasShatteredThisFight)
+	{
+		SoulCrackStackCount = FMath::Min(SoulCrackStackCount + 1, SoulCrackMaxStack);
+		OnSoulCrackStackChanged.Broadcast(SoulCrackStackCount, SoulCrackMaxStack);
+	}
+
+	if (GEngine)
+	{
+		GEngine->AddOnScreenDebugMessage(-1, 2.5f, FColor::Green,
+			FString::Printf(TEXT("💚 [영혼의 균열] %s 균열 성공! (%d/%d)"), *GetName(), SoulCrackStackCount, SoulCrackMaxStack));
+	}
+
+	OnSoulCrackHit(SoulCrackStackCount);
+
+	if (!bHasShatteredThisFight && SoulCrackStackCount >= SoulCrackMaxStack)
+	{
+		TriggerSoulCrackShatter();
+		return;
+	}
+
+	// ★ CanBeStaggered()(보스=false)를 거치지 않는 강제 경직: 진행 중인 공격 몽타주를 끊고(Notify_Hit 발동 안 함) 피격 모션
+	if (UAnimInstance* AnimInstance = GetMesh() ? GetMesh()->GetAnimInstance() : nullptr)
+	{
+		AnimInstance->StopAllMontages(0.15f);
+	}
+	const float HitPlayLength = SoulCrackHitMontage ? PlayAnimMontage(SoulCrackHitMontage) : 0.0f;
+	UE_LOG(LogTemp, Warning, TEXT("[SoulCrack] Hit %s: Stack=%d/%d Montage=%s PlayLength=%.2f"),
+		*GetName(), SoulCrackStackCount, SoulCrackMaxStack, *GetNameSafe(SoulCrackHitMontage), HitPlayLength);
+
+	PauseAIForSoulCrack(SoulCrackStaggerDuration);
+}
+
+void ARLEnemyCharacter::TriggerSoulCrackShatter()
+{
+	// 한 전투 1회 한정
+	if (bHasShatteredThisFight || (HealthComp && HealthComp->bIsDead))
+	{
+		return;
+	}
+
+	bHasShatteredThisFight = true;
+	EndSoulCrackPattern();
+	StopAttackTelegraph();
+
+	if (UAnimInstance* AnimInstance = GetMesh() ? GetMesh()->GetAnimInstance() : nullptr)
+	{
+		AnimInstance->StopAllMontages(0.15f);
+	}
+	const float ShatterPlayLength = SoulShatterMontage ? PlayAnimMontage(SoulShatterMontage) : 0.0f;
+	UE_LOG(LogTemp, Warning, TEXT("[SoulCrack] Shatter %s: Montage=%s PlayLength=%.2f (0이면 재생 실패)"),
+		*GetName(), *GetNameSafe(SoulShatterMontage), ShatterPlayLength);
+
+	PauseAIForSoulCrack(SoulShatterStunDuration);
+
+	// 피해감소 디버프: 기존 StatComp->DamageReduction을 저장해두고 덮어쓴 뒤, 지속 시간 후 복구
+	if (StatComp && !bSoulShatterDebuffActive)
+	{
+		SavedDamageReduction = StatComp->DamageReduction;
+		StatComp->DamageReduction = SoulShatterDamageReduction;
+		bSoulShatterDebuffActive = true;
+
+		if (SoulShatterDebuffDuration > 0.0f)
+		{
+			GetWorldTimerManager().SetTimer(SoulShatterDebuffTimerHandle, this, &ARLEnemyCharacter::EndSoulShatterDebuff, SoulShatterDebuffDuration, false);
+		}
+		else
+		{
+			EndSoulShatterDebuff();
+		}
+	}
+
+	if (GEngine)
+	{
+		GEngine->AddOnScreenDebugMessage(-1, 4.0f, FColor::Emerald,
+			FString::Printf(TEXT("💥 [영혼의 균열] %s 보호막 붕괴! %.1f초 경직, %.1f초간 피해감소 %.0f%% → %.0f%%"),
+				*GetName(), SoulShatterStunDuration, SoulShatterDebuffDuration, SavedDamageReduction, SoulShatterDamageReduction));
+	}
+
+	OnSoulCrackShattered();
+}
+
+void ARLEnemyCharacter::PauseAIForSoulCrack(float Duration)
+{
+	if (UCharacterMovementComponent* MoveComp = GetCharacterMovement())
+	{
+		MoveComp->StopMovementImmediately();
+	}
+
+	// ★ BT를 완전히 멈췄다가 RestartLogic으로 루트부터 다시 시작 — PauseLogic은 진행 중이던 BTT_Attack의
+	// 몽타주 대기 콜백과 꼬일 수 있어서, 사망 처리(HandleDeath)와 같은 StopLogic 방식을 씁니다.
+	AAIController* AICon = Cast<AAIController>(GetController());
+	UBrainComponent* Brain = AICon ? AICon->GetBrainComponent() : nullptr;
+	if (AICon)
+	{
+		AICon->StopMovement();
+	}
+	if (Brain)
+	{
+		const bool bWasRunning = Brain->IsRunning();
+		Brain->StopLogic(TEXT("SoulCrack"));
+		UE_LOG(LogTemp, Warning, TEXT("[SoulCrack] PauseAI %s: Controller=%s Brain=%s Running %d -> %d, Duration=%.1f"),
+			*GetName(), *GetNameSafe(AICon), *GetNameSafe(Brain), bWasRunning, Brain->IsRunning(), Duration);
+	}
+	else
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[SoulCrack] PauseAI %s: BrainComponent 없음 (Controller=%s)"), *GetName(), *GetNameSafe(GetController()));
+	}
+
+	bSoulCrackAIStopped = true;
+	SoulCrackAIStopEndTime = GetWorld()->GetTimeSeconds() + Duration;
+
+	GetWorldTimerManager().ClearTimer(SoulCrackAITimerHandle);
+	if (Duration > 0.0f)
+	{
+		GetWorldTimerManager().SetTimer(SoulCrackAITimerHandle, this, &ARLEnemyCharacter::ResumeAIAfterSoulCrack, Duration, false);
+	}
+	else
+	{
+		ResumeAIAfterSoulCrack();
+	}
+}
+
+void ARLEnemyCharacter::ResumeAIAfterSoulCrack()
+{
+	bSoulCrackAIStopped = false;
+
+	if (HealthComp && HealthComp->bIsDead)
+	{
+		return;
+	}
+
+	UE_LOG(LogTemp, Warning, TEXT("[SoulCrack] ResumeAI %s"), *GetName());
+
+	if (AAIController* AICon = Cast<AAIController>(GetController()))
+	{
+		if (UBrainComponent* Brain = AICon->GetBrainComponent())
+		{
+			Brain->RestartLogic();
+		}
+	}
+}
+
+void ARLEnemyCharacter::EndSoulShatterDebuff()
+{
+	if (!bSoulShatterDebuffActive)
+	{
+		return;
+	}
+
+	if (StatComp)
+	{
+		StatComp->DamageReduction = SavedDamageReduction;
+	}
+	bSoulShatterDebuffActive = false;
+
+	OnSoulShatterDebuffEnded();
 }
 
 void ARLEnemyCharacter::StartDeathFade()

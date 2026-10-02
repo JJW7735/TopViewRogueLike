@@ -23,6 +23,7 @@ class ARLItemDrop;
 class URLItemDataAsset;
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnEnemyDeathEvent, ARLEnemyCharacter*, DeadEnemy);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnSoulCrackStackChanged, int32, NewStack, int32, MaxStack);
 
 UCLASS()
 class ROGUELIKETOPVIEW_API ARLEnemyCharacter : public ARLCharacter
@@ -158,6 +159,82 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Enemy|Death", meta = (ClampMin = "0.0", EditCondition = "bUseDeathFade"))
 	float DeathSinkDistance = 120.0f;
 
+	// ==========================================
+	// ★ 영혼의 균열 (Soul Crack) — 보스 카운터 기믹
+	// ==========================================
+	// 흐름: BTT_Attack이 몽타주 재생 직후 BeginSoulCrackPattern(패턴)을 호출 → 패턴이 강화판(bSoulCrackVariant)이면
+	// 녹색 신호 훅(OnSoulCrackVariantStarted) + 균열 판정 구간이 열림 → 그 구간 동안 플레이어가
+	// bCanTriggerSoulCrack 스킬로 올바른 각도 구역에서 맞히면 ReceiveCustomDamage에서 TriggerSoulCrackHit
+	// (CanBeStaggered 무시 강제 경직 + 스택 +1) → SoulCrackMaxStack 도달 시 TriggerSoulCrackShatter
+	// (큰 경직 + 피해감소 디버프, 한 전투 1회 한정).
+
+	// 스택 변경 알림 (UI 아이콘 갱신용)
+	UPROPERTY(BlueprintAssignable, Category = "Enemy|SoulCrack")
+	FOnSoulCrackStackChanged OnSoulCrackStackChanged;
+
+	// 대균열(Shatter)까지 필요한 스택 수
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Enemy|SoulCrack", meta = (ClampMin = "1"))
+	int32 SoulCrackMaxStack = 3;
+
+	// 균열 성공 시 짧은 경직 몽타주 (비우면 몽타주 없이 공격만 끊고 AI만 잠시 멈춤)
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Enemy|SoulCrack")
+	TObjectPtr<UAnimMontage> SoulCrackHitMontage = nullptr;
+
+	// 균열 성공 시 AI(BT)를 멈춰두는 시간(초)
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Enemy|SoulCrack", meta = (ClampMin = "0.0"))
+	float SoulCrackStaggerDuration = 1.0f;
+
+	// 대균열 시 큰 경직(그로기) 몽타주 (예: AM_Boss_Stun)
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Enemy|SoulCrack")
+	TObjectPtr<UAnimMontage> SoulShatterMontage = nullptr;
+
+	// 대균열 시 AI(BT)를 멈춰두는 시간(초) = 프리딜 타임
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Enemy|SoulCrack", meta = (ClampMin = "0.0"))
+	float SoulShatterStunDuration = 5.0f;
+
+	// 대균열 디버프 동안 StatComp->DamageReduction을 이 값으로 덮어씀 (기본 0 = 피해감소 제거)
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Enemy|SoulCrack", meta = (ClampMin = "0.0", ClampMax = "80.0"))
+	float SoulShatterDamageReduction = 0.0f;
+
+	// 대균열 디버프 지속 시간(초). 끝나면 원래 DamageReduction으로 복구
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Enemy|SoulCrack", meta = (ClampMin = "0.0"))
+	float SoulShatterDebuffDuration = 8.0f;
+
+	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = "Enemy|SoulCrack")
+	int32 SoulCrackStackCount = 0;
+
+	// 이번 전투에서 이미 대균열이 터졌는지 (1회 한정). 터진 뒤에도 균열 성공 시 짧은 경직은 걸리지만 스택은 더 안 쌓임
+	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = "Enemy|SoulCrack")
+	bool bHasShatteredThisFight = false;
+
+	// ★ BTT_Attack에서 공격 몽타주 재생 직후 호출. Pattern.bSoulCrackVariant가 false면 아무것도 안 하고 false 반환
+	// (그래서 모든 패턴에 대해 무조건 호출해도 됨). HitNotifyName은 텔레그래프에 넘기는 것과 같은 히트 노티파이 이름.
+	UFUNCTION(BlueprintCallable, Category = "Enemy|SoulCrack")
+	bool BeginSoulCrackPattern(const FRLMonsterPatternData& Pattern, FName HitNotifyName = FName("Notify_Hit"));
+
+	// 강화판 상태 정리 (몽타주가 끝나면 Tick에서 자동 호출되므로 보통 직접 부를 필요 없음)
+	UFUNCTION(BlueprintCallable, Category = "Enemy|SoulCrack")
+	void EndSoulCrackPattern();
+
+	// 지금 균열 판정 구간이 열려있는지 (강화판 진행 중 + 히트 직전 구간 + 이번 패턴에서 아직 균열 안 남)
+	UFUNCTION(BlueprintPure, Category = "Enemy|SoulCrack")
+	bool IsSoulCrackWindowOpen() const;
+
+	// Attacker 위치가 현재 강화판의 정면/후방 균열 구역 안인지
+	UFUNCTION(BlueprintPure, Category = "Enemy|SoulCrack")
+	bool IsInSoulCrackZone(const AActor* Attacker) const;
+
+	// 균열 성공 처리 (CanBeStaggered 무시 강제 경직 + 스택 +1). 테스트용으로 BP/콘솔에서 직접 호출 가능
+	UFUNCTION(BlueprintCallable, Category = "Enemy|SoulCrack")
+	void TriggerSoulCrackHit();
+
+	// 대균열 처리 (큰 경직 + 피해감소 디버프). 보통 TriggerSoulCrackHit이 스택이 차면 자동 호출
+	UFUNCTION(BlueprintCallable, Category = "Enemy|SoulCrack")
+	void TriggerSoulCrackShatter();
+
+	virtual void ReceiveCustomDamage(const FRLDamageData& DamageData, const FHitResult& HitInfo) override;
+	virtual void Tick(float DeltaTime) override;
+
 protected:
 	virtual void BeginPlay() override;
 
@@ -180,7 +257,47 @@ protected:
 	UFUNCTION(BlueprintImplementableEvent, Category = "Enemy|Death")
 	void OnDeathFadeStarted();
 
+	// ★ 강화판 패턴 시작 훅. BP에서 녹색 아우라 Niagara를 켜세요.
+	UFUNCTION(BlueprintImplementableEvent, Category = "Enemy|SoulCrack")
+	void OnSoulCrackVariantStarted();
+
+	// ★ 강화판 패턴 종료 훅 (몽타주 종료/균열 성공/사망). BP에서 녹색 아우라를 끄세요.
+	UFUNCTION(BlueprintImplementableEvent, Category = "Enemy|SoulCrack")
+	void OnSoulCrackVariantEnded();
+
+	// ★ 균열 성공 훅 (균열 VFX/사운드/카메라 셰이크)
+	UFUNCTION(BlueprintImplementableEvent, Category = "Enemy|SoulCrack")
+	void OnSoulCrackHit(int32 NewStack);
+
+	// ★ 대균열 훅 (보호막 깨지는 VFX/사운드)
+	UFUNCTION(BlueprintImplementableEvent, Category = "Enemy|SoulCrack")
+	void OnSoulCrackShattered();
+
+	// ★ 대균열 디버프 종료 훅
+	UFUNCTION(BlueprintImplementableEvent, Category = "Enemy|SoulCrack")
+	void OnSoulShatterDebuffEnded();
+
 private:
+	// 경직 동안 BT를 멈췄다가 Duration 뒤 재시작
+	void PauseAIForSoulCrack(float Duration);
+	void ResumeAIAfterSoulCrack();
+	void EndSoulShatterDebuff();
+
+	UPROPERTY()
+	TObjectPtr<UAnimMontage> SoulCrackMontage = nullptr; // 현재 강화판 공격 몽타주
+	FVector2D SoulCrackWindow = FVector2D::ZeroVector;   // 몽타주 시간 기준 [열림, 닫힘)
+	float SoulCrackFrontAngle = 0.0f;
+	float SoulCrackBackAngle = 0.0f;
+	bool bSoulCrackConsumed = false;                     // 이번 강화판에서 이미 균열 성공했는지
+
+	bool bSoulCrackAIStopped = false;                    // 균열 경직으로 BT를 멈춰둔 상태인지 (Tick에서 재가동 감시)
+	float SoulCrackAIStopEndTime = 0.0f;
+	bool bSoulShatterDebuffActive = false;
+	float SavedDamageReduction = 0.0f;
+
+	FTimerHandle SoulCrackAITimerHandle;
+	FTimerHandle SoulShatterDebuffTimerHandle;
+
 	void StartDeathFade();
 	void TickDeathFade();
 

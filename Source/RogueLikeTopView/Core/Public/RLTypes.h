@@ -65,6 +65,13 @@ struct FRLDamageData
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Damage", meta = (ClampMin = "0.0", ClampMax = "1.0"))
 	float LifestealRatio = 0.0f;
 
+	// ★ 영혼의 균열(Soul Crack) 유발 가능 여부. URLSkillComponent::CalculateFinalDamage가 스킬의
+	// URLSkillData::bCanTriggerSoulCrack 값을 여기로 복사합니다. 데미지 구조체에 실어 보내기 때문에
+	// 근접 박스/투사체/장판(GroundAreaEffect) 어떤 경로로 맞혀도 ARLEnemyCharacter::ReceiveCustomDamage에서
+	// 똑같이 균열 판정을 받습니다.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Damage")
+	bool bCanTriggerSoulCrack = false;
+
 	UPROPERTY(BlueprintReadOnly, Category = "Damage")
 	AActor* DamageCauser = nullptr;
 };
@@ -131,6 +138,13 @@ struct FRLMonsterPatternData
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Pattern|Sector", meta = (EditCondition = "AttackShape == ERLAttackShape::Sector", ClampMin = "0.0", ClampMax = "359.0"))
 	float SectorSafeZoneAngle = 90.0f;
 
+	// ★ Sector 판정 전용: 보스 중심 "안쪽" 안전 반경(cm). 0보다 크면 이 반경 안의 대상은 맞지 않습니다
+	// (SectorSafeZoneAngle의 각도 안전지대와 별개로 거리 기준 안전지대). SectorSafeZoneAngle=0과 같이 쓰면
+	// "보스 가까이가 안전, 바깥 전체가 위험"인 반전 원형 판정이 됩니다 (예: Subjugation 균열 강화판).
+	// 데칼 머티리얼에 "InnerSafeRatio" Scalar Parameter(=이 값/반지름, 0~1)가 있으면 안쪽을 비워 그릴 수 있습니다.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Pattern|Sector", meta = (EditCondition = "AttackShape == ERLAttackShape::Sector", ClampMin = "0.0"))
+	float SectorInnerSafeRadius = 0.0f;
+
 	// ★ 원거리(투사체) 패턴 여부. true면 이 패턴은 근접 히트박스 대신 투사체를 발사합니다.
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Pattern|Projectile")
 	bool bIsRangedAttack = false;
@@ -164,4 +178,32 @@ struct FRLMonsterPatternData
 	// 보스 중심 소환 반경 (이 범위 안의 무작위 지점에 흩뿌려 소환)
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Pattern|Summon", meta = (EditCondition = "bSummonsMinions", ClampMin = "0.0"))
 	float SummonRadius = 300.0f;
+
+	// ==========================================
+	// ★ 영혼의 균열(Soul Crack) 강화판 설정
+	// ==========================================
+	// 강화판은 원본 패턴과 별개의 PatternID + 낮은 SelectionWeight를 가진 새 데이터 행으로 추가합니다
+	// (쿨타임이 PatternID 기준이라 원본과 독립적으로 돎). BTT_Attack이 몽타주 재생 직후
+	// ARLEnemyCharacter::BeginSoulCrackPattern(이 패턴)을 호출하면, bSoulCrackVariant가 true인 행만
+	// 녹색 신호(OnSoulCrackVariantStarted) + 균열 판정 구간이 열립니다. false인 행은 아무 일도 안 합니다.
+
+	// 이 패턴이 균열 강화판인지 여부
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Pattern|SoulCrack")
+	bool bSoulCrackVariant = false;
+
+	// 균열 판정 구간을 몇 번째 히트 노티파이 앞에 열지 (0부터, -1 = 마지막 히트). 예: SwingCombo 강화판의 3타 = 2 또는 -1
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Pattern|SoulCrack", meta = (EditCondition = "bSoulCrackVariant"))
+	int32 SoulCrackHitIndex = -1;
+
+	// 균열 판정 구간 길이(초). [히트 - 이 값, 히트) 동안 균열 스킬이 맞으면 성공 (차징/선딜레이 구간)
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Pattern|SoulCrack", meta = (EditCondition = "bSoulCrackVariant", ClampMin = "0.0"))
+	float SoulCrackWindowLeadTime = 1.5f;
+
+	// 균열 성공 가능한 "정면" 구역의 전체 폭(도). 예: 90 = 정면 기준 좌우 45도씩. 0이면 정면 불가
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Pattern|SoulCrack", meta = (EditCondition = "bSoulCrackVariant", ClampMin = "0.0", ClampMax = "360.0"))
+	float SoulCrackFrontAngle = 90.0f;
+
+	// 균열 성공 가능한 "후방" 구역의 전체 폭(도). 0이면 후방 불가 (예: BigSwing 강화판만 정면+후방 허용)
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Pattern|SoulCrack", meta = (EditCondition = "bSoulCrackVariant", ClampMin = "0.0", ClampMax = "360.0"))
+	float SoulCrackBackAngle = 0.0f;
 };

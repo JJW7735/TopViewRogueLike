@@ -645,6 +645,7 @@ FRLDamageData URLSkillComponent::CalculateFinalDamage(URLSkillData* Skill)
 {
 	FRLDamageData FinalDamage = Skill->DamageData;
 	FinalDamage.DamageCauser = OwnerCharacter;
+	FinalDamage.bCanTriggerSoulCrack |= Skill->bCanTriggerSoulCrack;
 
 	if (OwnerCharacter && OwnerCharacter->GetStatComponent())
 	{

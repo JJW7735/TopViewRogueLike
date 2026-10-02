@@ -54,7 +54,7 @@ public:
     // 실제 부채꼴(안전지대 쐐기 제외) 모양 자체는 머티리얼에서 UV 각도를 계산해서 마스킹합니다 —
     // 여기서는 데칼을 원형 풋프린트로 깔아두고, 머티리얼이 "SafeZoneAngleDeg"라는 이름의
     // Scalar Parameter를 갖고 있으면 그 값을 넘겨줍니다(없는 머티리얼이면 그냥 무시됨).
-    void SetupSectorIndicator(float Radius, float SafeZoneAngleDegrees, UMaterialInterface* Material = nullptr);
+    void SetupSectorIndicator(float Radius, float SafeZoneAngleDegrees, UMaterialInterface* Material = nullptr, float InnerSafeRadius = 0.0f);
 
     // ★ 부채꼴 데칼을 소유자의 현재 위치 + 정면 방향(YawDegrees)에 맞춰 재배치합니다.
     // (ForwardOffset이 없는 이유: Box와 달리 Sector는 소유자 위치가 곧 부채꼴의 중심입니다)
