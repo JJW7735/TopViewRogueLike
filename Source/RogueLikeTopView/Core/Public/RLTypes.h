@@ -152,6 +152,12 @@ struct FRLMonsterPatternData
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Pattern")
 	TArray<float> HitRangeScales;
 
+	// ★ Box 판정 전용: 히트별 "좌우 폭"에만 추가로 곱하는 배율 (HitRangeScales 위에 한 번 더 곱함).
+	// 예: HitRangeScales [1.0, 1.3, 1.6] + HitWidthScales [1.0, 1.0, 1.8] → 3타 폭 = 1.6 × 1.8배.
+	// 비워두면 1.0. 배열보다 히트가 많으면 마지막 값을 계속 씁니다.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Pattern")
+	TArray<float> HitWidthScales;
+
 	// ★ 공격 중 전진 속도(cm/s). 0보다 크면 몽타주가 재생되는 동안 보스가 정면 방향으로 이 속도로 천천히
 	// 전진합니다(ARLEnemyCharacter::StartAttackChase). 정면 방향은 텔레그래프 회전 로직(히트 사이엔 대상 추적,
 	// 데칼이 뜨면 고정)을 그대로 따르므로 "따라오면서 휘두르는" 연출이 됩니다. 0 = 제자리 공격(기존 동작).

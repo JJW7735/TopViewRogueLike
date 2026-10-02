@@ -169,6 +169,10 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Combat")
 	void SetAttackHitScales(const TArray<float>& Scales);
 
+	// ★ Box 판정의 히트별 좌우 폭 추가 배율(FRLMonsterPatternData::HitWidthScales). SetAttackHitScales와 같은 순번을 씁니다.
+	UFUNCTION(BlueprintCallable, Category = "Combat")
+	void SetAttackHitWidthScales(const TArray<float>& WidthScales);
+
 	UFUNCTION(BlueprintCallable, Category = "Action")
 	void Dodge(FVector CursorLocation);
 
@@ -375,9 +379,11 @@ protected:
 	// ★ SetAttackHitScales 상태. Consume은 Create*Hitbox에서 호출(다음 히트 배율을 꺼내고 카운터 +1),
 	// Get은 텔레그래프에서 호출(i번째 히트 배율 조회, 카운터 변경 없음)
 	TArray<float> AttackHitScales;
+	TArray<float> AttackHitWidthScales;
 	int32 AttackHitCounter = 0;
 	float ConsumeAttackHitScale();
 	float GetAttackHitScale(int32 HitIndex) const;
+	float GetAttackHitWidthScale(int32 HitIndex) const;
 
 public:
 	virtual void Tick(float DeltaTime) override;

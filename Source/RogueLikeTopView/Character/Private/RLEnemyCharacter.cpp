@@ -17,6 +17,7 @@
 #include "Animation/AnimMontage.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "RLDecalIndicator.h"
+#include "Materials/MaterialInterface.h"
 
 ARLEnemyCharacter::ARLEnemyCharacter()
 {
@@ -280,6 +281,115 @@ void ARLEnemyCharacter::Tick(float DeltaTime)
 			EndSoulCrackPattern();
 		}
 	}
+
+	// 강화판 진행 중: 카운터 방향 안내 데칼이 보스를 따라가고, 균열 구간 동안 몸 발광
+	if (SoulCrackMontage)
+	{
+		UpdateSoulCrackZones();
+		SetSoulCrackWindowVisual(IsSoulCrackWindowOpen());
+	}
+}
+
+// ==========================================
+// ★ 카운터 방향 안내 / 몸 발광
+// ==========================================
+
+ARLDecalIndicator* ARLEnemyCharacter::SpawnSoulCrackZoneIndicator()
+{
+	FActorSpawnParameters Params;
+	Params.Owner = this;
+	Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+	return GetWorld()->SpawnActor<ARLDecalIndicator>(ARLDecalIndicator::StaticClass(), GetActorLocation(), FRotator::ZeroRotator, Params);
+}
+
+// ★ 공격 예고와 같은 부채꼴 셰이더(M_Sector_Red 계열)를 재사용. 셰이더는 "뒤쪽 SafeZoneAngle만큼 잘라낸 부채꼴"을
+// 그리므로, SafeZone = 360 - 구역 각도로 넘기면 정면 쪽 구역 각도만큼의 쐐기만 남습니다. 후방 구역은 같은 쐐기를 180도 돌려 표시.
+void ARLEnemyCharacter::ShowSoulCrackZones()
+{
+	if (!SoulCrackZoneMaterial)
+	{
+		SoulCrackZoneMaterial = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/Effect/Material/MI_SoulCrack_Zone.MI_SoulCrack_Zone"));
+	}
+
+	auto SetupZone = [this](TObjectPtr<ARLDecalIndicator>& Indicator, float ZoneAngle)
+	{
+		if (ZoneAngle <= 0.0f)
+		{
+			if (Indicator)
+			{
+				Indicator->SetIndicatorVisibility(false);
+			}
+			return;
+		}
+		if (!Indicator)
+		{
+			Indicator = SpawnSoulCrackZoneIndicator();
+		}
+		if (Indicator)
+		{
+			Indicator->SetupSectorIndicator(SoulCrackZoneRadius, FMath::Clamp(360.0f - ZoneAngle, 0.0f, 359.0f), SoulCrackZoneMaterial);
+			Indicator->SetIndicatorVisibility(true);
+		}
+	};
+
+	SetupZone(SoulCrackZoneFront, SoulCrackFrontAngle);
+	SetupZone(SoulCrackZoneBack, SoulCrackBackAngle);
+	UpdateSoulCrackZones();
+}
+
+void ARLEnemyCharacter::HideSoulCrackZones()
+{
+	if (SoulCrackZoneFront)
+	{
+		SoulCrackZoneFront->SetIndicatorVisibility(false);
+	}
+	if (SoulCrackZoneBack)
+	{
+		SoulCrackZoneBack->SetIndicatorVisibility(false);
+	}
+}
+
+void ARLEnemyCharacter::UpdateSoulCrackZones()
+{
+	const FVector Location = GetActorLocation();
+	const float Yaw = GetActorRotation().Yaw;
+	if (SoulCrackZoneFront && SoulCrackFrontAngle > 0.0f)
+	{
+		SoulCrackZoneFront->UpdateSectorTransform(Location, Yaw);
+	}
+	if (SoulCrackZoneBack && SoulCrackBackAngle > 0.0f)
+	{
+		SoulCrackZoneBack->UpdateSectorTransform(Location, Yaw + 180.0f);
+	}
+}
+
+void ARLEnemyCharacter::SetSoulCrackWindowVisual(bool bOpen)
+{
+	if (bOpen == bSoulCrackWindowVisualOn)
+	{
+		return;
+	}
+	bSoulCrackWindowVisualOn = bOpen;
+
+	if (USkeletalMeshComponent* MeshComp = GetMesh())
+	{
+		if (bOpen)
+		{
+			if (!SoulCrackWindowOverlayMaterial)
+			{
+				SoulCrackWindowOverlayMaterial = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/Effect/Material/M_SoulCrack_Overlay.M_SoulCrack_Overlay"));
+			}
+			SavedOverlayMaterial = MeshComp->GetOverlayMaterial();
+			MeshComp->SetOverlayMaterial(SoulCrackWindowOverlayMaterial);
+		}
+		else
+		{
+			MeshComp->SetOverlayMaterial(SavedOverlayMaterial);
+			SavedOverlayMaterial = nullptr;
+		}
+	}
+
+	OnSoulCrackWindowChanged(bOpen);
 }
 
 // ==========================================
@@ -289,6 +399,7 @@ void ARLEnemyCharacter::Tick(float DeltaTime)
 void ARLEnemyCharacter::BeginAttackPattern(const FRLMonsterPatternData& Pattern, FName HitNotifyName)
 {
 	SetAttackHitScales(Pattern.HitRangeScales);
+	SetAttackHitWidthScales(Pattern.HitWidthScales);
 	StartAttackChase(Pattern);
 	BeginSoulCrackPattern(Pattern, HitNotifyName);
 }
@@ -379,6 +490,7 @@ bool ARLEnemyCharacter::BeginSoulCrackPattern(const FRLMonsterPatternData& Patte
 	SoulCrackBackAngle = Pattern.SoulCrackBackAngle;
 	bSoulCrackConsumed = false;
 
+	ShowSoulCrackZones();
 	OnSoulCrackVariantStarted();
 	return true;
 }
@@ -394,6 +506,8 @@ void ARLEnemyCharacter::EndSoulCrackPattern()
 	SoulCrackWindow = FVector2D::ZeroVector;
 	bSoulCrackConsumed = false;
 
+	HideSoulCrackZones();
+	SetSoulCrackWindowVisual(false);
 	OnSoulCrackVariantEnded();
 }
 

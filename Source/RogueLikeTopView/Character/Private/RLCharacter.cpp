@@ -412,8 +412,10 @@ void ARLCharacter::TestAddExp(float Amount)
 void ARLCharacter::CreateBoxHitbox(FVector BoxExtent, float ForwardOffset, const FRLDamageData& DamageData, bool bDrawDebug)
 {
     // ★ 이번 히트의 범위 배율 (SetAttackHitScales 미설정이면 1.0). 박스가 정면 쪽으로 길어지고 폭도 넓어짐
+    const float HitWidthScale = GetAttackHitWidthScale(AttackHitCounter); // Consume 전에 같은 순번으로 조회
     const float HitScale = ConsumeAttackHitScale();
     BoxExtent *= HitScale;
+    BoxExtent.Y *= HitWidthScale;
     ForwardOffset *= HitScale;
 
     FVector Center = GetActorLocation() + (GetActorForwardVector() * ForwardOffset);
@@ -660,6 +662,20 @@ float ARLCharacter::GetAttackHitScale(int32 HitIndex) const
     return FMath::Max(0.01f, AttackHitScales[FMath::Clamp(HitIndex, 0, AttackHitScales.Num() - 1)]);
 }
 
+void ARLCharacter::SetAttackHitWidthScales(const TArray<float>& WidthScales)
+{
+    AttackHitWidthScales = WidthScales;
+}
+
+float ARLCharacter::GetAttackHitWidthScale(int32 HitIndex) const
+{
+    if (AttackHitWidthScales.Num() == 0)
+    {
+        return 1.0f;
+    }
+    return FMath::Max(0.01f, AttackHitWidthScales[FMath::Clamp(HitIndex, 0, AttackHitWidthScales.Num() - 1)]);
+}
+
 float ARLCharacter::ConsumeAttackHitScale()
 {
     const float Scale = GetAttackHitScale(AttackHitCounter);
@@ -740,7 +756,9 @@ void ARLCharacter::UpdateAttackTelegraph(float DeltaTime)
             }
             else
             {
-                ShowBoxAttackIndicator(TelegraphBoxExtent * TelegraphShownScale, TelegraphForwardOffset * TelegraphShownScale, TelegraphMaterial);
+                FVector ScaledExtent = TelegraphBoxExtent * TelegraphShownScale;
+                ScaledExtent.Y *= GetAttackHitWidthScale(ActiveWindowIndex);
+                ShowBoxAttackIndicator(ScaledExtent, TelegraphForwardOffset * TelegraphShownScale, TelegraphMaterial);
             }
         }
     }

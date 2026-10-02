@@ -20,6 +20,8 @@
 //   ARLCharacter에 두면 의미가 없고, 몬스터 전용 계층에 두는 게 맞습니다.
 class ARLRewardChest;
 class ARLItemDrop;
+class ARLDecalIndicator;
+class UMaterialInterface;
 class URLItemDataAsset;
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnEnemyDeathEvent, ARLEnemyCharacter*, DeadEnemy);
@@ -200,6 +202,20 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Enemy|SoulCrack", meta = (ClampMin = "0.0"))
 	float SoulShatterDebuffDuration = 8.0f;
 
+	// ★ 카운터 방향 안내: 강화판 패턴이 시작되면 보스 발밑에 균열 가능 구역(정면/후방 각도)을 부채꼴 데칼로 표시.
+	// 비워두면 /Game/Effect/Material/MI_SoulCrack_Zone을 실행 중에 불러와 씁니다 (레벨 배치 인스턴스 전파 문제 회피).
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Enemy|SoulCrack")
+	TObjectPtr<UMaterialInterface> SoulCrackZoneMaterial = nullptr;
+
+	// 카운터 방향 안내 부채꼴의 반지름(cm)
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Enemy|SoulCrack", meta = (ClampMin = "50.0"))
+	float SoulCrackZoneRadius = 350.0f;
+
+	// ★ 균열 판정 구간이 열려 있는 동안 보스 메시에 씌울 오버레이 머티리얼 (몸 외곽이 어두운 녹색으로 빛남).
+	// 비워두면 /Game/Effect/Material/M_SoulCrack_Overlay를 실행 중에 불러와 씁니다.
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Enemy|SoulCrack")
+	TObjectPtr<UMaterialInterface> SoulCrackWindowOverlayMaterial = nullptr;
+
 	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = "Enemy|SoulCrack")
 	int32 SoulCrackStackCount = 0;
 
@@ -295,6 +311,11 @@ protected:
 	UFUNCTION(BlueprintImplementableEvent, Category = "Enemy|SoulCrack")
 	void OnSoulShatterDebuffEnded();
 
+	// ★ 균열 판정 구간이 열리고(true) 닫힐(false) 때 호출. 몸 발광 오버레이는 C++이 처리하므로,
+	// BP에서는 사운드/추가 VFX 등을 붙이세요.
+	UFUNCTION(BlueprintImplementableEvent, Category = "Enemy|SoulCrack")
+	void OnSoulCrackWindowChanged(bool bOpen);
+
 private:
 	// 경직 동안 BT를 멈췄다가 Duration 뒤 재시작
 	void PauseAIForSoulCrack(float Duration);
@@ -315,6 +336,24 @@ private:
 	TObjectPtr<UAnimMontage> ChaseMontage = nullptr;
 	float ChaseSpeed = 0.0f;
 	float ChaseStopDistance = 0.0f;
+
+	// ★ 카운터 방향 안내 데칼 / 몸 발광 상태
+	void ShowSoulCrackZones();
+	void HideSoulCrackZones();
+	void UpdateSoulCrackZones();
+	void SetSoulCrackWindowVisual(bool bOpen);
+	ARLDecalIndicator* SpawnSoulCrackZoneIndicator();
+
+	UPROPERTY()
+	TObjectPtr<ARLDecalIndicator> SoulCrackZoneFront = nullptr;
+
+	UPROPERTY()
+	TObjectPtr<ARLDecalIndicator> SoulCrackZoneBack = nullptr;
+
+	UPROPERTY()
+	TObjectPtr<UMaterialInterface> SavedOverlayMaterial = nullptr; // 발광 전 원래 오버레이 (복구용)
+
+	bool bSoulCrackWindowVisualOn = false;
 
 	bool bSoulCrackAIStopped = false;                    // 균열 경직으로 BT를 멈춰둔 상태인지 (Tick에서 재가동 감시)
 	float SoulCrackAIStopEndTime = 0.0f;
