@@ -163,6 +163,12 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Combat|Indicator")
 	void StopAttackTelegraph();
 
+	// ★ 이번 공격 패턴의 히트별 범위 배율(FRLMonsterPatternData::HitRangeScales)을 설정하고 히트 카운터를 0으로
+	// 되돌립니다. 이후 CreateBoxHitbox/CreateSectorHitbox/CreateLocationHitbox가 호출될 때마다 다음 배율을 하나씩
+	// 꺼내 쓰고, 텔레그래프 데칼도 같은 순번의 배율로 그립니다. 빈 배열이면 전부 1.0(기존 동작, 플레이어도 이 상태).
+	UFUNCTION(BlueprintCallable, Category = "Combat")
+	void SetAttackHitScales(const TArray<float>& Scales);
+
 	UFUNCTION(BlueprintCallable, Category = "Action")
 	void Dodge(FVector CursorLocation);
 
@@ -344,6 +350,7 @@ protected:
 	float TelegraphRadius = 0.0f;
 	float TelegraphSafeZoneAngle = 0.0f;
 	float TelegraphInnerSafeRadius = 0.0f;
+	float TelegraphShownScale = 1.0f; // 현재 떠 있는 예고 데칼에 적용된 히트 배율
 	bool bTelegraphVisible = false;
 	TWeakObjectPtr<AActor> TelegraphFaceTarget;
 	float TelegraphTurnSpeed = 0.0f;
@@ -364,6 +371,13 @@ protected:
 	// [max(히트 - LeadTime, 직전 히트 시각), 히트) 구간을 TelegraphWindows 형식으로 반환합니다.
 	// (콤보처럼 히트 간격이 LeadTime보다 짧으면 직전 히트 직후부터 바로 다음 표시 구간이 시작됩니다.)
 	TArray<FVector2D> ComputeTelegraphWindows(const UAnimMontage* Montage, FName HitNotifyName, float LeadTime) const;
+
+	// ★ SetAttackHitScales 상태. Consume은 Create*Hitbox에서 호출(다음 히트 배율을 꺼내고 카운터 +1),
+	// Get은 텔레그래프에서 호출(i번째 히트 배율 조회, 카운터 변경 없음)
+	TArray<float> AttackHitScales;
+	int32 AttackHitCounter = 0;
+	float ConsumeAttackHitScale();
+	float GetAttackHitScale(int32 HitIndex) const;
 
 public:
 	virtual void Tick(float DeltaTime) override;

@@ -232,6 +232,24 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Enemy|SoulCrack")
 	void TriggerSoulCrackShatter();
 
+	// ★ BTT_Attack에서 공격 몽타주 재생 직후 한 번 호출하는 진입점. 히트별 범위 배율(SetAttackHitScales),
+	// 공격 중 전진(StartAttackChase), 영혼의 균열 강화판(BeginSoulCrackPattern)을 한 번에 처리합니다.
+	// 각 기능은 패턴 데이터가 비활성 값이면 아무것도 안 하므로 모든 패턴에 대해 무조건 호출해도 됩니다.
+	UFUNCTION(BlueprintCallable, Category = "Enemy|Combat")
+	void BeginAttackPattern(const FRLMonsterPatternData& Pattern, FName HitNotifyName = FName("Notify_Hit"));
+
+	// ★ BTT_Attack의 OnNotifyBegin 분기용: "Notify_Hit"으로 시작하는 노티파이(Notify_Hit, Notify_Hit_Soul, ...)면 true
+	UFUNCTION(BlueprintPure, Category = "Enemy|Combat")
+	static bool IsAttackHitNotify(FName NotifyName);
+
+	// ★ BTT_Attack에서 공격 몽타주 재생 직후 호출. Pattern.AttackChaseSpeed가 0이면 아무것도 안 함
+	// (그래서 모든 패턴에 대해 무조건 호출해도 됨). 몽타주가 끝나거나 끊기면 자동으로 멈춥니다.
+	UFUNCTION(BlueprintCallable, Category = "Enemy|Combat")
+	void StartAttackChase(const FRLMonsterPatternData& Pattern);
+
+	UFUNCTION(BlueprintCallable, Category = "Enemy|Combat")
+	void StopAttackChase();
+
 	virtual void ReceiveCustomDamage(const FRLDamageData& DamageData, const FHitResult& HitInfo) override;
 	virtual void Tick(float DeltaTime) override;
 
@@ -289,6 +307,14 @@ private:
 	float SoulCrackFrontAngle = 0.0f;
 	float SoulCrackBackAngle = 0.0f;
 	bool bSoulCrackConsumed = false;                     // 이번 강화판에서 이미 균열 성공했는지
+
+	// ★ StartAttackChase 상태
+	void UpdateAttackChase(float DeltaTime);
+
+	UPROPERTY()
+	TObjectPtr<UAnimMontage> ChaseMontage = nullptr;
+	float ChaseSpeed = 0.0f;
+	float ChaseStopDistance = 0.0f;
 
 	bool bSoulCrackAIStopped = false;                    // 균열 경직으로 BT를 멈춰둔 상태인지 (Tick에서 재가동 감시)
 	float SoulCrackAIStopEndTime = 0.0f;

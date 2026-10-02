@@ -411,6 +411,11 @@ void ARLCharacter::TestAddExp(float Amount)
 
 void ARLCharacter::CreateBoxHitbox(FVector BoxExtent, float ForwardOffset, const FRLDamageData& DamageData, bool bDrawDebug)
 {
+    // ★ 이번 히트의 범위 배율 (SetAttackHitScales 미설정이면 1.0). 박스가 정면 쪽으로 길어지고 폭도 넓어짐
+    const float HitScale = ConsumeAttackHitScale();
+    BoxExtent *= HitScale;
+    ForwardOffset *= HitScale;
+
     FVector Center = GetActorLocation() + (GetActorForwardVector() * ForwardOffset);
     FRotator Rotation = GetActorRotation();
 
@@ -548,11 +553,14 @@ TArray<FVector2D> ARLCharacter::ComputeTelegraphWindows(const UAnimMontage* Mont
         return Windows;
     }
 
+    // ★ 이름이 HitNotifyName"으로 시작하는" 노티파이를 모두 히트로 봅니다 (예: Notify_Hit, Notify_Hit_Soul, Notify_Hit_Soul2).
+    // 히트마다 다른 이름을 붙여도(BTT_Attack 분기용) 텔레그래프/균열 구간/히트 배율 순번이 그대로 동작하게 하기 위함.
     const FString HitName = HitNotifyName.ToString();
     TArray<float> HitTimes;
     for (const FAnimNotifyEvent& Event : Montage->Notifies)
     {
-        const bool bMatch = Event.Notify ? Event.Notify->GetNotifyName() == HitName : Event.NotifyName == HitNotifyName;
+        const FString EventName = Event.Notify ? Event.Notify->GetNotifyName() : Event.NotifyName.ToString();
+        const bool bMatch = EventName.StartsWith(HitName);
         if (bMatch)
         {
             HitTimes.Add(Event.GetTriggerTime());
@@ -637,6 +645,28 @@ void ARLCharacter::StartLocationAttackTelegraph(UAnimMontage* Montage, FName Hit
     UpdateAttackTelegraph(0.0f);
 }
 
+void ARLCharacter::SetAttackHitScales(const TArray<float>& Scales)
+{
+    AttackHitScales = Scales;
+    AttackHitCounter = 0;
+}
+
+float ARLCharacter::GetAttackHitScale(int32 HitIndex) const
+{
+    if (AttackHitScales.Num() == 0)
+    {
+        return 1.0f;
+    }
+    return FMath::Max(0.01f, AttackHitScales[FMath::Clamp(HitIndex, 0, AttackHitScales.Num() - 1)]);
+}
+
+float ARLCharacter::ConsumeAttackHitScale()
+{
+    const float Scale = GetAttackHitScale(AttackHitCounter);
+    ++AttackHitCounter;
+    return Scale;
+}
+
 void ARLCharacter::StopAttackTelegraph()
 {
     TelegraphMontage = nullptr;
@@ -671,12 +701,15 @@ void ARLCharacter::UpdateAttackTelegraph(float DeltaTime)
 
     bool bShouldShow = false;
     FVector2D ActiveWindow = FVector2D::ZeroVector;
-    for (const FVector2D& Window : TelegraphWindows)
+    int32 ActiveWindowIndex = 0;
+    for (int32 WindowIndex = 0; WindowIndex < TelegraphWindows.Num(); ++WindowIndex)
     {
+        const FVector2D& Window = TelegraphWindows[WindowIndex];
         if (Position >= Window.X && Position < Window.Y)
         {
             bShouldShow = true;
             ActiveWindow = Window;
+            ActiveWindowIndex = WindowIndex;
             break;
         }
     }
@@ -690,20 +723,24 @@ void ARLCharacter::UpdateAttackTelegraph(float DeltaTime)
             bTelegraphLocationLocked = false;
             const FVector StartLoc = TelegraphTrackTarget.IsValid() ? TelegraphTrackTarget->GetActorLocation() : GetActorLocation();
             TelegraphLockedLocation = StartLoc;
-            ShowLocationAttackIndicator(StartLoc, TelegraphRadius, TelegraphMaterial);
+            TelegraphShownScale = GetAttackHitScale(ActiveWindowIndex);
+            ShowLocationAttackIndicator(StartLoc, TelegraphRadius * TelegraphShownScale, TelegraphMaterial);
         }
         else
         {
             // 대상을 정면으로 맞춘 뒤 그 위치/방향으로 데칼 고정 (판정도 그 방향으로 나감)
             FaceTelegraphTarget(-1.0f);
 
+            // 이 구간이 몇 번째 히트인지에 맞춰 HitRangeScales 배율 적용 (실제 판정과 같은 크기)
+            TelegraphShownScale = GetAttackHitScale(ActiveWindowIndex);
+
             if (TelegraphShape == ETelegraphShape::Sector)
             {
-                ShowSectorAttackIndicator(TelegraphRadius, TelegraphSafeZoneAngle, TelegraphMaterial, TelegraphInnerSafeRadius);
+                ShowSectorAttackIndicator(TelegraphRadius * TelegraphShownScale, TelegraphSafeZoneAngle, TelegraphMaterial, TelegraphInnerSafeRadius);
             }
             else
             {
-                ShowBoxAttackIndicator(TelegraphBoxExtent, TelegraphForwardOffset, TelegraphMaterial);
+                ShowBoxAttackIndicator(TelegraphBoxExtent * TelegraphShownScale, TelegraphForwardOffset * TelegraphShownScale, TelegraphMaterial);
             }
         }
     }
@@ -979,6 +1016,8 @@ void ARLCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCompone
 
 void ARLCharacter::CreateLocationHitbox(FVector TargetLocation, float Radius, const FRLDamageData& DamageData, bool bDrawDebug)
 {
+    Radius *= ConsumeAttackHitScale();
+
     TArray<AActor*> ActorsToIgnore;
     ActorsToIgnore.Add(this);
 
@@ -1031,6 +1070,8 @@ void ARLCharacter::CreateLocationHitbox(FVector TargetLocation, float Radius, co
 // 바로 뒤 90도(좌우 45도씩)만 안전지대입니다.
 void ARLCharacter::CreateSectorHitbox(float Radius, float SafeZoneAngleDegrees, const FRLDamageData& DamageData, bool bDrawDebug, float InnerSafeRadius)
 {
+    Radius *= ConsumeAttackHitScale();
+
     const FVector Origin = GetActorLocation();
     const FVector ForwardDir = GetActorForwardVector().GetSafeNormal2D();
 

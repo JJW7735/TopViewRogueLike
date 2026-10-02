@@ -145,6 +145,23 @@ struct FRLMonsterPatternData
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Pattern|Sector", meta = (EditCondition = "AttackShape == ERLAttackShape::Sector", ClampMin = "0.0"))
 	float SectorInnerSafeRadius = 0.0f;
 
+	// ★ 히트별 범위 배율. 몽타주의 "Notify_Hit"으로 시작하는 노티파이(Notify_Hit, Notify_Hit_Soul, ...)를
+	// 시간 순서대로 0, 1, 2...번째 히트로 보고, i번째 히트의 판정/예고 데칼 크기에 HitRangeScales[i]를 곱합니다
+	// (Box는 BoxExtent·ForwardOffset, Sector/Location은 반지름). 배열보다 히트가 많으면 마지막 값을 계속 씁니다.
+	// 비워두면 전부 1.0(기존 동작). 예: SwingCombo 강화판 [1.0, 1.3, 1.6] → 3연타가 점점 커짐
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Pattern")
+	TArray<float> HitRangeScales;
+
+	// ★ 공격 중 전진 속도(cm/s). 0보다 크면 몽타주가 재생되는 동안 보스가 정면 방향으로 이 속도로 천천히
+	// 전진합니다(ARLEnemyCharacter::StartAttackChase). 정면 방향은 텔레그래프 회전 로직(히트 사이엔 대상 추적,
+	// 데칼이 뜨면 고정)을 그대로 따르므로 "따라오면서 휘두르는" 연출이 됩니다. 0 = 제자리 공격(기존 동작).
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Pattern|Chase", meta = (ClampMin = "0.0"))
+	float AttackChaseSpeed = 0.0f;
+
+	// 플레이어와의 2D 거리가 이 값 이하이면 전진을 멈춥니다 (밀고 들어가지 않도록)
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Pattern|Chase", meta = (ClampMin = "0.0", EditCondition = "AttackChaseSpeed > 0"))
+	float AttackChaseStopDistance = 150.0f;
+
 	// ★ 원거리(투사체) 패턴 여부. true면 이 패턴은 근접 히트박스 대신 투사체를 발사합니다.
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Pattern|Projectile")
 	bool bIsRangedAttack = false;

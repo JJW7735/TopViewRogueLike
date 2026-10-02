@@ -16,6 +16,7 @@
 #include "Animation/AnimInstance.h"
 #include "Animation/AnimMontage.h"
 #include "GameFramework/CharacterMovementComponent.h"
+#include "RLDecalIndicator.h"
 
 ARLEnemyCharacter::ARLEnemyCharacter()
 {
@@ -123,6 +124,7 @@ void ARLEnemyCharacter::HandleDeath()
 
 	// 균열 관련 타이머가 사망 후 BT를 재시작하지 않도록 정리
 	EndSoulCrackPattern();
+	StopAttackChase();
 	bSoulCrackAIStopped = false;
 	GetWorldTimerManager().ClearTimer(SoulCrackAITimerHandle);
 	GetWorldTimerManager().ClearTimer(SoulShatterDebuffTimerHandle);
@@ -251,6 +253,8 @@ void ARLEnemyCharacter::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
 
+	UpdateAttackChase(DeltaTime);
+
 	// ★ 균열 경직 중인데 BT가 다시 돌고 있으면(다른 경로에서 재시작된 경우) 원인 로그를 남기고 다시 멈춤
 	if (bSoulCrackAIStopped)
 	{
@@ -275,6 +279,78 @@ void ARLEnemyCharacter::Tick(float DeltaTime)
 		{
 			EndSoulCrackPattern();
 		}
+	}
+}
+
+// ==========================================
+// ★ 공격 중 전진 (Attack Chase)
+// ==========================================
+
+void ARLEnemyCharacter::BeginAttackPattern(const FRLMonsterPatternData& Pattern, FName HitNotifyName)
+{
+	SetAttackHitScales(Pattern.HitRangeScales);
+	StartAttackChase(Pattern);
+	BeginSoulCrackPattern(Pattern, HitNotifyName);
+}
+
+bool ARLEnemyCharacter::IsAttackHitNotify(FName NotifyName)
+{
+	return NotifyName.ToString().StartsWith(TEXT("Notify_Hit"));
+}
+
+void ARLEnemyCharacter::StartAttackChase(const FRLMonsterPatternData& Pattern)
+{
+	StopAttackChase();
+
+	if (Pattern.AttackChaseSpeed <= 0.0f || !Pattern.AttackMontage || (HealthComp && HealthComp->bIsDead))
+	{
+		return;
+	}
+
+	ChaseMontage = Pattern.AttackMontage;
+	ChaseSpeed = Pattern.AttackChaseSpeed;
+	ChaseStopDistance = Pattern.AttackChaseStopDistance;
+}
+
+void ARLEnemyCharacter::StopAttackChase()
+{
+	ChaseMontage = nullptr;
+	ChaseSpeed = 0.0f;
+}
+
+// ARLCharacter::Tick은 몽타주 재생 중 CharacterMovement 속도를 매 프레임 0으로 만들기 때문에(공격 중 미끄러짐 방지),
+// 여기서는 무브먼트 입력이 아니라 SetActorLocation(스윕)으로 직접 조금씩 옮깁니다. 방향은 현재 정면(텔레그래프
+// 회전 로직이 히트 사이엔 대상 쪽으로 돌리고, 데칼이 뜨면 고정)을 그대로 따릅니다.
+void ARLEnemyCharacter::UpdateAttackChase(float DeltaTime)
+{
+	if (!ChaseMontage)
+	{
+		return;
+	}
+
+	UAnimInstance* AnimInstance = GetMesh() ? GetMesh()->GetAnimInstance() : nullptr;
+	if (!AnimInstance || !AnimInstance->Montage_IsPlaying(ChaseMontage) || (HealthComp && HealthComp->bIsDead))
+	{
+		StopAttackChase();
+		return;
+	}
+
+	// 플레이어에게 충분히 붙었으면 더 전진하지 않음
+	if (const APawn* Player = UGameplayStatics::GetPlayerPawn(this, 0))
+	{
+		if (FVector::Dist2D(Player->GetActorLocation(), GetActorLocation()) <= ChaseStopDistance)
+		{
+			return;
+		}
+	}
+
+	const FVector Forward = GetActorForwardVector().GetSafeNormal2D();
+	SetActorLocation(GetActorLocation() + Forward * ChaseSpeed * DeltaTime, true);
+
+	// 보스가 움직였으니 떠 있는 Box 예고 데칼도 같이 옮겨서 실제 판정 위치와 어긋나지 않게 함
+	if (bTelegraphVisible && AttackIndicator && TelegraphShape == ETelegraphShape::Box)
+	{
+		AttackIndicator->UpdateBoxTransform(GetActorLocation(), TelegraphForwardOffset * TelegraphShownScale, GetActorRotation().Yaw);
 	}
 }
 
