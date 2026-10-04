@@ -158,13 +158,16 @@ bool ARLPlayerController::GetGroundHitUnderCursor(FHitResult& OutHit) const
 	}
 
 	const FVector TraceEnd = RayOrigin + RayDirection * 100000.0f;
+	FVector TraceStart = RayOrigin;
 
-	// 바닥이 아닌 것(구조물 윗면, 기둥 옆면, 캐릭터)에 맞으면 그 컴포넌트를 무시하고 다시 쏩니다
-	constexpr int32 MaxRetrace = 8;
+	// 바닥이 아닌 면(구조물 윗면, 천장 안쪽, 기둥 옆면)에 맞으면 그 지점 바로 뒤에서 이어서 다시 쏩니다.
+	// 컴포넌트 통째로 무시하면 안 되는 이유: 아치 천장과 터널 바닥이 한 메시로 합쳐진 에셋(예: SM_HC_RuinsAndCorridors)에서
+	// 천장 때문에 바닥까지 같이 무시되어 터널 안 바닥을 클릭할 수 없게 됨. (Params 두 번째 인자 true = 폴리곤 단위 트레이스)
+	constexpr int32 MaxRetrace = 16;
 	for (int32 Attempt = 0; Attempt < MaxRetrace; ++Attempt)
 	{
 		FHitResult Hit;
-		if (!GetWorld()->LineTraceSingleByChannel(Hit, RayOrigin, TraceEnd, ECC_Ground, Params))
+		if (!GetWorld()->LineTraceSingleByChannel(Hit, TraceStart, TraceEnd, ECC_Ground, Params))
 		{
 			return false;
 		}
@@ -179,11 +182,14 @@ bool ARLPlayerController::GetGroundHitUnderCursor(FHitResult& OutHit) const
 			return true;
 		}
 
-		if (!Hit.GetComponent())
+		if (bIsPawn)
 		{
-			return false;
+			Params.AddIgnoredActor(Hit.GetActor());
+			continue;
 		}
-		Params.AddIgnoredComponent(Hit.GetComponent());
+
+		// 시작점이 이미 메시 안이면(bStartPenetrating) 조금 더 크게 전진
+		TraceStart = Hit.bStartPenetrating ? TraceStart + RayDirection * 10.0f : Hit.ImpactPoint + RayDirection * 1.0f;
 	}
 
 	return false;
