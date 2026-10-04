@@ -8,6 +8,9 @@
 #include "RLSkillComponent.h"
 #include "NiagaraSystem.h"
 #include "NiagaraFunctionLibrary.h"
+#include "Components/CapsuleComponent.h"
+#include "Kismet/KismetMaterialLibrary.h"
+#include "Materials/MaterialParameterCollection.h"
 
 ARLPlayerController::ARLPlayerController()
 {
@@ -112,12 +115,86 @@ void ARLPlayerController::KillAllEnemies()
 	}
 }
 
+void ARLPlayerController::PlayerTick(float DeltaTime)
+{
+	Super::PlayerTick(DeltaTime);
+
+	if (!OcclusionMPC)
+	{
+		OcclusionMPC = LoadObject<UMaterialParameterCollection>(nullptr, TEXT("/Game/Effect/Material/Occlusion/MPC_Occlusion.MPC_Occlusion"));
+	}
+
+	const APawn* ControlledPawn = GetPawn();
+	if (!OcclusionMPC || !ControlledPawn || !PlayerCameraManager)
+	{
+		return;
+	}
+
+	UKismetMaterialLibrary::SetVectorParameterValue(this, OcclusionMPC, TEXT("PlayerLocation"), FLinearColor(ControlledPawn->GetActorLocation()));
+	UKismetMaterialLibrary::SetVectorParameterValue(this, OcclusionMPC, TEXT("CameraLocation"), FLinearColor(PlayerCameraManager->GetCameraLocation()));
+}
+
+bool ARLPlayerController::GetGroundHitUnderCursor(FHitResult& OutHit) const
+{
+	FVector RayOrigin;
+	FVector RayDirection;
+	if (!DeprojectMousePositionToWorld(RayOrigin, RayDirection))
+	{
+		return false;
+	}
+
+	const APawn* ControlledPawn = GetPawn();
+	// 폰이 없으면(관전 등) 높이 제한 없이 위를 향한 첫 면을 채택
+	float PawnFootZ = UE_BIG_NUMBER * 0.5f;
+	if (const ACharacter* ControlledCharacter = Cast<ACharacter>(ControlledPawn))
+	{
+		PawnFootZ = ControlledCharacter->GetActorLocation().Z - ControlledCharacter->GetCapsuleComponent()->GetScaledCapsuleHalfHeight();
+	}
+
+	FCollisionQueryParams Params(SCENE_QUERY_STAT(RLGroundUnderCursor), true);
+	if (ControlledPawn)
+	{
+		Params.AddIgnoredActor(ControlledPawn);
+	}
+
+	const FVector TraceEnd = RayOrigin + RayDirection * 100000.0f;
+
+	// 바닥이 아닌 것(구조물 윗면, 기둥 옆면, 캐릭터)에 맞으면 그 컴포넌트를 무시하고 다시 쏩니다
+	constexpr int32 MaxRetrace = 8;
+	for (int32 Attempt = 0; Attempt < MaxRetrace; ++Attempt)
+	{
+		FHitResult Hit;
+		if (!GetWorld()->LineTraceSingleByChannel(Hit, RayOrigin, TraceEnd, ECC_Ground, Params))
+		{
+			return false;
+		}
+
+		const bool bIsPawn = Hit.GetActor() && Hit.GetActor()->IsA<APawn>();
+		const bool bFacesUp = Hit.ImpactNormal.Z >= GroundMinNormalZ;
+		const bool bNearFootHeight = Hit.ImpactPoint.Z <= PawnFootZ + GroundMaxHeightAbovePawn;
+
+		if (!bIsPawn && bFacesUp && bNearFootHeight)
+		{
+			OutHit = Hit;
+			return true;
+		}
+
+		if (!Hit.GetComponent())
+		{
+			return false;
+		}
+		Params.AddIgnoredComponent(Hit.GetComponent());
+	}
+
+	return false;
+}
+
 void ARLPlayerController::OnDodge_Started()
 {
 	if (ARLCharacter* RLChar = Cast<ARLCharacter>(GetPawn()))
 	{
 		FHitResult Hit;
-		if (GetHitResultUnderCursor(ECollisionChannel::ECC_Visibility, true, Hit))
+		if (GetGroundHitUnderCursor(Hit))
 		{
 			RLChar->Dodge(Hit.ImpactPoint);
 		}
@@ -187,7 +264,7 @@ void ARLPlayerController::OnMoveStarted()
 	}
 
 	FHitResult Hit;
-	if (GetHitResultUnderCursor(ECollisionChannel::ECC_Visibility, true, Hit))
+	if (GetGroundHitUnderCursor(Hit))
 	{
 		if (FXCursor)
 		{
@@ -207,7 +284,7 @@ void ARLPlayerController::OnMoveTriggered()
 	}
 
 	FHitResult Hit;
-	if (GetHitResultUnderCursor(ECollisionChannel::ECC_Visibility, true, Hit))
+	if (GetGroundHitUnderCursor(Hit))
 	{
 		UAIBlueprintHelperLibrary::SimpleMoveToLocation(this, Hit.Location);
 	}

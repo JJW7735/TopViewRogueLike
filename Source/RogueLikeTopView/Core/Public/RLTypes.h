@@ -6,6 +6,12 @@
 class UAnimMontage;
 class UMaterialInterface;
 
+// ★ 마우스 커서 → 바닥 지점 판정 전용 트레이스 채널 (DefaultEngine.ini의 Name="Ground", GameTraceChannel3).
+// 기본 반응 Block(기존 Visibility처럼 모든 메시가 막음), Pawn/CharacterMesh 프로필은 Ignore.
+// 바닥이 아닌 구조물(아치/기둥/천장)은 메시 콜리전에서 Ground=Ignore로 바꾸면 확실히 제외되고,
+// 그러지 않아도 ARLPlayerController::GetGroundHitUnderCursor가 "위를 향한 면 + 플레이어 발 높이 근처"만 채택합니다.
+#define ECC_Ground ECC_GameTraceChannel3
+
 // ★ 진영(팀) 구분. ARLCharacter::ReceiveCustomDamage에서 같은 팀끼리는 피해를 무시하는 데 사용합니다.
 UENUM(BlueprintType)
 enum class ERLTeam : uint8

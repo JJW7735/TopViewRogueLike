@@ -1,5 +1,6 @@
 #include "RLSkillComponent.h"
 #include "RLCharacter.h"
+#include "RLPlayerController.h"
 #include "RLDecalIndicator.h"
 #include "GameFramework/PlayerController.h"
 #include "GameFramework/CharacterMovementComponent.h"
@@ -553,10 +554,10 @@ void URLSkillComponent::StopPlayerMovement()
 void URLSkillComponent::RotateOwnerToMouseCursor()
 {
 	if (!OwnerCharacter) return;
-	if (APlayerController* PC = Cast<APlayerController>(OwnerCharacter->GetController()))
+	if (ARLPlayerController* PC = Cast<ARLPlayerController>(OwnerCharacter->GetController()))
 	{
 		FHitResult Hit;
-		if (PC->GetHitResultUnderCursor(ECC_Visibility, true, Hit))
+		if (PC->GetGroundHitUnderCursor(Hit))
 		{
 			FVector LookDir = (Hit.ImpactPoint - OwnerCharacter->GetActorLocation()).GetSafeNormal2D();
 			if (!LookDir.IsNearlyZero())
@@ -570,10 +571,10 @@ void URLSkillComponent::RotateOwnerToMouseCursor()
 FVector URLSkillComponent::GetMouseGroundLocation() const
 {
 	if (!OwnerCharacter) return FVector::ZeroVector;
-	if (APlayerController* PC = Cast<APlayerController>(OwnerCharacter->GetController()))
+	if (ARLPlayerController* PC = Cast<ARLPlayerController>(OwnerCharacter->GetController()))
 	{
 		FHitResult Hit;
-		if (PC->GetHitResultUnderCursor(ECC_Visibility, true, Hit)) return Hit.ImpactPoint;
+		if (PC->GetGroundHitUnderCursor(Hit)) return Hit.ImpactPoint;
 	}
 	return OwnerCharacter->GetActorLocation();
 }

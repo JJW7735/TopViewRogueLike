@@ -60,6 +60,15 @@ void ARLCharacter::BeginPlay()
 {
     Super::BeginPlay();
 
+    // ★ 바닥 예고/안내 데칼이 캐릭터 몸(메시, 붙어있는 무기 등)에 문신처럼 투영되지 않도록 데칼 수신을 끕니다.
+    // BP 디폴트가 아니라 런타임에 끄는 이유: 레벨에 배치된 인스턴스에 BP 값이 전파되지 않는 문제를 피하기 위함.
+    TArray<UPrimitiveComponent*> PrimitiveComps;
+    GetComponents<UPrimitiveComponent>(PrimitiveComps);
+    for (UPrimitiveComponent* PrimComp : PrimitiveComps)
+    {
+        PrimComp->SetReceivesDecals(false);
+    }
+
     if (HealthComp)
     {
         HealthComp->OnDeath.AddDynamic(this, &ARLCharacter::HandleDeath);
