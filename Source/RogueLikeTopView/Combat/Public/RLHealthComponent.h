@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 
 #include "CoreMinimal.h"
 #include "Components/ActorComponent.h"
@@ -59,4 +59,8 @@ public:
     // Visual Studio 로컬 히스토리로 원본과 대조해 주세요.
     UFUNCTION(BlueprintCallable, Category = "Health")
     void IncreaseMaxHealth(float Delta, bool bApply);
+
+    /** 세이브 로드 시 체력 상태를 직접 안전하게 복원 */
+    UFUNCTION(BlueprintCallable, Category = "Health")
+    void RestoreHealthDirect(float InCurrentHealth, float InMaxHealth);
 };

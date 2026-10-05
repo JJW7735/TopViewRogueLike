@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 
 #include "CoreMinimal.h"
 #include "Components/ActorComponent.h"
@@ -71,6 +71,9 @@ public:
 	// ========================================================
 	UFUNCTION(BlueprintCallable, Category = "Skill|Setup")
 	void EquipSkill(ESkillSlot Slot, URLSkillData* NewSkill);
+
+	UFUNCTION(BlueprintPure, Category = "Skill|Setup")
+	const TMap<ESkillSlot, URLSkillData*>& GetEquippedSkills() const { return EquippedSkills; }
 
 	UFUNCTION(BlueprintPure, Category = "Skill|State")
 	bool IsOnCooldown(ESkillSlot Slot) const;

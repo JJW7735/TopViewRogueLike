@@ -58,6 +58,13 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Stats|Level")
 	float GetExpPercent() const { return MaxExp > 0.0f ? FMath::Clamp(CurrentExp / MaxExp, 0.0f, 1.0f) : 0.0f; }
 
+	/** 세이브 로드 시 스탯 및 레벨 정보를 직접 복원하고 UI/이동속도를 갱신 */
+	UFUNCTION(BlueprintCallable, Category = "Stats")
+	void RestoreStatsDirect(int32 InLevel, float InCurrentExp, float InMaxExp, float InExpGrowth,
+	                        float InAttackPower, float InAbilityPower, float InCritChance,
+	                        float InCritDamageMultiplier, float InMoveSpeed, float InAttackSpeed,
+	                        float InDefense, float InDamageReduction);
+
 	// ==========================================
 	// ★ 핵심 스탯 4가지
 	// ==========================================

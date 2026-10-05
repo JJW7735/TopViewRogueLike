@@ -1,4 +1,4 @@
-﻿// Fill out your copyright notice in the Description page of Project Settings.
+// Fill out your copyright notice in the Description page of Project Settings.
 
 #include "RLCharacter.h"
 #include "GameFramework/SpringArmComponent.h"
@@ -23,8 +23,10 @@
 #include "RLRewardSelectWidget.h"
 #include "RLInventoryComponent.h"
 #include "RLItemDataAsset.h"
+#include "RLSaveSubsystem.h"
 #include "RLDecalIndicator.h"
 #include "NavigationSystem.h"
+#include "Engine/World.h"
 
 ARLCharacter::ARLCharacter()
 {
@@ -99,6 +101,25 @@ void ARLCharacter::BeginPlay()
         if (GetCharacterMovement())
         {
             GetCharacterMovement()->MaxWalkSpeed = StatComp->MoveSpeed;
+        }
+    }
+
+    // ★ 세이브 시스템 연동: 플레이어 캐릭터이고, 저장된 활성 런이 남아있다면 자동 복원 (이어하기)
+    if (TeamID == ERLTeam::Player && bAutoRestoreRunSaveOnSpawn)
+    {
+        if (URLSaveSubsystem* SaveSys = URLSaveSubsystem::Get(this))
+        {
+            if (SaveSys->HasActiveRun())
+            {
+                const FString CurrentMap = GetWorld() ? UWorld::RemovePIEPrefix(GetWorld()->GetMapName()) : TEXT("");
+                const FString SavedMap = UWorld::RemovePIEPrefix(SaveSys->GetActiveRunData().CurrentMapName.ToString());
+
+                // 같은 맵이거나 맵 지정이 없으면 즉시 저장 위치 및 스탯/아이템 복원
+                if (SavedMap.IsEmpty() || SavedMap == TEXT("None") || CurrentMap.Equals(SavedMap, ESearchCase::IgnoreCase))
+                {
+                    SaveSys->ApplyRunDataToPlayer(this);
+                }
+            }
         }
     }
 }
@@ -195,6 +216,15 @@ void ARLCharacter::HandleDeath()
 
     GetCharacterMovement()->DisableMovement();
     GetCapsuleComponent()->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+
+    // ★ 플레이어 사망 시 로그라이크 규칙: 런 세이브 삭제 및 영혼 메타 정산
+    if (TeamID == ERLTeam::Player)
+    {
+        if (URLSaveSubsystem* SaveSys = URLSaveSubsystem::Get(this))
+        {
+            SaveSys->HandlePlayerDeath();
+        }
+    }
 
     OnCharacterDeath();
 }
@@ -1268,4 +1298,54 @@ void ARLCharacter::AddMovementInput(FVector WorldDirection, float ScaleValue, bo
 
     Super::AddMovementInput(WorldDirection, ScaleValue, bForce);
 }
+
+void ARLCharacter::SaveCurrentRun()
+{
+    if (URLSaveSubsystem* SaveSys = URLSaveSubsystem::Get(this))
+    {
+        const FString RawMapName = GetWorld() ? GetWorld()->GetMapName() : TEXT("Map_Persistent");
+        const FString CleanMapName = UWorld::RemovePIEPrefix(RawMapName);
+        SaveSys->SaveActiveRun(this, FName(*CleanMapName), SaveSys->GetActiveRunData().StageNumber);
+    }
+}
+
+void ARLCharacter::LoadCurrentRun()
+{
+    if (URLSaveSubsystem* SaveSys = URLSaveSubsystem::Get(this))
+    {
+        if (SaveSys->LoadActiveRun(false))
+        {
+            const FString CurrentMap = GetWorld() ? UWorld::RemovePIEPrefix(GetWorld()->GetMapName()) : TEXT("");
+            const FString SavedMap = UWorld::RemovePIEPrefix(SaveSys->GetActiveRunData().CurrentMapName.ToString());
+
+            // 같은 맵이면 현재 플레이어에게 즉시 위치 및 모든 스탯/아이템 복원
+            if (SavedMap.IsEmpty() || SavedMap == TEXT("None") || CurrentMap.Equals(SavedMap, ESearchCase::IgnoreCase))
+            {
+                SaveSys->ApplyRunDataToPlayer(this);
+            }
+            else
+            {
+                // 다른 맵에서 저장된 경우 해당 레벨을 열고 진입 시 복원
+                SaveSys->ResumeActiveRun();
+            }
+        }
+    }
+}
+
+void ARLCharacter::ClearCurrentRun()
+{
+    if (URLSaveSubsystem* SaveSys = URLSaveSubsystem::Get(this))
+    {
+        SaveSys->ClearActiveRun(true);
+    }
+}
+
+void ARLCharacter::AddSouls(int32 Amount)
+{
+    if (URLSaveSubsystem* SaveSys = URLSaveSubsystem::Get(this))
+    {
+        SaveSys->AddTotalSouls(Amount);
+    }
+}
+
 

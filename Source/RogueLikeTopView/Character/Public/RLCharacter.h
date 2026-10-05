@@ -1,4 +1,4 @@
-﻿// Fill out your copyright notice in the Description page of Project Settings.
+// Fill out your copyright notice in the Description page of Project Settings.
 #pragma once
 
 #include "CoreMinimal.h"
@@ -238,6 +238,24 @@ public:
 
 	UFUNCTION(BlueprintCallable, Exec, Category = "Cheat|Stats")
 	void TestAddExp(float Amount = 100.0f);
+
+	// ==========================================
+	// 세이브 시스템 연동 및 테스트 콘솔 명령어
+	// ==========================================
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Save")
+	bool bAutoRestoreRunSaveOnSpawn = true;
+
+	UFUNCTION(BlueprintCallable, Exec, Category = "Save")
+	void SaveCurrentRun();
+
+	UFUNCTION(BlueprintCallable, Exec, Category = "Save")
+	void LoadCurrentRun();
+
+	UFUNCTION(BlueprintCallable, Exec, Category = "Save")
+	void ClearCurrentRun();
+
+	UFUNCTION(BlueprintCallable, Exec, Category = "Save")
+	void AddSouls(int32 Amount = 100);
 
 	UFUNCTION(BlueprintImplementableEvent, Category = "Interaction")
 	void OnInteractPromptChanged(bool bVisible, const FText& Prompt);

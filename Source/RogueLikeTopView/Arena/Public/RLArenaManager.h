@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
@@ -188,14 +188,14 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Arena|Barriers")
 	bool bEncloseEntireArena = true;
 
-	// 플레이어 진입 후 결계가 닫히기까지의 딜레이 (초, 기본: 0.6초)
+	// 플레이어 진입 후 결계가 닫히기까지의 딜레이 (초, 기본: 1.5초)
 	// 방 안으로 충분히 걸어 들어온 후 등 뒤에서 닫혀 벽에 끼이는 현상을 방지합니다.
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Arena|Barriers", meta = (ClampMin = "0.0"))
-	float BarrierCloseDelay = 0.6f;
+	float BarrierCloseDelay = 1.5f;
 
-	// 자체 EntranceBarrier 박스로 특정 입구를 자동 차단할지 여부 (실내 던전 룸에서 문만 막을 때 사용, 기본: true)
+	// 자체 EntranceBarrier 박스로 특정 입구를 자동 차단할지 여부 (실내 던전 룸에서 문만 막을 때 사용, 기본: false)
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Arena|Barriers")
-	bool bUseEntranceBarrier = true;
+	bool bUseEntranceBarrier = false;
 
 	// 전투 중 잠그고, 클리어 시 열어줄 외부 문/장애물 액터 목록
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Arena|Barriers")

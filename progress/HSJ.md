@@ -1,7 +1,35 @@
 # HSJ
-> 최종 갱신: 2026-10-01
+> 최종 갱신: 2026-10-05
 
 ## 완료
+- **2-Track 로그라이크 세이브 시스템 (영구 메타 + 런 세이브) 구축** (`Source/RogueLikeTopView/Save/`):
+  - **세이브 데이터 구조체 및 세이브게임 정의 (`RLSaveGame.h / .cpp`)**:
+    - `FRLHealthSaveData`, `FRLStatSaveData`, `FRLInventorySlotSaveData`, `FRLInventorySaveData`, `FRLSkillSlotSaveData`, `FRLSkillSaveData`
+    - `FRLRunSaveData` ([Track 2] 런 세이브): 스테이지 번호, 맵 이름, 플레이어 위치/회전 좌표, 체력, 레벨/스탯/경험치, 인벤토리/소지 골드, 장착 스킬
+    - `FRLMetaSaveData` ([Track 1] 영구 메타 세이브): 누적 영혼(`TotalSouls`), 최고 클리어 스테이지(`HighestStageCleared`), 영구 특성 업그레이드(`PermanentUpgrades`), 해금 ID 목록(`UnlockedIDs`)
+    - `URLSaveGame : public USaveGame`
+  - **세이브 총괄 서브시스템 (`RLSaveSubsystem.h / .cpp`)**:
+    - `UGameInstanceSubsystem` 기반의 전역 세이브 매니저 (`URLSaveSubsystem::Get(WorldContext)`)
+    - `SaveActiveRun`, `LoadActiveRun`, `ApplyRunDataToPlayer`, `ResumeActiveRun`, `ClearActiveRun`
+    - 포탈 전이 자동 저장 (`AutoSaveOnStageTransition`) 및 영구 사망 정산 처리 (`HandlePlayerDeath`)
+    - 영구 메타 세이브/로드 및 영혼 경제 시스템 (`AddTotalSouls`, `SpendTotalSouls`, `GetTotalSouls`, `AddRunSouls`)
+    - 영구 특성/해금 관리 (`GetUpgradeLevel`, `SetUpgradeLevel`, `UnlockID`, `IsIDUnlocked`)
+    - UI 연동용 이벤트 델리게이트 4종 (`OnSoulsChanged`, `OnRunSaveCompleted`, `OnRunLoaded`, `OnMetaSaved`)
+  - **컴포넌트 복원 메서드 신설**:
+    - `RLHealthComponent`: `RestoreHealthDirect`
+    - `RLStatComponent`: `RestoreStatsDirect`
+    - `RLInventoryComponent`: `RestoreInventoryDirect`
+    - `RLSkillComponent`: `GetEquippedSkills`
+  - **캐릭터 및 월드 연동 (`RLCharacter.h / .cpp`, `RLPortal.cpp`)**:
+    - 스폰 시 자동 이어하기 (`bAutoRestoreRunSaveOnSpawn = true`): 저장된 런이 남아있으면 자동으로 저장 위치 텔레포트 및 스탯/아이템/스킬 복원
+    - 포탈 통과 시 다음 스테이지 진입점 자동 저장 연동 (`AutoSaveOnStageTransition`)
+    - 사망 시 런 세이브 영구 삭제 및 수집 영혼 메타 정산 연동 (`HandleDeath` -> `HandlePlayerDeath`)
+    - 즉시 테스트용 콘솔 명령어 4종 탑재 (`SaveCurrentRun`, `LoadCurrentRun`, `ClearCurrentRun`, `AddSouls`)
+  - **UI 담당자를 위한 상세 연동 가이드 문서 작성**:
+    - 프로젝트 루트 `hsj.md`에 타이틀 메뉴, HUD, 일시정지, 게임오버, 영구 강화 상점 연동 노드 및 델리게이트 가이드 완비
+- **아레나 매니저 진입 시 캐릭터 끼임 및 이동 버그 해결 (`RLArenaManager.h / .cpp`, `RLPlayerController.cpp`)**:
+  - `TriggerVolume`의 `ECC_Ground` 충돌 해제로 마우스 커서 바닥 레이캐스트 간섭 제거
+  - 자체 차단벽에 Pawn 전용 충돌 프로필 적용 및 진입 딜레이(1.5s), 근접 탈출 텔레포트 안전장치 추가
 - **보상 상자 수령 라이프사이클 및 포탈 이동 잔여물 정리 구축** (`Source/RogueLikeTopView/`):
   - **보상 상자 수령 후 소멸 (`ARLRewardChest.h / .cpp`)**:
     - `FinishAndDestroyChest(DelaySeconds)`: 콜리전 즉시 차단(이동 방해 해소), 나이아가라 이펙트 정지, `OnChestClaimed` BP 연출 이벤트 방송 및 `SetLifeSpan` 지연 `Destroy()`

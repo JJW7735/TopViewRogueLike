@@ -107,3 +107,27 @@ void URLStatComponent::NotifyStatsChanged()
 {
 	OnStatsChanged.Broadcast();
 }
+
+void URLStatComponent::RestoreStatsDirect(int32 InLevel, float InCurrentExp, float InMaxExp, float InExpGrowth,
+	float InAttackPower, float InAbilityPower, float InCritChance,
+	float InCritDamageMultiplier, float InMoveSpeed, float InAttackSpeed,
+	float InDefense, float InDamageReduction)
+{
+	CurrentLevel = FMath::Max(1, InLevel);
+	CurrentExp = FMath::Max(0.0f, InCurrentExp);
+	MaxExp = FMath::Max(1.0f, InMaxExp);
+	ExpGrowthMultiplier = FMath::Max(1.0f, InExpGrowth);
+
+	AttackPower = InAttackPower;
+	AbilityPower = InAbilityPower;
+	CritChance = FMath::Clamp(InCritChance, 0.0f, 100.0f);
+	CritDamageMultiplier = FMath::Max(1.0f, InCritDamageMultiplier);
+	MoveSpeed = FMath::Max(0.0f, InMoveSpeed);
+	AttackSpeed = FMath::Max(0.1f, InAttackSpeed);
+	Defense = InDefense;
+	DamageReduction = FMath::Clamp(InDamageReduction, 0.0f, 80.0f);
+
+	NotifyStatsChanged();
+	const float Percent = MaxExp > 0.0f ? FMath::Clamp(CurrentExp / MaxExp, 0.0f, 1.0f) : 0.0f;
+	OnExpChanged.Broadcast(CurrentExp, MaxExp, Percent);
+}

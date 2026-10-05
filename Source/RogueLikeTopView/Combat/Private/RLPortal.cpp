@@ -1,6 +1,7 @@
-﻿#include "RLPortal.h"
+#include "RLPortal.h"
 #include "Components/BoxComponent.h"
 #include "RLCharacter.h"
+#include "RLSaveSubsystem.h"
 #include "Kismet/GameplayStatics.h"
 
 ARLPortal::ARLPortal()
@@ -65,6 +66,12 @@ void ARLPortal::OnLevelLoaded()
         // GetActorTransform()을 더해서 포탈 기준의 상대 좌표를 절대 좌표로 변환해 줍니다.
         FVector FinalLocation = GetActorLocation() + TeleportLocation;
         OverlappedPlayer->SetActorLocation(FinalLocation);
+
+        // ★ 로그라이크 표준: 다음 맵 진입 시점 자동 저장
+        if (URLSaveSubsystem* SaveSys = URLSaveSubsystem::Get(this))
+        {
+            SaveSys->AutoSaveOnStageTransition(OverlappedPlayer, LevelToLoad);
+        }
     }
 
     // 6. 무사히 도착했으니, 등 뒤에 남겨진 예전 맵(Map_A)을 메모리에서 흔적도 없이 싹 지워버립니다!

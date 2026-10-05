@@ -102,6 +102,10 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Inventory")
 	const TArray<FRLInventorySlot>& GetSlots() const { return Slots; }
 
+	/** 세이브 로드 시 골드 및 슬롯 아이템 목록을 안전하게 복원 */
+	UFUNCTION(BlueprintCallable, Category = "Inventory")
+	void RestoreInventoryDirect(int32 InGold, const TArray<FRLInventorySlot>& InSlots);
+
 	/** 골드 획득 */
 	UFUNCTION(BlueprintCallable, Category = "Inventory|Economy")
 	void AddGold(int32 Amount);

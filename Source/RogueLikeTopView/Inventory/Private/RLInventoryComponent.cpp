@@ -349,3 +349,24 @@ void URLInventoryComponent::ApplyPassiveItemBonuses(URLItemDataAsset* ItemData, 
 		StatComp->NotifyStatsChanged();
 	}
 }
+
+void URLInventoryComponent::RestoreInventoryDirect(int32 InGold, const TArray<FRLInventorySlot>& InSlots)
+{
+	Gold = FMath::Max(0, InGold);
+	Slots.SetNum(FMath::Max(1, MaxSlots));
+
+	for (int32 i = 0; i < Slots.Num(); ++i)
+	{
+		if (InSlots.IsValidIndex(i))
+		{
+			Slots[i] = InSlots[i];
+		}
+		else
+		{
+			Slots[i].Clear();
+		}
+	}
+
+	OnInventoryUpdated.Broadcast();
+	OnGoldChanged.Broadcast(Gold);
+}

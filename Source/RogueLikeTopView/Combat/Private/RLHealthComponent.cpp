@@ -1,4 +1,4 @@
-﻿#include "RLHealthComponent.h"
+#include "RLHealthComponent.h"
 #include "GameFramework/Actor.h"
 
 // 생성자: 기본 체력을 100으로 세팅합니다.
@@ -92,5 +92,13 @@ void URLHealthComponent::IncreaseMaxHealth(float Delta, bool bApply)
     }
 
     // 데미지/회복이 아닌 최대치 변경 이벤트이므로 HealthDelta는 0으로 방송합니다 (체력바 갱신용).
+    OnHealthChanged.Broadcast(CurrentHealth, MaxHealth, 0.0f);
+}
+
+void URLHealthComponent::RestoreHealthDirect(float InCurrentHealth, float InMaxHealth)
+{
+    MaxHealth = FMath::Max(1.0f, InMaxHealth);
+    CurrentHealth = FMath::Clamp(InCurrentHealth, 0.0f, MaxHealth);
+    bIsDead = (CurrentHealth <= 0.0f);
     OnHealthChanged.Broadcast(CurrentHealth, MaxHealth, 0.0f);
 }

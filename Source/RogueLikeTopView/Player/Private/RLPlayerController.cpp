@@ -1,6 +1,7 @@
-﻿#include "RLPlayerController.h"
+#include "RLPlayerController.h"
 #include "RLCharacter.h"
 #include "RLEnemyCharacter.h"
+#include "RLArenaManager.h"
 #include "EngineUtils.h"
 #include "EnhancedInputComponent.h"
 #include "EnhancedInputSubsystems.h"
@@ -185,6 +186,19 @@ bool ARLPlayerController::GetGroundHitUnderCursor(FHitResult& OutHit) const
 		if (bIsPawn)
 		{
 			Params.AddIgnoredActor(Hit.GetActor());
+			continue;
+		}
+
+		// ARLArenaManager 또는 폰을 막지 않는 컴포넌트(TriggerVolume 등)는 바닥이 아니므로 즉시 무시하고 관통
+		if (Hit.GetActor() && Hit.GetActor()->IsA<ARLArenaManager>())
+		{
+			Params.AddIgnoredActor(Hit.GetActor());
+			continue;
+		}
+
+		if (Hit.GetComponent() && Hit.GetComponent()->GetCollisionResponseToChannel(ECC_Pawn) != ECR_Block)
+		{
+			Params.AddIgnoredComponent(Hit.GetComponent());
 			continue;
 		}
 

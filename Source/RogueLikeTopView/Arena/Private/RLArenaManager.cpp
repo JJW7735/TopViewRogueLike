@@ -1,4 +1,4 @@
-﻿#include "RLArenaManager.h"
+#include "RLArenaManager.h"
 #include "RLEnemyCharacter.h"
 #include "RLRewardChest.h"
 #include "RLPortal.h"
@@ -22,6 +22,9 @@ ARLArenaManager::ARLArenaManager()
 	TriggerVolume->SetupAttachment(RootComponent);
 	TriggerVolume->SetBoxExtent(FVector(1000.0f, 1000.0f, 300.0f));
 	TriggerVolume->SetCollisionProfileName(TEXT("Trigger"));
+	TriggerVolume->SetCollisionResponseToChannel(ECC_Ground, ECR_Ignore);
+	TriggerVolume->SetCollisionResponseToChannel(ECC_Camera, ECR_Ignore);
+	TriggerVolume->SetCollisionResponseToChannel(ECC_Visibility, ECR_Ignore);
 	TriggerVolume->SetGenerateOverlapEvents(true);
 
 	PortalSpawnPoint = CreateDefaultSubobject<USceneComponent>(TEXT("PortalSpawnPoint"));
@@ -36,32 +39,47 @@ ARLArenaManager::ARLArenaManager()
 	EntranceBarrier->SetupAttachment(RootComponent);
 	EntranceBarrier->SetRelativeLocation(FVector(0.0f, -600.0f, 100.0f));
 	EntranceBarrier->SetBoxExtent(FVector(50.0f, 250.0f, 150.0f));
-	EntranceBarrier->SetCollisionProfileName(TEXT("BlockAll"));
+	EntranceBarrier->SetCollisionProfileName(TEXT("Custom"));
+	EntranceBarrier->SetCollisionObjectType(ECC_WorldStatic);
+	EntranceBarrier->SetCollisionResponseToAllChannels(ECR_Ignore);
+	EntranceBarrier->SetCollisionResponseToChannel(ECC_Pawn, ECR_Block);
 	EntranceBarrier->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 	EntranceBarrier->SetHiddenInGame(true);
 
 	// 사방 4면 테두리 자동 결계 벽 (TriggerVolume 둘레를 감싸 플레이어 이탈 방지)
 	BoundaryWall_North = CreateDefaultSubobject<UBoxComponent>(TEXT("BoundaryWall_North"));
 	BoundaryWall_North->SetupAttachment(TriggerVolume);
-	BoundaryWall_North->SetCollisionProfileName(TEXT("BlockAll"));
+	BoundaryWall_North->SetCollisionProfileName(TEXT("Custom"));
+	BoundaryWall_North->SetCollisionObjectType(ECC_WorldStatic);
+	BoundaryWall_North->SetCollisionResponseToAllChannels(ECR_Ignore);
+	BoundaryWall_North->SetCollisionResponseToChannel(ECC_Pawn, ECR_Block);
 	BoundaryWall_North->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 	BoundaryWall_North->SetHiddenInGame(true);
 
 	BoundaryWall_South = CreateDefaultSubobject<UBoxComponent>(TEXT("BoundaryWall_South"));
 	BoundaryWall_South->SetupAttachment(TriggerVolume);
-	BoundaryWall_South->SetCollisionProfileName(TEXT("BlockAll"));
+	BoundaryWall_South->SetCollisionProfileName(TEXT("Custom"));
+	BoundaryWall_South->SetCollisionObjectType(ECC_WorldStatic);
+	BoundaryWall_South->SetCollisionResponseToAllChannels(ECR_Ignore);
+	BoundaryWall_South->SetCollisionResponseToChannel(ECC_Pawn, ECR_Block);
 	BoundaryWall_South->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 	BoundaryWall_South->SetHiddenInGame(true);
 
 	BoundaryWall_East = CreateDefaultSubobject<UBoxComponent>(TEXT("BoundaryWall_East"));
 	BoundaryWall_East->SetupAttachment(TriggerVolume);
-	BoundaryWall_East->SetCollisionProfileName(TEXT("BlockAll"));
+	BoundaryWall_East->SetCollisionProfileName(TEXT("Custom"));
+	BoundaryWall_East->SetCollisionObjectType(ECC_WorldStatic);
+	BoundaryWall_East->SetCollisionResponseToAllChannels(ECR_Ignore);
+	BoundaryWall_East->SetCollisionResponseToChannel(ECC_Pawn, ECR_Block);
 	BoundaryWall_East->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 	BoundaryWall_East->SetHiddenInGame(true);
 
 	BoundaryWall_West = CreateDefaultSubobject<UBoxComponent>(TEXT("BoundaryWall_West"));
 	BoundaryWall_West->SetupAttachment(TriggerVolume);
-	BoundaryWall_West->SetCollisionProfileName(TEXT("BlockAll"));
+	BoundaryWall_West->SetCollisionProfileName(TEXT("Custom"));
+	BoundaryWall_West->SetCollisionObjectType(ECC_WorldStatic);
+	BoundaryWall_West->SetCollisionResponseToAllChannels(ECR_Ignore);
+	BoundaryWall_West->SetCollisionResponseToChannel(ECC_Pawn, ECR_Block);
 	BoundaryWall_West->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 	BoundaryWall_West->SetHiddenInGame(true);
 
@@ -73,6 +91,14 @@ ARLArenaManager::ARLArenaManager()
 void ARLArenaManager::BeginPlay()
 {
 	Super::BeginPlay();
+
+	// 전투 영역 트리거가 마우스 바닥 클릭(Ground)이나 카메라를 방해하지 않도록 보장
+	if (TriggerVolume)
+	{
+		TriggerVolume->SetCollisionResponseToChannel(ECC_Ground, ECR_Ignore);
+		TriggerVolume->SetCollisionResponseToChannel(ECC_Camera, ECR_Ignore);
+		TriggerVolume->SetCollisionResponseToChannel(ECC_Visibility, ECR_Ignore);
+	}
 
 	// 입구 차단벽 평상시(전투 전) 비활성화
 	if (EntranceBarrier)
@@ -640,7 +666,37 @@ void ARLArenaManager::UpdateBoundaryWalls()
 
 void ARLArenaManager::LockBarriers()
 {
-	// 1. 사방 4면 전체 결계 활성화 (벽 없는 맵/야외 투기장)
+	// 0. 결계 닫기 전 안전 검사: 플레이어가 결계/벽 근처에 있으면 끼이지 않도록 잠시 대기
+	ARLCharacter* Player = Cast<ARLCharacter>(UGameplayStatics::GetPlayerCharacter(this, 0));
+	if (Player)
+	{
+		const FVector PlayerLoc = Player->GetActorLocation();
+
+		// 플레이어가 경계 벽 근처(150cm 이내)에 머물러 있다면 끼이지 않도록 0.5초 더 대기
+		bool bTooCloseToWall = false;
+		UBoxComponent* AllCheckWalls[] = { BoundaryWall_North, BoundaryWall_South, BoundaryWall_East, BoundaryWall_West, EntranceBarrier };
+		for (UBoxComponent* CheckWall : AllCheckWalls)
+		{
+			if (CheckWall)
+			{
+				const FBox WallBox = CheckWall->Bounds.GetBox().ExpandBy(FVector(150.0f, 150.0f, 50.0f));
+				if (WallBox.IsInsideOrOn(PlayerLoc))
+				{
+					bTooCloseToWall = true;
+					break;
+				}
+			}
+		}
+
+		if (bTooCloseToWall)
+		{
+			// 아직 입구에 걸쳐 있으므로 0.5초 후 다시 시도
+			GetWorldTimerManager().SetTimer(BarrierCloseTimerHandle, this, &ARLArenaManager::LockBarriers, 0.5f, false);
+			return;
+		}
+	}
+
+	// 1. 사방 4면 전체 결계 활성화 (Pawn 채널만 Block, Ground/Camera/Visibility는 Ignore)
 	if (bEncloseEntireArena)
 	{
 		UpdateBoundaryWalls();
@@ -649,25 +705,29 @@ void ARLArenaManager::LockBarriers()
 		{
 			if (Wall)
 			{
-				Wall->SetCollisionProfileName(TEXT("BlockAll"));
+				Wall->SetCollisionProfileName(TEXT("Custom"));
+				Wall->SetCollisionObjectType(ECC_WorldStatic);
 				Wall->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
+				Wall->SetCollisionResponseToAllChannels(ECR_Ignore);
 				Wall->SetCollisionResponseToChannel(ECC_Pawn, ECR_Block);
 				Wall->SetHiddenInGame(false);
 			}
 		}
 	}
 
-	// 2. 자체 내장 입구 차단벽 활성화 (실내 룸 문 차단)
-	if (EntranceBarrier && bUseEntranceBarrier)
+	// 2. 자체 내장 입구 차단벽 활성화 (실내 룸 문 차단, 4면 결계와 중복 활성화 방지)
+	if (EntranceBarrier && bUseEntranceBarrier && !bEncloseEntireArena)
 	{
-		EntranceBarrier->SetCollisionProfileName(TEXT("BlockAll"));
+		EntranceBarrier->SetCollisionProfileName(TEXT("Custom"));
+		EntranceBarrier->SetCollisionObjectType(ECC_WorldStatic);
 		EntranceBarrier->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
+		EntranceBarrier->SetCollisionResponseToAllChannels(ECR_Ignore);
 		EntranceBarrier->SetCollisionResponseToChannel(ECC_Pawn, ECR_Block);
 		EntranceBarrier->SetHiddenInGame(false);
 	}
 
-	// 3. 결계가 닫힐 때 플레이어가 경계 벽에 겹쳐있다면 아레나 중심 방향으로 안전하게 살짝 밀어넣기 (벽 끼임 원천 방지)
-	if (ARLCharacter* Player = Cast<ARLCharacter>(UGameplayStatics::GetPlayerCharacter(this, 0)))
+	// 3. 혹시라도 결계 활성화 시점에 플레이어가 벽과 겹쳤다면 아레나 중심 쪽으로 안전하게 즉시 텔레포트 (끼임 완전 방지)
+	if (Player)
 	{
 		const FVector Center = GetActorLocation();
 		const FVector PlayerLoc = Player->GetActorLocation();
@@ -676,10 +736,14 @@ void ARLArenaManager::LockBarriers()
 		UBoxComponent* AllCheckWalls[] = { BoundaryWall_North, BoundaryWall_South, BoundaryWall_East, BoundaryWall_West, EntranceBarrier };
 		for (UBoxComponent* CheckWall : AllCheckWalls)
 		{
-			if (CheckWall && CheckWall->IsOverlappingActor(Player))
+			if (CheckWall && CheckWall->GetCollisionEnabled() != ECollisionEnabled::NoCollision)
 			{
-				Player->AddActorWorldOffset(DirToCenter * 150.0f, true);
-				break;
+				const FBox WallBox = CheckWall->Bounds.GetBox().ExpandBy(FVector(50.0f, 50.0f, 50.0f));
+				if (WallBox.IsInsideOrOn(PlayerLoc))
+				{
+					Player->TeleportTo(PlayerLoc + DirToCenter * 200.0f, Player->GetActorRotation());
+					break;
+				}
 			}
 		}
 	}
