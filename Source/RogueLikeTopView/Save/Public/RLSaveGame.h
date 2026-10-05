@@ -5,6 +5,8 @@
 #include "RLSkillData.h"
 #include "RLSaveGame.generated.h"
 
+class ARLCharacter;
+
 /**
  * 체력 저장 데이터
  */
@@ -138,6 +140,17 @@ struct FRLRunSaveData
 	// 현재 런이 진행 중인지 여부 (사망 시 false)
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Save|Run")
 	bool bIsRunActive = false;
+
+	// ★ 이 런이 어느 캐릭터(블레이드/소서리스/디스트로이어 등)로 저장된 것인지 식별.
+	//   저장 시점의 캐릭터와 지금 스폰되는 캐릭터가 다르면 복원하지 않기 위한 안전장치.
+	//   (이 필드가 추가되기 전 저장 파일은 비어있으므로, 비어있을 땐 구분 없이 복원 허용)
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Save|Run")
+	TSoftClassPtr<ARLCharacter> CharacterClass;
+
+	// ★ "새 게임 시작 시 기존 런 삭제" 경고 팝업에 표시할 캐릭터 이름 (ARLCharacter::CharacterDisplayName 복사본).
+	//   BP에서 클래스를 다시 로드하지 않고 바로 텍스트로 쓸 수 있게 저장 시점에 같이 박아둠.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Save|Run")
+	FText SavedCharacterDisplayName;
 
 	// 현재 진행 중인 스트리밍 맵 이름 (예: L_Haunted, L_Soul 등)
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Save|Run")

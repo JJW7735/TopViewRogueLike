@@ -109,15 +109,39 @@ void ARLCharacter::BeginPlay()
     {
         if (URLSaveSubsystem* SaveSys = URLSaveSubsystem::Get(this))
         {
-            if (SaveSys->HasActiveRun())
-            {
-                const FString CurrentMap = GetWorld() ? UWorld::RemovePIEPrefix(GetWorld()->GetMapName()) : TEXT("");
-                const FString SavedMap = UWorld::RemovePIEPrefix(SaveSys->GetActiveRunData().CurrentMapName.ToString());
+            // ★ bPendingRunApply가 true일 때만 복원한다. (ResumeActiveRun()이 명시적으로
+            //   "이어하기"를 요청했을 때만 true로 세팅됨 — LoadActiveRun(true) 참고)
+            //   예전엔 HasActiveRun()만 봤어서, 아직 ClearActiveRun이 안 된 활성 런이 남아있는
+            //   채로 Retry 등으로 새로 스폰될 때도 무조건 옛 상태를 복원해버리는 버그가 있었음.
+            // ★ 플래그는 체크하자마자 바로 소비한다(one-shot). 아래에서 캐릭터/맵 불일치로 복원을
+            //   건너뛰더라도 true로 남아있으면, 다음 스폰(Retry 등)에서 뒤늦게 복원이 걸려버리기 때문.
+            const bool bShouldApplyPendingRun = SaveSys->bPendingRunApply;
+            SaveSys->bPendingRunApply = false;
 
-                // 같은 맵이거나 맵 지정이 없으면 즉시 저장 위치 및 스탯/아이템 복원
-                if (SavedMap.IsEmpty() || SavedMap == TEXT("None") || CurrentMap.Equals(SavedMap, ESearchCase::IgnoreCase))
+            if (bShouldApplyPendingRun && SaveSys->HasActiveRun())
+            {
+                // ★ 세이프가드: 저장된 런이 "지금 스폰된 캐릭터와 다른 캐릭터" 걸로 저장된 거라면
+                //   복원하지 않는다. (정상 흐름에서는 캐릭터 선택 시 기존 런을 폐기하므로 여기 걸릴
+                //   일이 없어야 하지만, 혹시 UI 쪽에서 다른 캐릭터로 이어하기가 잘못 걸리는 경우를
+                //   막는 안전장치) 이 필드가 비어있는 옛 저장 파일은 구분 없이 복원 허용.
+                const FString SavedClassPath = SaveSys->GetActiveRunData().CharacterClass.ToString();
+                const bool bCharacterMatches = SavedClassPath.IsEmpty() || SavedClassPath == GetClass()->GetPathName();
+
+                if (bCharacterMatches)
                 {
-                    SaveSys->ApplyRunDataToPlayer(this);
+                    const FString CurrentMap = GetWorld() ? UWorld::RemovePIEPrefix(GetWorld()->GetMapName()) : TEXT("");
+                    const FString SavedMap = UWorld::RemovePIEPrefix(SaveSys->GetActiveRunData().CurrentMapName.ToString());
+
+                    // 같은 맵이거나 맵 지정이 없으면 즉시 저장 위치 및 스탯/아이템 복원
+                    if (SavedMap.IsEmpty() || SavedMap == TEXT("None") || CurrentMap.Equals(SavedMap, ESearchCase::IgnoreCase))
+                    {
+                        SaveSys->ApplyRunDataToPlayer(this);
+                    }
+                }
+                else if (GEngine)
+                {
+                    GEngine->AddOnScreenDebugMessage(-1, 3.0f, FColor::Orange,
+                        TEXT("⚠ 저장된 런의 캐릭터가 지금 캐릭터와 달라서 복원을 건너뜁니다."));
                 }
             }
         }
@@ -218,15 +242,19 @@ void ARLCharacter::HandleDeath()
     GetCapsuleComponent()->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 
     // ★ 플레이어 사망 시 로그라이크 규칙: 런 세이브 삭제 및 영혼 메타 정산
+    int32 SoulsEarnedThisRun = 0;
     if (TeamID == ERLTeam::Player)
     {
         if (URLSaveSubsystem* SaveSys = URLSaveSubsystem::Get(this))
         {
+            // ★ HandlePlayerDeath() 안에서 ClearActiveRun(true)이 RunSouls를 0으로 리셋하므로,
+            //   그 전에 값을 먼저 읽어서 게임오버 화면에 넘겨준다.
+            SoulsEarnedThisRun = SaveSys->GetRunSouls();
             SaveSys->HandlePlayerDeath();
         }
     }
 
-    OnCharacterDeath();
+    OnCharacterDeath(SoulsEarnedThisRun);
 }
 
 

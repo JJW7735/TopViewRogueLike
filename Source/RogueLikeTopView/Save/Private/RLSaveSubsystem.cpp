@@ -203,6 +203,23 @@ bool URLSaveSubsystem::HasActiveRun() const
 	return CurrentRunData.bIsRunActive;
 }
 
+bool URLSaveSubsystem::HasActiveRunForDifferentCharacter(TSubclassOf<ARLCharacter> NewCharacterClass) const
+{
+	if (!HasActiveRun() || !NewCharacterClass)
+	{
+		return false;
+	}
+
+	const FString SavedClassPath = CurrentRunData.CharacterClass.ToString();
+	if (SavedClassPath.IsEmpty())
+	{
+		// 캐릭터 정보가 없는 옛 저장 파일은 "다른 캐릭터"로 간주하지 않고 그냥 통과시킴
+		return false;
+	}
+
+	return SavedClassPath != NewCharacterClass->GetPathName();
+}
+
 bool URLSaveSubsystem::AutoSaveOnStageTransition(ARLCharacter* PlayerCharacter, FName NewLevelName)
 {
 	if (!PlayerCharacter)
@@ -360,6 +377,10 @@ void URLSaveSubsystem::SetUpgradeLevel(FName UpgradeKey, int32 Level)
 void URLSaveSubsystem::GatherPlayerData(ARLCharacter* PlayerCharacter, FRLRunSaveData& OutData)
 {
 	if (!PlayerCharacter) return;
+
+	// ★ 어느 캐릭터로 저장된 런인지 기록 (블레이드로 저장한 런이 소서리스한테 복원되는 것 방지)
+	OutData.CharacterClass = PlayerCharacter->GetClass();
+	OutData.SavedCharacterDisplayName = PlayerCharacter->CharacterDisplayName;
 
 	OutData.PlayerLocation = PlayerCharacter->GetActorLocation();
 	OutData.PlayerRotation = PlayerCharacter->GetActorRotation();

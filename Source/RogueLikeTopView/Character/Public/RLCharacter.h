@@ -34,6 +34,12 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Team")
 	ERLTeam TeamID = ERLTeam::Enemy;
 
+	// ★ 캐릭터 선택 UI / "새 게임 시작 시 기존 런 삭제" 경고 팝업 등에 표시할 이름.
+	//   BP_Player_Blade, BP_Player_Sorceress 등 각 캐릭터 BP의 클래스 디폴트값에서
+	//   "블레이드", "소서리스"처럼 설정해주세요. (기본값은 비워둠)
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "UI")
+	FText CharacterDisplayName;
+
 	UPROPERTY(BlueprintReadWrite, Category = "Skill")
 	bool bIsSkillMoving = false;
 
@@ -330,8 +336,11 @@ protected:
 	UFUNCTION()
 	void HandleLevelUp(int32 NewLevel);
 
+	// ★ SoulsEarnedThisRun: 이번 런에서 모은 영혼(RunSouls). HandleDeath()에서 RunSouls가
+	//   0으로 리셋되기 전에 미리 읽어서 넘겨준다 — 게임오버 화면에서 GetRunSouls()를 직접
+	//   호출하면 이미 0이 된 뒤라 항상 +0으로 보이던 문제 때문에 추가됨.
 	UFUNCTION(BlueprintImplementableEvent, Category = "Death")
-	void OnCharacterDeath();
+	void OnCharacterDeath(int32 SoulsEarnedThisRun);
 
 	UFUNCTION(BlueprintImplementableEvent, Category = "Level")
 	void OnCharacterLevelUp(int32 NewLevel);

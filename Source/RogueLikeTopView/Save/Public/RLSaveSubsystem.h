@@ -57,6 +57,12 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Save|Run")
 	bool HasActiveRun() const;
 
+	/** 캐릭터 선택 화면에서 사용: 지금 고르려는 캐릭터가, 저장된 활성 런의 캐릭터와 다른지 확인합니다.
+	 *  true면 "새로 시작하면 기존 런이 삭제됩니다" 경고 팝업을 띄우고, 확인 시 ClearActiveRun(true)을
+	 *  호출한 뒤 새 캐릭터로 진행하세요. (캐릭터 정보가 없는 옛 저장 파일은 안전하게 false를 반환합니다) */
+	UFUNCTION(BlueprintPure, Category = "Save|Run")
+	bool HasActiveRunForDifferentCharacter(TSubclassOf<ARLCharacter> NewCharacterClass) const;
+
 	/** 포탈을 타고 다음 스테이지로 진입할 때 자동 호출되는 편의 함수 */
 	UFUNCTION(BlueprintCallable, Category = "Save|Run")
 	bool AutoSaveOnStageTransition(ARLCharacter* PlayerCharacter, FName NewLevelName);
