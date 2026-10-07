@@ -148,6 +148,9 @@ bool URLSaveSubsystem::ApplyRunDataToPlayer(ARLCharacter* PlayerCharacter)
 
 void URLSaveSubsystem::ClearActiveRun(bool bBankSoulsToMeta)
 {
+	// 이번 런 정산 영혼 기록 (게임오버 UI 결과창 조회용)
+	LastSettledRunSouls = CurrentRunData.RunSouls;
+
 	if (bBankSoulsToMeta && CurrentRunData.RunSouls > 0)
 	{
 		AddTotalSouls(CurrentRunData.RunSouls);
@@ -250,6 +253,43 @@ void URLSaveSubsystem::HandlePlayerDeath()
 
 	// 런 세이브 삭제 및 이번 런에서 모은 영혼 메타 계정으로 입금
 	ClearActiveRun(true);
+}
+
+void URLSaveSubsystem::RestartRunAfterDeath(FName RestartLevelName)
+{
+	ClearActiveRun(true);
+
+	if (APlayerController* PC = UGameplayStatics::GetPlayerController(this, 0))
+	{
+		PC->bShowMouseCursor = false;
+		FInputModeGameOnly InputMode;
+		PC->SetInputMode(InputMode);
+	}
+	UGameplayStatics::SetGamePaused(this, false);
+
+	FName TargetMap = RestartLevelName;
+	if (TargetMap == NAME_None && GetWorld())
+	{
+		TargetMap = FName(*UWorld::RemovePIEPrefix(GetWorld()->GetMapName()));
+	}
+
+	if (TargetMap != NAME_None)
+	{
+		UGameplayStatics::OpenLevel(this, TargetMap);
+	}
+}
+
+void URLSaveSubsystem::QuitToMainMenuAfterDeath(FName MainMenuLevelName)
+{
+	ClearActiveRun(true);
+
+	if (APlayerController* PC = UGameplayStatics::GetPlayerController(this, 0))
+	{
+		PC->bShowMouseCursor = true;
+	}
+	UGameplayStatics::SetGamePaused(this, false);
+
+	UGameplayStatics::OpenLevel(this, MainMenuLevelName);
 }
 
 // ==========================================

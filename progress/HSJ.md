@@ -1,7 +1,19 @@
 # HSJ
-> 최종 갱신: 2026-10-05
+> 최종 갱신: 2026-10-07
 
 ## 완료
+- **영혼(Souls) 획득 및 게임오버/재시작 시스템 구축** (`Source/RogueLikeTopView/`):
+  - **몬스터 처치 시 영혼 적립 (`RLEnemyCharacter.h / .cpp`)**:
+    - `SoulReward` 속성 신설 (일반 몬스터 2, 보스 몬스터 35)
+    - 처치 시 `URLSaveSubsystem::AddRunSouls` 호출로 이번 런 임시 영혼 실시간 적립
+  - **게임오버 및 재도전 편의 기능 (`RLSaveSubsystem.h / .cpp`)**:
+    - `GetLastSettledRunSouls`: 사망 후 정산된 영혼 수치 결과창 조회용 메서드
+    - `RestartRunAfterDeath`: 런 세이브 완전 초기화 + 마우스 커서 숨김 / GameOnly 입력 복원 + 레벨 재시작
+    - `QuitToMainMenuAfterDeath`: 런 세이브 정리 + 메인 메뉴 오픈
+  - **게임오버 결과창 C++ 베이스 위젯 신설 (`RLGameOverWidget.h / .cpp`)**:
+    - 생성 시 마우스 커서 활성화 및 UI 입력 모드 자동 전환
+    - 정산 영혼, 누적 영혼, 소멸 골드, 도달 스테이지 데이터 바인딩 제공
+    - `RetryRun`, `QuitToMainMenu` 기본 탑재
 - **2-Track 로그라이크 세이브 시스템 (영구 메타 + 런 세이브) 구축** (`Source/RogueLikeTopView/Save/`):
   - **세이브 데이터 구조체 및 세이브게임 정의 (`RLSaveGame.h / .cpp`)**:
     - `FRLHealthSaveData`, `FRLStatSaveData`, `FRLInventorySlotSaveData`, `FRLInventorySaveData`, `FRLSkillSlotSaveData`, `FRLSkillSaveData`
@@ -192,10 +204,17 @@
   3. `Get RLSaveSubsystem` → **`SaveActiveRun(PlayerCharacter, CurrentLevelName, StageNumber)`** 호출
   4. 타이틀 맵(`Map_Title`)으로 이동
 
-#### ④ 게임오버 / 사망 팝업 (`WBP_GameOver`)
-- 플레이어 사망 시 C++ 내부에서 `HandlePlayerDeath`가 자동 실행되어 이번 런 세이브가 삭제되고, 이번 런에서 얻은 영혼은 메타로 입금됨.
-- **결과창 텍스트:** `Get Active Run Data`의 `RunSouls`를 읽어 *"이번 런에서 수집한 영혼: +X"* 출력 가능.
-- **[타이틀 / 로비로 돌아가기] 버튼:** 타이틀 맵 오픈. 다음 시작 시 자동으로 1스테이지 시작 지점에서 1레벨로 시작.
+#### ④ 게임오버 / 사망 팝업 (`WBP_GameOver` or `URLGameOverWidget`)
+- **자동 정산**: 플레이어 사망 시 C++ 내부에서 `HandlePlayerDeath`가 자동 실행되어 이번 런 세이브가 삭제되고, 이번 런에서 얻은 영혼은 메타(`TotalSouls`)로 자동 입금됩니다.
+- **결과창 텍스트 바인딩**:
+  - 이번 런 획득 영혼: `Get RLSaveSubsystem` → **`GetLastSettledRunSouls`** (사망 직전 런에서 정산된 영혼 수치 반환) 또는 `OnCharacterDeath(SoulsEarnedThisRun)` 핀 사용.
+  - 현재 누적 영혼: `Get RLSaveSubsystem` → **`GetTotalSouls`** (합산된 전체 영혼).
+- **[다시하기 (Retry)] 버튼**:
+  - `Get RLSaveSubsystem` → **`RestartRunAfterDeath`** 호출! (런 세이브 완전 초기화 + 마우스 커서/입력 모드 GameOnly 원복 + 현재 맵 즉시 재시작).
+- **[타이틀 / 로비로 (QuitToMain)] 버튼**:
+  - `Get RLSaveSubsystem` → **`QuitToMainMenuAfterDeath`** 호출! (런 세이브 완전 초기화 + 메인 메뉴 오픈).
+- **C++ 베이스 위젯 지원 (`URLGameOverWidget`)**:
+  - 블루프린트에서 `File -> Reparent Blueprint`로 `RLGameOverWidget`을 상속받으면, 마우스 커서 표시 / 입력 모드 자동 전환 및 위의 수치 바인딩/버튼 로직이 C++에서 일괄 지원됩니다.
 
 #### ⑤ 영구 강화 / 메타 상점 UI (`WBP_MetaUpgrade`)
 - **`GetTotalSouls`**: 영구 영혼 보유 잔액 반환 (`int32`)

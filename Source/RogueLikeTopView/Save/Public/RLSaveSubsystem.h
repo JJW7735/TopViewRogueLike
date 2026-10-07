@@ -107,6 +107,18 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Save|Run|Souls")
 	int32 GetRunSouls() const { return CurrentRunData.RunSouls; }
 
+	/** 가장 최근 런에서 정산되어 메타 금고로 입금된 소울 반환 (사망/종료 후 게임오버 UI 표시용) */
+	UFUNCTION(BlueprintPure, Category = "Save|Run|Souls")
+	int32 GetLastSettledRunSouls() const { return LastSettledRunSouls; }
+
+	/** 게임오버 후 재도전: 활성 런을 완전 삭제하고 지정된 레벨(기본: 현재 레벨)을 새로 엽니다 */
+	UFUNCTION(BlueprintCallable, Category = "Save|Run|GameOver")
+	void RestartRunAfterDeath(FName RestartLevelName = NAME_None);
+
+	/** 게임오버 후 메인 메뉴로 복귀: 활성 런을 정리하고 메인 메뉴를 엽니다 */
+	UFUNCTION(BlueprintCallable, Category = "Save|Run|GameOver")
+	void QuitToMainMenuAfterDeath(FName MainMenuLevelName = FName("L_MainMenu"));
+
 	/** 최고 도달 스테이지 갱신 */
 	UFUNCTION(BlueprintCallable, Category = "Save|Meta")
 	void RecordStageClear(int32 StageNumber);
@@ -167,6 +179,10 @@ public:
 protected:
 	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = "Save|State")
 	FRLRunSaveData CurrentRunData;
+
+	/** 가장 최근 정산된 런 소울 (게임오버 UI 표시용) */
+	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = "Save|State")
+	int32 LastSettledRunSouls = 0;
 
 	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = "Save|State")
 	FRLMetaSaveData CurrentMetaData;

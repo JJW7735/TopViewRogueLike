@@ -1,9 +1,10 @@
-﻿#include "RLEnemyCharacter.h"
+#include "RLEnemyCharacter.h"
 #include "RLHealthComponent.h"
 #include "RLStatComponent.h"
 #include "RLRewardChest.h"
 #include "RLItemDrop.h"
 #include "RLItemDataAsset.h"
+#include "RLSaveSubsystem.h"
 #include "AIController.h"
 #include "BehaviorTree/BlackboardComponent.h"
 #include "BrainComponent.h"
@@ -167,6 +168,21 @@ void ARLEnemyCharacter::HandleDeath()
 
 	// 보스 여부 판정 (bIsBoss 체크 여부 또는 클래스/액터 이름에 "Boss"가 포함되어 있으면 자동 보스 판정)
 	const bool bIsActualBoss = IsBossEnemy();
+
+	// 1-1. 이번 런 임시 영혼(RunSouls) 적립 (일반 몬스터 기본 2, 보스 기본 35)
+	int32 GrantedSouls = SoulReward;
+	if (bIsActualBoss && GrantedSouls < 20)
+	{
+		GrantedSouls = 35;
+	}
+
+	if (GrantedSouls > 0)
+	{
+		if (URLSaveSubsystem* SaveSys = URLSaveSubsystem::Get(this))
+		{
+			SaveSys->AddRunSouls(GrantedSouls);
+		}
+	}
 
 	// 2. 보스 처치: 100% 확정 보상 상자 + 대량 골드 드롭
 	if (bIsActualBoss)
