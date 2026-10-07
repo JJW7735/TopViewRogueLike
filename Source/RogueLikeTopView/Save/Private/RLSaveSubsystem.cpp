@@ -1,4 +1,4 @@
-#include "RLSaveSubsystem.h"
+﻿#include "RLSaveSubsystem.h"
 #include "RLCharacter.h"
 #include "RLHealthComponent.h"
 #include "RLStatComponent.h"
@@ -60,6 +60,12 @@ bool URLSaveSubsystem::SaveActiveRun(ARLCharacter* PlayerCharacter, FName InCurr
 		return false;
 	}
 
+	FillRunData(PlayerCharacter, InCurrentMapName, InStageNumber, InRespawnLocation);
+	return WriteRunToDisk();
+}
+
+void URLSaveSubsystem::FillRunData(ARLCharacter* PlayerCharacter, FName InCurrentMapName, int32 InStageNumber, FVector InRespawnLocation)
+{
 	CurrentRunData.bIsRunActive = true;
 	const FString CleanMap = UWorld::RemovePIEPrefix(InCurrentMapName.ToString());
 	CurrentRunData.CurrentMapName = FName(*CleanMap);
@@ -72,7 +78,10 @@ bool URLSaveSubsystem::SaveActiveRun(ARLCharacter* PlayerCharacter, FName InCurr
 	{
 		CurrentRunData.PlayerLocation = InRespawnLocation;
 	}
+}
 
+bool URLSaveSubsystem::WriteRunToDisk()
+{
 	URLSaveGame* SaveObj = Cast<URLSaveGame>(UGameplayStatics::CreateSaveGameObject(URLSaveGame::StaticClass()));
 	if (!SaveObj)
 	{
@@ -220,7 +229,7 @@ bool URLSaveSubsystem::HasActiveRunForDifferentCharacter(TSubclassOf<ARLCharacte
 	return SavedClassPath != NewCharacterClass->GetPathName();
 }
 
-bool URLSaveSubsystem::AutoSaveOnStageTransition(ARLCharacter* PlayerCharacter, FName NewLevelName)
+bool URLSaveSubsystem::AutoSaveOnStageTransition(ARLCharacter* PlayerCharacter, FName NewLevelName, bool bSpawnAtPlayerStart)
 {
 	if (!PlayerCharacter)
 	{
@@ -229,7 +238,16 @@ bool URLSaveSubsystem::AutoSaveOnStageTransition(ARLCharacter* PlayerCharacter, 
 
 	// 스테이지 번호 1 증가
 	const int32 NextStageNumber = CurrentRunData.bIsRunActive ? (CurrentRunData.StageNumber + 1) : 1;
-	const bool bSaved = SaveActiveRun(PlayerCharacter, NewLevelName, NextStageNumber, PlayerCharacter->GetActorLocation());
+	FillRunData(PlayerCharacter, NewLevelName, NextStageNumber, PlayerCharacter->GetActorLocation());
+
+	// 맵이 바뀌면 이전 맵 좌표는 의미가 없으므로 비워둔다 (ApplyPlayerData는 영벡터면 위치 복원을 건너뜀 → PlayerStart 유지)
+	if (bSpawnAtPlayerStart)
+	{
+		CurrentRunData.PlayerLocation = FVector::ZeroVector;
+		CurrentRunData.PlayerRotation = FRotator::ZeroRotator;
+	}
+
+	const bool bSaved = WriteRunToDisk();
 
 	if (bSaved)
 	{

@@ -1,8 +1,9 @@
-#include "RLArenaManager.h"
+﻿#include "RLArenaManager.h"
 #include "RLEnemyCharacter.h"
 #include "RLRewardChest.h"
 #include "RLPortal.h"
 #include "RLCharacter.h"
+#include "RLFogWall.h"
 #include "Components/BoxComponent.h"
 #include "Components/SceneComponent.h"
 #include "Components/ArrowComponent.h"
@@ -751,7 +752,11 @@ void ARLArenaManager::LockBarriers()
 	// 4. 외부 등록된 문/장애물 액터 활성화
 	for (AActor* Barrier : BarrierActors)
 	{
-		if (Barrier)
+		if (ARLFogWall* FogWall = Cast<ARLFogWall>(Barrier))
+		{
+			FogWall->Restore();
+		}
+		else if (Barrier)
 		{
 			Barrier->SetActorHiddenInGame(false);
 			Barrier->SetActorEnableCollision(true);
@@ -788,7 +793,12 @@ void ARLArenaManager::UnlockBarriers()
 	// 3. 외부 등록된 문/장애물 액터 비활성화
 	for (AActor* Barrier : BarrierActors)
 	{
-		if (Barrier)
+		if (ARLFogWall* FogWall = Cast<ARLFogWall>(Barrier))
+		{
+			// 안개벽은 즉시 숨기지 않고 서서히 걷히게
+			FogWall->Dissolve();
+		}
+		else if (Barrier)
 		{
 			Barrier->SetActorHiddenInGame(true);
 			Barrier->SetActorEnableCollision(false);

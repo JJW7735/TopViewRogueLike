@@ -1,8 +1,9 @@
-#include "RLPortal.h"
+﻿#include "RLPortal.h"
 #include "Components/BoxComponent.h"
 #include "RLCharacter.h"
 #include "RLSaveSubsystem.h"
 #include "Kismet/GameplayStatics.h"
+#include "Misc/PackageName.h"
 
 ARLPortal::ARLPortal()
 {
@@ -35,7 +36,7 @@ void ARLPortal::OnOverlapBegin(UPrimitiveComponent* OverlappedComp, AActor* Othe
 {
     // 3. 겹친 대상이 몬스터나 투사체가 아니라 개발자님의 캐릭터(ARLCharacter)인지 확실히 검사합니다.
     ARLCharacter* PlayerChar = Cast<ARLCharacter>(OtherActor);
-    if (PlayerChar && !LevelToLoad.IsNone())
+    if (PlayerChar && HasDestination())
     {
         // ▼ 기존 로직: 닿자마자 바로 텔레포트했었음. 이제 E키 누를 때(TryInteract → ActivatePortal)만 실행되도록 변경.
         // // 중복해서 포탈을 타는 버그를 막기 위해, 한 번 닿으면 포탈의 충돌을 바로 꺼버립니다.
@@ -107,12 +108,19 @@ void ARLPortal::OnOverlapEnd(UPrimitiveComponent* OverlappedComp, AActor* OtherA
 
 void ARLPortal::ActivatePortal(ARLCharacter* PlayerChar)
 {
-    if (!PlayerChar || LevelToLoad.IsNone())
+    if (!PlayerChar || !HasDestination())
     {
         return;
     }
 
     PortalCollision->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+
+    if (!TravelMap.IsNull())
+    {
+        TravelToMap(PlayerChar);
+        return;
+    }
+
     OverlappedPlayer = PlayerChar;
 
     FLatentActionInfo LatentInfo;
@@ -121,4 +129,22 @@ void ARLPortal::ActivatePortal(ARLCharacter* PlayerChar)
     LatentInfo.Linkage = 0;
     LatentInfo.UUID = GetUniqueID();
     UGameplayStatics::LoadStreamLevel(this, LevelToLoad, true, false, LatentInfo);
+}
+
+void ARLPortal::TravelToMap(ARLCharacter* PlayerChar)
+{
+    const FString MapPackage = TravelMap.GetLongPackageName();
+    const FName MapShortName(*FPackageName::GetShortName(MapPackage));
+
+    // 맵이 통째로 바뀌므로 캐릭터 상태를 런 세이브에 담아두고, 새 맵에서 스폰될 때 BeginPlay가 복원하게 한다.
+    // 위치는 새 맵의 PlayerStart를 쓰도록 비워서 저장.
+    if (URLSaveSubsystem* SaveSys = URLSaveSubsystem::Get(this))
+    {
+        if (SaveSys->AutoSaveOnStageTransition(PlayerChar, MapShortName, true))
+        {
+            SaveSys->bPendingRunApply = true;
+        }
+    }
+
+    UGameplayStatics::OpenLevel(this, FName(*MapPackage));
 }

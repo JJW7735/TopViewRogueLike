@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include "CoreMinimal.h"
 #include "Subsystems/GameInstanceSubsystem.h"
@@ -63,9 +63,10 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Save|Run")
 	bool HasActiveRunForDifferentCharacter(TSubclassOf<ARLCharacter> NewCharacterClass) const;
 
-	/** 포탈을 타고 다음 스테이지로 진입할 때 자동 호출되는 편의 함수 */
+	/** 포탈을 타고 다음 스테이지로 진입할 때 자동 호출되는 편의 함수
+	 *  bSpawnAtPlayerStart: 맵 자체가 바뀌는 경우(OpenLevel) true — 위치를 비워서 새 맵의 PlayerStart에 스폰되게 한다. */
 	UFUNCTION(BlueprintCallable, Category = "Save|Run")
-	bool AutoSaveOnStageTransition(ARLCharacter* PlayerCharacter, FName NewLevelName);
+	bool AutoSaveOnStageTransition(ARLCharacter* PlayerCharacter, FName NewLevelName, bool bSpawnAtPlayerStart = false);
 
 	/** 플레이어 사망 시 호출: 런 세이브 삭제 + 수집한 소울 메타 정산 */
 	UFUNCTION(BlueprintCallable, Category = "Save|Run")
@@ -170,6 +171,12 @@ protected:
 
 	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = "Save|State")
 	FRLMetaSaveData CurrentMetaData;
+
+	/** 플레이어 상태와 맵/스테이지 정보를 CurrentRunData에 채움 (디스크 기록은 하지 않음) */
+	void FillRunData(ARLCharacter* PlayerCharacter, FName InCurrentMapName, int32 InStageNumber, FVector InRespawnLocation);
+
+	/** CurrentRunData를 디스크 슬롯에 기록 */
+	bool WriteRunToDisk();
 
 	void GatherPlayerData(ARLCharacter* PlayerCharacter, FRLRunSaveData& OutData);
 	void ApplyPlayerData(ARLCharacter* PlayerCharacter, const FRLRunSaveData& InData);

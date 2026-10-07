@@ -68,6 +68,16 @@ private:
     UPROPERTY(EditAnywhere, Category = "Portal Setup", meta = (MakeEditWidget = true))
     FVector TeleportLocation;
 
+    // 독립 맵(.umap)으로 넘어갈 때 지정. 설정되면 스트리밍(LevelToLoad/Unload) 대신 OpenLevel로 맵 자체를 전환하고,
+    // 체력/스탯/인벤토리/스킬은 런 세이브로 넘겨서 새 맵의 PlayerStart에서 복원한다.
+    UPROPERTY(EditAnywhere, Category = "Portal Setup")
+    TSoftObjectPtr<UWorld> TravelMap;
+
+    bool HasDestination() const { return !TravelMap.IsNull() || !LevelToLoad.IsNone(); }
+
+    // TravelMap으로 맵 전환 (런 자동저장 → OpenLevel)
+    void TravelToMap(ARLCharacter* PlayerChar);
+
     // 로딩하는 동안 포탈을 탄 플레이어를 안전하게 기억해 둘 변수
     UPROPERTY()
     ARLCharacter* OverlappedPlayer;
