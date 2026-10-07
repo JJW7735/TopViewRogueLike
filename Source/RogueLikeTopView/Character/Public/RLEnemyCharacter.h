@@ -1,4 +1,4 @@
-﻿// Fill out your copyright notice in the Description page of Project Settings.
+// Fill out your copyright notice in the Description page of Project Settings.
 #pragma once
 
 #include "CoreMinimal.h"
@@ -65,6 +65,10 @@ public:
 	// 처치 시 플레이어에게 지급할 경험치 (일반 몬스터 기본 30, 보스 350)
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Enemy|Reward", meta = (ClampMin = "0.0"))
 	float ExpReward = 30.0f;
+
+	// 처치 시 플레이어에게 지급할 영혼 (런 세이브 임시 영혼 / 사망 정산 메타 재화, 일반 몬스터 기본 2, 보스 35)
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Enemy|Reward", meta = (ClampMin = "0"))
+	int32 SoulReward = 2;
 
 	// ==========================================
 	// ★ 필드 아이템 / 골드 드롭 설정
