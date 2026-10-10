@@ -160,6 +160,10 @@ struct FRLRunSaveData
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Save|Run")
 	int32 StageNumber = 1;
 
+	// 현재 스테이지의 아레나 전투가 이미 클리어되었는지 여부
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Save|Run")
+	bool bIsStageCleared = false;
+
 	// 플레이어 위치 및 회전
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Save|Run")
 	FVector PlayerLocation = FVector::ZeroVector;

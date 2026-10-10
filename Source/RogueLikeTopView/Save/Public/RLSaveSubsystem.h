@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 
 #include "CoreMinimal.h"
 #include "Subsystems/GameInstanceSubsystem.h"
@@ -75,6 +75,14 @@ public:
 	/** 캐시된 현재 런 세이브 데이터 조회 */
 	UFUNCTION(BlueprintPure, Category = "Save|Run")
 	const FRLRunSaveData& GetActiveRunData() const { return CurrentRunData; }
+
+	/** 현재 월드에 살아있는 적이 있거나 아레나 전투가 진행 중인지 확인 */
+	UFUNCTION(BlueprintPure, Category = "Save|Combat", meta = (WorldContext = "WorldContextObject"))
+	bool IsCombatActive(const UObject* WorldContextObject = nullptr) const;
+
+	/** 현재 월드의 아레나가 클리어 완료 상태인지 확인 */
+	UFUNCTION(BlueprintPure, Category = "Save|Combat", meta = (WorldContext = "WorldContextObject"))
+	bool IsArenaCleared(const UObject* WorldContextObject = nullptr) const;
 
 	// ==========================================
 	// [Track 1] 영구 메타 세이브 (Permanent Meta Progression)

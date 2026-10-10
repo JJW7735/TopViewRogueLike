@@ -1,4 +1,4 @@
-﻿#include "RLSaveSubsystem.h"
+#include "RLSaveSubsystem.h"
 #include "RLCharacter.h"
 #include "RLHealthComponent.h"
 #include "RLStatComponent.h"
@@ -10,6 +10,8 @@
 #include "Engine/World.h"
 #include "GameFramework/PlayerController.h"
 #include "GameFramework/CharacterMovementComponent.h"
+#include "RLEnemyCharacter.h"
+#include "RLArenaManager.h"
 
 void URLSaveSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
@@ -74,9 +76,32 @@ void URLSaveSubsystem::FillRunData(ARLCharacter* PlayerCharacter, FName InCurren
 
 	GatherPlayerData(PlayerCharacter, CurrentRunData);
 
-	if (!InRespawnLocation.IsZero())
+	UWorld* World = PlayerCharacter ? PlayerCharacter->GetWorld() : GetWorld();
+	const bool bInCombat = IsCombatActive(World);
+
+	if (bInCombat)
 	{
-		CurrentRunData.PlayerLocation = InRespawnLocation;
+		// ★ [유저 요청] 몬스터가 있을 때(전투 중) 나가면 라운드 처음부터 진행하도록 초기화:
+		// 1. 플레이어 위치를 ZeroVector로 리셋 -> 레벨 로드 시 기본 PlayerStart 위치에서 스폰/유지됨
+		CurrentRunData.PlayerLocation = FVector::ZeroVector;
+		CurrentRunData.PlayerRotation = FRotator::ZeroRotator;
+
+		// 2. 전투 중 소모된 체력을 최대 체력으로 회복하여 라운드 시작 컨디션 제공
+		CurrentRunData.Health.CurrentHealth = CurrentRunData.Health.MaxHealth;
+
+		// 3. 전투 중이었으므로 해당 스테이지는 미클리어 상태
+		CurrentRunData.bIsStageCleared = false;
+
+		UE_LOG(LogTemp, Log, TEXT("[SaveSubsystem] 몬스터가 존재하는 전투 중 저장되었습니다. 라운드 처음(PlayerStart)부터 시작하도록 위치와 체력이 초기화됩니다."));
+	}
+	else
+	{
+		if (!InRespawnLocation.IsZero())
+		{
+			CurrentRunData.PlayerLocation = InRespawnLocation;
+		}
+
+		CurrentRunData.bIsStageCleared = IsArenaCleared(World);
 	}
 }
 
@@ -243,6 +268,9 @@ bool URLSaveSubsystem::AutoSaveOnStageTransition(ARLCharacter* PlayerCharacter, 
 	const int32 NextStageNumber = CurrentRunData.bIsRunActive ? (CurrentRunData.StageNumber + 1) : 1;
 	FillRunData(PlayerCharacter, NewLevelName, NextStageNumber, PlayerCharacter->GetActorLocation());
 
+	// ★ 새 스테이지로 진입했으므로 아레나 클리어 플래그는 무조건 false로 초기화
+	CurrentRunData.bIsStageCleared = false;
+
 	// 맵이 바뀌면 이전 맵 좌표는 의미가 없으므로 비워둔다 (ApplyPlayerData는 영벡터면 위치 복원을 건너뜀 → PlayerStart 유지)
 	if (bSpawnAtPlayerStart)
 	{
@@ -259,6 +287,86 @@ bool URLSaveSubsystem::AutoSaveOnStageTransition(ARLCharacter* PlayerCharacter, 
 	}
 
 	return bSaved;
+}
+
+bool URLSaveSubsystem::IsCombatActive(const UObject* WorldContextObject) const
+{
+	const UWorld* World = WorldContextObject ? GEngine->GetWorldFromContextObject(WorldContextObject, EGetWorldErrorMode::LogAndReturnNull) : GetWorld();
+	if (!World)
+	{
+		return false;
+	}
+
+	// 1. 월드에 살아있는 적(ARLEnemyCharacter)이 존재하는지 확인
+	TArray<AActor*> FoundEnemies;
+	UGameplayStatics::GetAllActorsOfClass(World, ARLEnemyCharacter::StaticClass(), FoundEnemies);
+	for (AActor* Actor : FoundEnemies)
+	{
+		if (ARLEnemyCharacter* Enemy = Cast<ARLEnemyCharacter>(Actor))
+		{
+			if (URLHealthComponent* Health = Enemy->FindComponentByClass<URLHealthComponent>())
+			{
+				if (!Health->bIsDead && Health->CurrentHealth > 0.0f)
+				{
+					return true;
+				}
+			}
+			else if (IsValid(Enemy))
+			{
+				return true;
+			}
+		}
+	}
+
+	// 2. 아레나 매니저가 전투 진행 중인지 확인 (웨이브 진행 중 또는 웨이브 사이 대기 중)
+	TArray<AActor*> FoundArenas;
+	UGameplayStatics::GetAllActorsOfClass(World, ARLArenaManager::StaticClass(), FoundArenas);
+	for (AActor* Actor : FoundArenas)
+	{
+		if (ARLArenaManager* Arena = Cast<ARLArenaManager>(Actor))
+		{
+			const ERLArenaState State = Arena->GetArenaState();
+			if (State == ERLArenaState::InProgress || State == ERLArenaState::BetweenWaves)
+			{
+				return true;
+			}
+			if (Arena->GetRemainingEnemies() > 0)
+			{
+				return true;
+			}
+		}
+	}
+
+	return false;
+}
+
+bool URLSaveSubsystem::IsArenaCleared(const UObject* WorldContextObject) const
+{
+	const UWorld* World = WorldContextObject ? GEngine->GetWorldFromContextObject(WorldContextObject, EGetWorldErrorMode::LogAndReturnNull) : GetWorld();
+	if (!World)
+	{
+		return false;
+	}
+
+	TArray<AActor*> FoundArenas;
+	UGameplayStatics::GetAllActorsOfClass(World, ARLArenaManager::StaticClass(), FoundArenas);
+	if (FoundArenas.Num() == 0)
+	{
+		return false;
+	}
+
+	for (AActor* Actor : FoundArenas)
+	{
+		if (ARLArenaManager* Arena = Cast<ARLArenaManager>(Actor))
+		{
+			if (Arena->GetArenaState() == ERLArenaState::Cleared)
+			{
+				return true;
+			}
+		}
+	}
+
+	return false;
 }
 
 void URLSaveSubsystem::HandlePlayerDeath()

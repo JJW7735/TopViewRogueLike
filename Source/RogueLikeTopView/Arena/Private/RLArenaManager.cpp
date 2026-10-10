@@ -1,4 +1,4 @@
-﻿#include "RLArenaManager.h"
+#include "RLArenaManager.h"
 #include "RLEnemyCharacter.h"
 #include "RLRewardChest.h"
 #include "RLPortal.h"
@@ -11,6 +11,7 @@
 #include "TimerManager.h"
 #include "Kismet/GameplayStatics.h"
 #include "NavigationSystem.h"
+#include "RLSaveSubsystem.h"
 
 ARLArenaManager::ARLArenaManager()
 {
@@ -170,6 +171,9 @@ void ARLArenaManager::BeginPlay()
 		ExistingPortalActor->SetActorHiddenInGame(true);
 		ExistingPortalActor->SetActorEnableCollision(false);
 	}
+
+	// 로드 시 플레이어가 이미 트리거 안에 있거나, 이전 클리어 상태가 있는지 0.2초 후 점검
+	GetWorldTimerManager().SetTimer(InitialOverlapCheckTimerHandle, this, &ARLArenaManager::CheckInitialPlayerOverlap, 0.2f, false);
 }
 
 void ARLArenaManager::EndPlay(const EEndPlayReason::Type EndPlayReason)
@@ -179,6 +183,7 @@ void ARLArenaManager::EndPlay(const EEndPlayReason::Type EndPlayReason)
 		World->GetTimerManager().ClearTimer(WaveDelayTimerHandle);
 		World->GetTimerManager().ClearTimer(SpawnIntervalTimerHandle);
 		World->GetTimerManager().ClearTimer(BarrierCloseTimerHandle);
+		World->GetTimerManager().ClearTimer(InitialOverlapCheckTimerHandle);
 	}
 
 	CleanupArenaSpawnedActors();
@@ -875,4 +880,44 @@ void ARLArenaManager::TestClearCurrentWave()
 void ARLArenaManager::TestKillAllEnemies()
 {
 	TestClearCurrentWave();
+}
+
+void ARLArenaManager::CheckInitialPlayerOverlap()
+{
+	if (CurrentState != ERLArenaState::Inactive)
+	{
+		return;
+	}
+
+	// 1. 이미 클리어된 스테이지로 저장된 데이터를 로드한 경우: 포탈 즉시 개방
+	if (URLSaveSubsystem* SaveSys = URLSaveSubsystem::Get(this))
+	{
+		if (SaveSys->HasActiveRun() && SaveSys->GetActiveRunData().bIsStageCleared)
+		{
+			UE_LOG(LogTemp, Log, TEXT("[ArenaManager] '%s': 저장된 스테이지가 이미 클리어된 상태입니다. 포탈을 즉시 개방합니다."), *GetName());
+			CompleteArena();
+			return;
+		}
+	}
+
+	if (!bAutoStartOnOverlap || !TriggerVolume)
+	{
+		return;
+	}
+
+	ARLCharacter* PlayerChar = Cast<ARLCharacter>(UGameplayStatics::GetPlayerCharacter(this, 0));
+	if (!PlayerChar || !PlayerChar->IsPlayerControlled())
+	{
+		return;
+	}
+
+	// 2. 플레이어가 이미 TriggerVolume 안에 스폰/위치해 있는 경우 아레나 자동 시작
+	const bool bOverlapping = TriggerVolume->IsOverlappingActor(PlayerChar) ||
+		TriggerVolume->Bounds.GetBox().IsInsideOrOn(PlayerChar->GetActorLocation());
+
+	if (bOverlapping)
+	{
+		UE_LOG(LogTemp, Log, TEXT("[ArenaManager] '%s': 플레이어가 이미 트리거 내부에 위치해 있어 아레나를 시작합니다."), *GetName());
+		StartArena();
+	}
 }

@@ -339,6 +339,7 @@ protected:
 
 	void CompleteCurrentWave();
 	void CompleteArena();
+	void CheckInitialPlayerOverlap();
 
 private:
 	UPROPERTY(VisibleInstanceOnly, Category = "Arena|Runtime")
@@ -368,4 +369,5 @@ private:
 	FTimerHandle WaveDelayTimerHandle;
 	FTimerHandle SpawnIntervalTimerHandle;
 	FTimerHandle BarrierCloseTimerHandle;
+	FTimerHandle InitialOverlapCheckTimerHandle;
 };
