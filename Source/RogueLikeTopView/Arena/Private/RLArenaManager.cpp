@@ -1,4 +1,4 @@
-#include "RLArenaManager.h"
+﻿#include "RLArenaManager.h"
 #include "RLEnemyCharacter.h"
 #include "RLRewardChest.h"
 #include "RLPortal.h"
@@ -679,8 +679,16 @@ void ARLArenaManager::LockBarriers()
 		const FVector PlayerLoc = Player->GetActorLocation();
 
 		// 플레이어가 경계 벽 근처(150cm 이내)에 머물러 있다면 끼이지 않도록 0.5초 더 대기
+		// 실제로 켜질 벽만 검사 (꺼진 4면 결계가 트리거 근처에 있으면 영원히 대기하게 됨)
 		bool bTooCloseToWall = false;
-		UBoxComponent* AllCheckWalls[] = { BoundaryWall_North, BoundaryWall_South, BoundaryWall_East, BoundaryWall_West, EntranceBarrier };
+		const bool bUseBoundary = bEncloseEntireArena;
+		const bool bUseEntrance = bUseEntranceBarrier && !bEncloseEntireArena;
+		UBoxComponent* AllCheckWalls[] = {
+			bUseBoundary ? BoundaryWall_North.Get() : nullptr,
+			bUseBoundary ? BoundaryWall_South.Get() : nullptr,
+			bUseBoundary ? BoundaryWall_East.Get() : nullptr,
+			bUseBoundary ? BoundaryWall_West.Get() : nullptr,
+			bUseEntrance ? EntranceBarrier.Get() : nullptr };
 		for (UBoxComponent* CheckWall : AllCheckWalls)
 		{
 			if (CheckWall)
@@ -691,6 +699,17 @@ void ARLArenaManager::LockBarriers()
 					bTooCloseToWall = true;
 					break;
 				}
+			}
+		}
+
+		// 열려 있던 안개벽(입구) 안에 서 있어도 닫히면 끼이므로 대기
+		for (AActor* Barrier : BarrierActors)
+		{
+			const ARLFogWall* FogWall = Cast<ARLFogWall>(Barrier);
+			if (!bTooCloseToWall && FogWall && !FogWall->IsBlocking() && FogWall->BlockVolume)
+			{
+				const FBox FogBox = FogWall->BlockVolume->Bounds.GetBox().ExpandBy(FVector(150.0f, 150.0f, 50.0f));
+				bTooCloseToWall = FogBox.IsInsideOrOn(PlayerLoc);
 			}
 		}
 
