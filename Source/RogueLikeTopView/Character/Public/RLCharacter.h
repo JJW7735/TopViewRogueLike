@@ -1,4 +1,4 @@
-// Fill out your copyright notice in the Description page of Project Settings.
+﻿// Fill out your copyright notice in the Description page of Project Settings.
 #pragma once
 
 #include "CoreMinimal.h"
@@ -55,6 +55,10 @@ public:
 	// 완전히 분리했습니다 — 기존 Dodge/StartDashMovement 호출부에 영향 없음.
 	UFUNCTION(BlueprintCallable, Category = "Combat")
 	void StartDashAttack(FVector TargetLocation, float Duration, float HitRadius, const FRLDamageData& DamageData);
+
+	// ★ LaunchCharacter와 같지만, 날아갈 거리를 추정해서 걸을 수 있는 영역(네비메시) 밖으로 나가지 않게 수평 속도를 줄임
+	// (넉백/돌진 스킬로 낭떠러지·강 너머로 떨어지는 것 방지)
+	void LaunchClampedToNav(const FVector& LaunchVelocity, bool bXYOverride, bool bZOverride);
 
 	UFUNCTION(BlueprintCallable, Category = "Combat")
 	virtual void ReceiveCustomDamage(const FRLDamageData& DamageData, const FHitResult& HitInfo);

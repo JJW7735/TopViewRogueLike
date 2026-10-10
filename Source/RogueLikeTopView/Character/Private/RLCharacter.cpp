@@ -1,4 +1,4 @@
-// Fill out your copyright notice in the Description page of Project Settings.
+﻿// Fill out your copyright notice in the Description page of Project Settings.
 
 #include "RLCharacter.h"
 #include "GameFramework/SpringArmComponent.h"
@@ -27,6 +27,68 @@
 #include "RLDecalIndicator.h"
 #include "NavigationSystem.h"
 #include "Engine/World.h"
+
+namespace
+{
+    // 시작점에서 Dir 방향으로 걸을 수 있는 영역(네비메시) 경계까지의 수평 거리. 경계에 안 닿으면 MaxDist, 네비 밖이면 -1
+    float GetNavDistanceToEdge(const ACharacter* Character, const FVector& Dir, float MaxDist)
+    {
+        UNavigationSystemV1* NavSys = FNavigationSystem::GetCurrent<UNavigationSystemV1>(Character->GetWorld());
+        FNavLocation StartOnNav;
+        if (!NavSys || !NavSys->ProjectPointToNavigation(Character->GetActorLocation(), StartOnNav, FVector(50.0f, 50.0f, 250.0f)))
+        {
+            return -1.0f;
+        }
+
+        const FVector RayEnd = StartOnNav.Location + Dir * MaxDist;
+        FVector HitLocation;
+        if (UNavigationSystemV1::NavigationRaycast(const_cast<ACharacter*>(Character), StartOnNav.Location, RayEnd, HitLocation, nullptr, Character->GetController()))
+        {
+            return FVector::Dist2D(StartOnNav.Location, HitLocation);
+        }
+        return MaxDist;
+    }
+
+    // ★ 넉백(LaunchCharacter)으로 날아갈 수평 거리를 추정해서, 낭떠러지/강 너머로 날아가지 않게 수평 속도를 줄임
+    // 예상 거리 = 공중 비행(위로 UpSpeed만큼 떴다 떨어지는 시간 x 수평 속도) + 착지 후 제동 거리
+    // 마찰은 무시해서 실제보다 길게 잡음 (가장자리 근처에서만 줄어들고, 안전한 곳에서는 원래 세기 그대로)
+    float ClampKnockbackSpeedToNav(const ACharacter* Character, const FVector& Dir, float Speed, float UpSpeed)
+    {
+        const UCharacterMovementComponent* Move = Character->GetCharacterMovement();
+        if (!Move || Speed <= 0.0f)
+        {
+            return Speed;
+        }
+
+        const float Gravity = FMath::Max(FMath::Abs(Move->GetGravityZ()), 1.0f);
+        const float AirTime = 2.0f * UpSpeed / Gravity;
+        const float Braking = FMath::Max(Move->BrakingDecelerationWalking, 1.0f);
+        const float PredictedDist = Speed * AirTime + Speed * Speed / (2.0f * Braking);
+
+        const float EdgeDist = GetNavDistanceToEdge(Character, Dir, PredictedDist + 100.0f);
+        if (EdgeDist < 0.0f || EdgeDist >= PredictedDist)
+        {
+            return Speed;
+        }
+
+        // Speed*AirTime + Speed^2/(2*Braking) = 안전거리 를 Speed에 대해 풂
+        const float SafeDist = FMath::Max(EdgeDist - 30.0f, 0.0f);
+        const float A = 1.0f / (2.0f * Braking);
+        const float B = AirTime;
+        return (-B + FMath::Sqrt(B * B + 4.0f * A * SafeDist)) / (2.0f * A);
+    }
+}
+
+void ARLCharacter::LaunchClampedToNav(const FVector& LaunchVelocity, bool bXYOverride, bool bZOverride)
+{
+    const FVector Dir = LaunchVelocity.GetSafeNormal2D();
+    const float Speed = LaunchVelocity.Size2D();
+    // Z를 덮어쓰지 않으면 위로 거의 안 뜨므로 공중 비행 시간은 위쪽 성분만으로 추정
+    const float UpSpeed = FMath::Max(LaunchVelocity.Z, 0.0f);
+    const float ClampedSpeed = ClampKnockbackSpeedToNav(this, Dir, Speed, UpSpeed);
+
+    LaunchCharacter(Dir * ClampedSpeed + FVector(0.f, 0.f, LaunchVelocity.Z), bXYOverride, bZOverride);
+}
 
 ARLCharacter::ARLCharacter()
 {
@@ -199,7 +261,7 @@ void ARLCharacter::ReceiveCustomDamage(const FRLDamageData& DamageData, const FH
     {
         float KnockbackMultiplier = DamageData.bIsCritical ? 1.25f : 1.0f;
         FVector KnockbackDir = (GetActorLocation() - HitInfo.ImpactPoint).GetSafeNormal2D();
-        LaunchCharacter(KnockbackDir * (DamageData.KnockbackForce * KnockbackMultiplier) + FVector(0.f, 0.f, 150.f), true, true);
+        LaunchClampedToNav(KnockbackDir * (DamageData.KnockbackForce * KnockbackMultiplier) + FVector(0.f, 0.f, 150.f), true, true);
     }
 
     AController* InstigatorController = DamageData.DamageCauser ? DamageData.DamageCauser->GetInstigatorController() : nullptr;
@@ -973,6 +1035,29 @@ float ARLCharacter::TakeDamage(float DamageAmount, struct FDamageEvent const& Da
 void ARLCharacter::StartDashMovement(FVector TargetLocation, float Duration)
 {
     DashStartLocation = GetActorLocation();
+
+    // ★ 낭떠러지/강 위로 대시해서 떨어지지 않도록, 목표 지점을 걸을 수 있는 영역(네비메시) 경계까지로 자름
+    if (UNavigationSystemV1* NavSys = FNavigationSystem::GetCurrent<UNavigationSystemV1>(GetWorld()))
+    {
+        FNavLocation StartOnNav;
+        if (NavSys->ProjectPointToNavigation(DashStartLocation, StartOnNav, FVector(50.0f, 50.0f, 250.0f)))
+        {
+            const FVector RayEnd(TargetLocation.X, TargetLocation.Y, StartOnNav.Location.Z);
+            FVector NavHitLocation;
+            if (UNavigationSystemV1::NavigationRaycast(this, StartOnNav.Location, RayEnd, NavHitLocation, nullptr, GetController()))
+            {
+                // 짧아진 거리만큼 시간도 줄여서 대시 속도는 그대로 유지
+                const float OriginalDist = FVector::Dist2D(DashStartLocation, TargetLocation);
+                if (OriginalDist > KINDA_SMALL_NUMBER)
+                {
+                    Duration *= FVector::Dist2D(DashStartLocation, NavHitLocation) / OriginalDist;
+                }
+                TargetLocation.X = NavHitLocation.X;
+                TargetLocation.Y = NavHitLocation.Y;
+            }
+        }
+    }
+
     DashTargetLocation = TargetLocation;
     DashDuration = FMath::Max(0.01f, Duration);
     DashElapsedTime = 0.0f;

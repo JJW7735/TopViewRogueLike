@@ -1,4 +1,4 @@
-#include "RLSkillComponent.h"
+﻿#include "RLSkillComponent.h"
 #include "RLCharacter.h"
 #include "RLPlayerController.h"
 #include "RLDecalIndicator.h"
@@ -297,7 +297,7 @@ void URLSkillComponent::OnSkillInputCompleted(ESkillSlot Slot)
 
 		if (Skill->CastType == ESkillCastType::ChargeDash && CurrentAccumulatedTime >= Skill->MinChargeTime)
 		{
-			OwnerCharacter->LaunchCharacter(OwnerCharacter->GetActorForwardVector() * Skill->DashPower, true, true);
+			OwnerCharacter->LaunchClampedToNav(OwnerCharacter->GetActorForwardVector() * Skill->DashPower, true, true);
 		}
 
 		FRLDamageData FinalDamage = CalculateFinalDamage(Skill);
@@ -487,7 +487,7 @@ void URLSkillComponent::TriggerActiveSkillDash()
 		if (Skill->CastType == ESkillCastType::Dash || Skill->CastType == ESkillCastType::ChargeDash)
 		{
 			FVector LaunchVelocity = OwnerCharacter->GetActorForwardVector() * Skill->DashPower;
-			OwnerCharacter->LaunchCharacter(LaunchVelocity, true, false);
+			OwnerCharacter->LaunchClampedToNav(LaunchVelocity, true, false);
 		}
 	}
 }
