@@ -43,13 +43,18 @@ void URLRewardSelectWidget::SelectReward(int32 OptionIndex)
 		OnRewardChosen(OptionIndex);
 	}
 
-	// 보상 제공 상자 소멸 처리 (이펙트 끄고 딜레이 후 파괴)
-	if (SourceChest.IsValid())
-	{
-		SourceChest->FinishAndDestroyChest();
-	}
+	// ★ 위젯을 먼저 닫아 일시정지/입력 모드를 원복한 뒤 상자를 정리한다.
+	// 상자의 OnRewardClaimed를 받아 새 모달(예: 보스 상자 → 승리 화면)이 게임을 다시 일시정지할 수 있도록,
+	// CloseWidget의 일시정지 해제가 그 뒤에 덮어쓰지 않게 하기 위함.
+	ARLRewardChest* ChestToFinish = SourceChest.Get();
 
 	CloseWidget();
+
+	// 보상 제공 상자 소멸 처리 (이펙트 끄고 딜레이 후 파괴)
+	if (ChestToFinish)
+	{
+		ChestToFinish->FinishAndDestroyChest();
+	}
 }
 
 void URLRewardSelectWidget::CloseWidget()

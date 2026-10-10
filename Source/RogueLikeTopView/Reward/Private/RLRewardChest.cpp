@@ -173,6 +173,7 @@ void ARLRewardChest::FinishAndDestroyChest(float DelaySeconds)
 
 	// 블루프린트 연출 훅 호출 (소멸 VFX/SFX 등)
 	OnChestClaimed();
+	OnRewardClaimed.Broadcast(this);
 
 	const float ActualDelay = (DelaySeconds >= 0.0f) ? DelaySeconds : DestroyDelay;
 	if (ActualDelay <= 0.0f)

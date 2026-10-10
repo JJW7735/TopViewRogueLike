@@ -11,6 +11,8 @@ class UNiagaraComponent;
 class ARLCharacter;
 class URLRewardSelectWidget;
 
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnRewardChestClaimed, ARLRewardChest*, Chest);
+
 /**
  * 필드에 배치되거나 몬스터/보스 처치 시 스폰되는 상호작용 가능한 보상 상자 액터
  */
@@ -53,6 +55,10 @@ public:
 	/** 상자 보상 수령 완료 시 BP에서 소멸 연출(VFX, SFX, 페이드아웃)할 수 있는 이벤트 */
 	UFUNCTION(BlueprintImplementableEvent, Category = "Reward|Chest")
 	void OnChestClaimed();
+
+	/** 보상 수령이 끝났을 때(FinishAndDestroyChest) 외부에 알리는 델리게이트. 상자 소멸 직전에 방송됨 */
+	UPROPERTY(BlueprintAssignable, Category = "Reward|Chest")
+	FOnRewardChestClaimed OnRewardClaimed;
 
 	/** 플레이어가 범위에 들어왔을 때 HUD에 띄울 상호작용 안내 문구 (인스턴스별로 에디터에서 지정) */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Interaction")

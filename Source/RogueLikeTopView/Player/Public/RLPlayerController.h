@@ -9,6 +9,8 @@ class UInputMappingContext;
 class UInputAction;
 class UNiagaraSystem;
 class UMaterialParameterCollection;
+class UUserWidget;
+class ARLRewardChest;
 
 UCLASS()
 class ROGUELIKETOPVIEW_API ARLPlayerController : public APlayerController
@@ -42,6 +44,35 @@ public:
 	// 비워두면 /Game/Effect/Material/Occlusion/MPC_Occlusion을 실행 중에 불러와 씁니다.
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Camera|Occlusion")
 	TObjectPtr<UMaterialParameterCollection> OcclusionMPC = nullptr;
+
+	// ★ "STAGE CLEAR" 화면을 StageClearDisplayDuration초 동안 띄웠다가 제거합니다.
+	// 입력 모드/일시정지는 건드리지 않으므로 플레이어는 그대로 움직일 수 있습니다.
+	// 타이머를 컨트롤러가 들고 있어서, 호출한 액터(예: 사망 페이드 후 Destroy되는 보스)가 먼저 사라져도 정상 제거됩니다.
+	UFUNCTION(BlueprintCallable, Category = "UI")
+	void ShowStageClearScreen();
+
+	// 비워두면 /Game/Blueprint/UI/WBP_StageClear를 실행 중에 불러와 씁니다.
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "UI|StageClear")
+	TSubclassOf<UUserWidget> StageClearWidgetClass;
+
+	// 클리어 화면 표시 시간(초)
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "UI|StageClear", meta = (ClampMin = "0.1"))
+	float StageClearDisplayDuration = 2.5f;
+
+	// ★ 보스가 떨어뜨린 보상 상자를 추적합니다. 이 상자의 보상 수령이 끝나면 승리 화면을 띄웁니다.
+	// (일반 아레나 클리어 상자는 등록되지 않으므로 반응하지 않음)
+	void WatchBossRewardChest(ARLRewardChest* Chest);
+
+	// 승리 화면(WBP_Victory)을 일시정지 + 커서 표시 모달로 띄웁니다
+	UFUNCTION(BlueprintCallable, Category = "UI")
+	void ShowVictoryScreen();
+
+	// 비워두면 /Game/Blueprint/UI/WBP_Victory를 실행 중에 불러와 씁니다.
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "UI|Victory")
+	TSubclassOf<UUserWidget> VictoryWidgetClass;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "UI|Victory")
+	FName MainMenuLevelName = FName("L_MainMenu");
 
 protected:
 	virtual void BeginPlay() override;
@@ -104,4 +135,22 @@ private:
 
 	void OnDodge_Started();
 	void OnInteract_Started();
+
+	void HideStageClearScreen();
+
+	UPROPERTY()
+	TObjectPtr<UUserWidget> StageClearWidget;
+
+	FTimerHandle StageClearHideTimerHandle;
+
+	UFUNCTION()
+	void HandleBossChestClaimed(ARLRewardChest* Chest);
+
+	UFUNCTION()
+	void HandleVictoryMainMenuClicked();
+
+	TWeakObjectPtr<ARLRewardChest> WatchedBossChest;
+
+	UPROPERTY()
+	TObjectPtr<UUserWidget> VictoryWidget;
 };

@@ -12,6 +12,12 @@
 #include "Components/CapsuleComponent.h"
 #include "Kismet/KismetMaterialLibrary.h"
 #include "Materials/MaterialParameterCollection.h"
+#include "Blueprint/UserWidget.h"
+#include "TimerManager.h"
+#include "RLRewardChest.h"
+#include "RLSaveSubsystem.h"
+#include "Components/Button.h"
+#include "Kismet/GameplayStatics.h"
 
 ARLPlayerController::ARLPlayerController()
 {
@@ -114,6 +120,159 @@ void ARLPlayerController::KillAllEnemies()
 	{
 		GEngine->AddOnScreenDebugMessage(-1, 2.0f, FColor::Red, FString::Printf(TEXT("[Cheat] 적 %d마리 처치"), KilledCount));
 	}
+}
+
+void ARLPlayerController::ShowStageClearScreen()
+{
+	TSubclassOf<UUserWidget> TargetWidgetClass = StageClearWidgetClass;
+	if (!TargetWidgetClass)
+	{
+		TargetWidgetClass = LoadClass<UUserWidget>(nullptr, TEXT("/Game/Blueprint/UI/WBP_StageClear.WBP_StageClear_C"));
+		if (!TargetWidgetClass)
+		{
+			return;
+		}
+	}
+
+	// 이전 클리어 화면이 남아있으면 먼저 정리
+	HideStageClearScreen();
+
+	StageClearWidget = CreateWidget<UUserWidget>(this, TargetWidgetClass);
+	if (!StageClearWidget)
+	{
+		return;
+	}
+
+	// 마우스 클릭(이동/공격)을 가로채지 않도록 히트 테스트 제외
+	StageClearWidget->SetVisibility(ESlateVisibility::HitTestInvisible);
+	StageClearWidget->AddToViewport();
+
+	GetWorldTimerManager().SetTimer(StageClearHideTimerHandle, this, &ARLPlayerController::HideStageClearScreen,
+		FMath::Max(StageClearDisplayDuration, 0.1f), false);
+}
+
+void ARLPlayerController::HideStageClearScreen()
+{
+	GetWorldTimerManager().ClearTimer(StageClearHideTimerHandle);
+
+	if (StageClearWidget)
+	{
+		StageClearWidget->RemoveFromParent();
+		StageClearWidget = nullptr;
+	}
+}
+
+void ARLPlayerController::WatchBossRewardChest(ARLRewardChest* Chest)
+{
+	if (!Chest)
+	{
+		return;
+	}
+
+	if (ARLRewardChest* Prev = WatchedBossChest.Get())
+	{
+		Prev->OnRewardClaimed.RemoveDynamic(this, &ARLPlayerController::HandleBossChestClaimed);
+	}
+
+	WatchedBossChest = Chest;
+	Chest->OnRewardClaimed.AddUniqueDynamic(this, &ARLPlayerController::HandleBossChestClaimed);
+}
+
+void ARLPlayerController::HandleBossChestClaimed(ARLRewardChest* Chest)
+{
+	if (!Chest || Chest != WatchedBossChest.Get())
+	{
+		return;
+	}
+
+	Chest->OnRewardClaimed.RemoveDynamic(this, &ARLPlayerController::HandleBossChestClaimed);
+	WatchedBossChest = nullptr;
+
+	ShowVictoryScreen();
+}
+
+void ARLPlayerController::ShowVictoryScreen()
+{
+	if (VictoryWidget)
+	{
+		return;
+	}
+
+	TSubclassOf<UUserWidget> TargetWidgetClass = VictoryWidgetClass;
+	if (!TargetWidgetClass)
+	{
+		TargetWidgetClass = LoadClass<UUserWidget>(nullptr, TEXT("/Game/Blueprint/UI/WBP_Victory.WBP_Victory_C"));
+		if (!TargetWidgetClass)
+		{
+			return;
+		}
+	}
+
+	// 1. 위젯 생성
+	VictoryWidget = CreateWidget<UUserWidget>(this, TargetWidgetClass);
+	if (!VictoryWidget)
+	{
+		return;
+	}
+
+	// 2. 표시할 값 채우기 (WBP_Victory의 BP 변수: CharacterNameText / StageReached)
+	FText CharacterName;
+	if (const ARLCharacter* RLChar = Cast<ARLCharacter>(GetPawn()))
+	{
+		CharacterName = RLChar->CharacterDisplayName;
+	}
+
+	int32 StageReached = 1;
+	if (URLSaveSubsystem* SaveSys = URLSaveSubsystem::Get(this))
+	{
+		StageReached = SaveSys->GetActiveRunData().StageNumber;
+	}
+
+	if (FTextProperty* NameProp = FindFProperty<FTextProperty>(VictoryWidget->GetClass(), TEXT("CharacterNameText")))
+	{
+		NameProp->SetPropertyValue_InContainer(VictoryWidget, CharacterName);
+	}
+	if (FIntProperty* StageProp = FindFProperty<FIntProperty>(VictoryWidget->GetClass(), TEXT("StageReached")))
+	{
+		StageProp->SetPropertyValue_InContainer(VictoryWidget, StageReached);
+	}
+
+	// 3. 값을 텍스트에 반영 (Construct에서도 호출되지만, 값 채운 직후 명시적으로 한 번 더 호출)
+	if (UFunction* ApplyFn = VictoryWidget->FindFunction(TEXT("ApplyVictoryData")))
+	{
+		VictoryWidget->ProcessEvent(ApplyFn, nullptr);
+	}
+
+	// 메인 메뉴 버튼 연결
+	if (UButton* MainMenuButton = Cast<UButton>(VictoryWidget->GetWidgetFromName(TEXT("Btn_MainMenu"))))
+	{
+		MainMenuButton->OnClicked.AddUniqueDynamic(this, &ARLPlayerController::HandleVictoryMainMenuClicked);
+	}
+
+	// 4. 화면에 추가 + 모달 처리 (일시정지, 커서 표시, UI 전용 입력)
+	VictoryWidget->AddToViewport(100);
+
+	UGameplayStatics::SetGamePaused(this, true);
+
+	FInputModeUIOnly InputMode;
+	InputMode.SetWidgetToFocus(VictoryWidget->TakeWidget());
+	InputMode.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
+	SetInputMode(InputMode);
+	bShowMouseCursor = true;
+}
+
+void ARLPlayerController::HandleVictoryMainMenuClicked()
+{
+	// QuitToMainMenuAfterDeath와 같은 방식으로 입력/일시정지를 원복하고 메인 메뉴로 이동.
+	// (런 정리/소울 정산은 이 단계에서 하지 않음)
+	UGameplayStatics::SetGamePaused(this, false);
+
+	FInputModeGameAndUI InputMode;
+	InputMode.SetHideCursorDuringCapture(false);
+	SetInputMode(InputMode);
+	bShowMouseCursor = true;
+
+	UGameplayStatics::OpenLevel(this, MainMenuLevelName);
 }
 
 void ARLPlayerController::PlayerTick(float DeltaTime)

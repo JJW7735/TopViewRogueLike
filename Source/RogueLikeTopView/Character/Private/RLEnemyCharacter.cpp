@@ -5,6 +5,7 @@
 #include "RLItemDrop.h"
 #include "RLItemDataAsset.h"
 #include "RLSaveSubsystem.h"
+#include "RLPlayerController.h"
 #include "AIController.h"
 #include "BehaviorTree/BlackboardComponent.h"
 #include "BrainComponent.h"
@@ -187,6 +188,12 @@ void ARLEnemyCharacter::HandleDeath()
 	// 2. 보스 처치: 100% 확정 보상 상자 + 대량 골드 드롭
 	if (bIsActualBoss)
 	{
+		// 보스 처치 즉시 "STAGE CLEAR" 화면 (트리거 소환/맵 직접 배치 보스 모두 해당)
+		if (ARLPlayerController* PC = Cast<ARLPlayerController>(UGameplayStatics::GetPlayerController(this, 0)))
+		{
+			PC->ShowStageClearScreen();
+		}
+
 		// 보상 상자 클래스 확보 (MyRLRewardChest 에셋이 있으면 메시/이펙트가 들어간 블루프린트로 스폰)
 		TSubclassOf<ARLRewardChest> TargetChestClass = DropChestClass;
 		if (!TargetChestClass || TargetChestClass == ARLRewardChest::StaticClass())
@@ -209,7 +216,16 @@ void ARLEnemyCharacter::HandleDeath()
 			FActorSpawnParameters SpawnParams;
 			SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
 
-			GetWorld()->SpawnActor<ARLRewardChest>(TargetChestClass, SpawnLoc, FRotator::ZeroRotator, SpawnParams);
+			ARLRewardChest* BossChest = GetWorld()->SpawnActor<ARLRewardChest>(TargetChestClass, SpawnLoc, FRotator::ZeroRotator, SpawnParams);
+
+			// 보스가 떨어뜨린 이 상자 하나만 추적 → 보상 수령이 끝나면 승리 화면
+			if (BossChest)
+			{
+				if (ARLPlayerController* PC = Cast<ARLPlayerController>(UGameplayStatics::GetPlayerController(this, 0)))
+				{
+					PC->WatchBossRewardChest(BossChest);
+				}
+			}
 
 			if (GEngine)
 			{
