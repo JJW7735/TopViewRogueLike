@@ -58,9 +58,24 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Boss")
 	bool bTriggerOnce = true;
 
+	// 보스 소환 시 닫고, 보스가 사라지면 열어줄 길목 액터 (ARLFogWall은 bStartOpen=true로 두면 처음엔 열려 있음)
+	UPROPERTY(EditInstanceOnly, BlueprintReadWrite, Category = "Boss|Barriers")
+	TArray<TObjectPtr<AActor>> BarrierActors;
+
+	// 보스 소환 후 길목이 닫히기까지의 딜레이 (초)
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Boss|Barriers", meta = (ClampMin = "0.0"))
+	float BarrierCloseDelay = 0.5f;
+
 private:
+	void LockBarriers();
+	void UnlockBarriers();
+
+	UFUNCTION()
+	void HandleBossDestroyed(AActor* DestroyedActor);
+
 	UPROPERTY()
 	TObjectPtr<APawn> SpawnedBoss;
 
 	bool bTriggered = false;
+	FTimerHandle BarrierCloseTimerHandle;
 };

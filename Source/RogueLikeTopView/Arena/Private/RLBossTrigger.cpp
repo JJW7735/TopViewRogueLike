@@ -1,6 +1,9 @@
 ﻿#include "RLBossTrigger.h"
 #include "RLArenaMoodController.h"
 #include "RLCharacter.h"
+#include "RLFogWall.h"
+#include "Kismet/GameplayStatics.h"
+#include "TimerManager.h"
 #include "Components/BoxComponent.h"
 #include "Components/ArrowComponent.h"
 #include "GameFramework/Pawn.h"
@@ -79,6 +82,75 @@ void ARLBossTrigger::TriggerBossEncounter()
 
 	if (SpawnedBoss)
 	{
+		SpawnedBoss->OnDestroyed.AddDynamic(this, &ARLBossTrigger::HandleBossDestroyed);
 		OnBossSpawned(SpawnedBoss);
 	}
+
+	// 들어온 길목을 닫아 보스전에서 도망칠 수 없게 함
+	if (BarrierCloseDelay > 0.0f)
+	{
+		GetWorldTimerManager().SetTimer(BarrierCloseTimerHandle, this, &ARLBossTrigger::LockBarriers, BarrierCloseDelay, false);
+	}
+	else
+	{
+		LockBarriers();
+	}
+}
+
+void ARLBossTrigger::LockBarriers()
+{
+	// 플레이어가 안개벽 안/근처에 서 있으면 끼이지 않도록 0.5초 뒤 다시 시도
+	if (const APawn* Player = UGameplayStatics::GetPlayerPawn(this, 0))
+	{
+		const FVector PlayerLoc = Player->GetActorLocation();
+		for (AActor* Barrier : BarrierActors)
+		{
+			const ARLFogWall* FogWall = Cast<ARLFogWall>(Barrier);
+			if (FogWall && !FogWall->IsBlocking() && FogWall->BlockVolume)
+			{
+				const FBox FogBox = FogWall->BlockVolume->Bounds.GetBox().ExpandBy(FVector(150.0f, 150.0f, 50.0f));
+				if (FogBox.IsInsideOrOn(PlayerLoc))
+				{
+					GetWorldTimerManager().SetTimer(BarrierCloseTimerHandle, this, &ARLBossTrigger::LockBarriers, 0.5f, false);
+					return;
+				}
+			}
+		}
+	}
+
+	for (AActor* Barrier : BarrierActors)
+	{
+		if (ARLFogWall* FogWall = Cast<ARLFogWall>(Barrier))
+		{
+			FogWall->Restore();
+		}
+		else if (Barrier)
+		{
+			Barrier->SetActorHiddenInGame(false);
+			Barrier->SetActorEnableCollision(true);
+		}
+	}
+}
+
+void ARLBossTrigger::UnlockBarriers()
+{
+	GetWorldTimerManager().ClearTimer(BarrierCloseTimerHandle);
+
+	for (AActor* Barrier : BarrierActors)
+	{
+		if (ARLFogWall* FogWall = Cast<ARLFogWall>(Barrier))
+		{
+			FogWall->Dissolve();
+		}
+		else if (Barrier)
+		{
+			Barrier->SetActorHiddenInGame(true);
+			Barrier->SetActorEnableCollision(false);
+		}
+	}
+}
+
+void ARLBossTrigger::HandleBossDestroyed(AActor* DestroyedActor)
+{
+	UnlockBarriers();
 }

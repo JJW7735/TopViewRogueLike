@@ -109,7 +109,18 @@ void ARLFogWall::BeginPlay()
 		}
 		++LayerIndex;
 	}
-	ApplyFade(1.0f);
+
+	if (bStartOpen)
+	{
+		bBlocking = false;
+		BlockVolume->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+		SetActorHiddenInGame(true);
+		ApplyFade(0.0f);
+	}
+	else
+	{
+		ApplyFade(1.0f);
+	}
 }
 
 void ARLFogWall::Dissolve()
@@ -146,7 +157,30 @@ void ARLFogWall::Restore()
 	bBlocking = true;
 	SetActorHiddenInGame(false);
 	BlockVolume->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
-	ApplyFade(1.0f);
+
+	// 길은 즉시 막고, 안개만 서서히 짙어짐
+	if (RestoreDuration > 0.0f)
+	{
+		RestoreElapsed = 0.0f;
+		ApplyFade(0.0f);
+		GetWorldTimerManager().SetTimer(DissolveTimerHandle, this, &ARLFogWall::TickRestore, DissolveTickInterval, true);
+	}
+	else
+	{
+		ApplyFade(1.0f);
+	}
+}
+
+void ARLFogWall::TickRestore()
+{
+	RestoreElapsed += DissolveTickInterval;
+	const float Alpha = FMath::Clamp(RestoreElapsed / RestoreDuration, 0.0f, 1.0f);
+	ApplyFade(FMath::InterpEaseOut(0.0f, 1.0f, Alpha, 2.0f));
+
+	if (Alpha >= 1.0f)
+	{
+		GetWorldTimerManager().ClearTimer(DissolveTimerHandle);
+	}
 }
 
 void ARLFogWall::ApplyFade(float Alpha)

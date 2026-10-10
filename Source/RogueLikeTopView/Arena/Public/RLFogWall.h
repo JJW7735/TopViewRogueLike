@@ -79,15 +79,25 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "FogWall", meta = (ClampMin = "0.05"))
 	float DissolveDuration = 1.5f;
 
+	// true면 시작 시 열려 있다가(숨김+충돌 없음) Restore()로 닫힘. 아레나 입구처럼 전투 시작 시 등 뒤를 막는 용도
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "FogWall")
+	bool bStartOpen = false;
+
+	// Restore() 시 안개가 짙어지는 데 걸리는 시간 (초, 0이면 즉시)
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "FogWall", meta = (ClampMin = "0.0"))
+	float RestoreDuration = 0.6f;
+
 private:
 	void UpdateLayerLayout();
 	void ApplyFade(float Alpha);
 	void TickDissolve();
+	void TickRestore();
 
 	UPROPERTY(Transient)
 	TArray<TObjectPtr<UMaterialInstanceDynamic>> FogMIDs;
 
 	bool bBlocking = true;
 	float DissolveElapsed = 0.0f;
+	float RestoreElapsed = 0.0f;
 	FTimerHandle DissolveTimerHandle;
 };
