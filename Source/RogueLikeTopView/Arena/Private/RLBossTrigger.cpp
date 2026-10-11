@@ -2,6 +2,7 @@
 #include "RLArenaMoodController.h"
 #include "RLCharacter.h"
 #include "RLFogWall.h"
+#include "RLSaveSubsystem.h"
 #include "Kismet/GameplayStatics.h"
 #include "TimerManager.h"
 #include "Components/BoxComponent.h"
@@ -24,6 +25,28 @@ ARLBossTrigger::ARLBossTrigger()
 	BossSpawnPoint->SetRelativeLocation(FVector(1000.f, 0.f, 0.f));
 }
 
+namespace
+{
+	bool ShouldSkipClearedBossEncounter(const UObject* WorldContextObject, const ARLCharacter* PlayerChar)
+	{
+		if (!WorldContextObject || !PlayerChar || !PlayerChar->ActorHasTag(TEXT("RunResumed")))
+		{
+			return false;
+		}
+
+		URLSaveSubsystem* SaveSys = URLSaveSubsystem::Get(WorldContextObject);
+		if (!SaveSys || !SaveSys->HasActiveRun() || !SaveSys->GetActiveRunData().bIsStageCleared)
+		{
+			return false;
+		}
+
+		const UWorld* World = WorldContextObject->GetWorld();
+		const FString CurrentMap = World ? UWorld::RemovePIEPrefix(World->GetMapName()) : TEXT("");
+		const FString SavedMap = UWorld::RemovePIEPrefix(SaveSys->GetActiveRunData().CurrentMapName.ToString());
+		return !SavedMap.IsEmpty() && SavedMap != TEXT("None") && CurrentMap.Equals(SavedMap, ESearchCase::IgnoreCase);
+	}
+}
+
 void ARLBossTrigger::BeginPlay()
 {
 	Super::BeginPlay();
@@ -41,14 +64,49 @@ void ARLBossTrigger::BeginPlay()
 	}
 
 	TriggerBox->OnComponentBeginOverlap.AddUniqueDynamic(this, &ARLBossTrigger::OnTriggerBeginOverlap);
+
+	// 로드 시 플레이어가 이미 클리어 상태로 이어하기했는지 0.2초 후 점검 (ARLCharacter::BeginPlay 완료 대기)
+	FTimerHandle CheckTimer;
+	GetWorldTimerManager().SetTimer(CheckTimer, [this]()
+	{
+		if (bTriggered) return;
+
+		ARLCharacter* PlayerChar = Cast<ARLCharacter>(UGameplayStatics::GetPlayerCharacter(this, 0));
+		if (ShouldSkipClearedBossEncounter(this, PlayerChar))
+		{
+			UE_LOG(LogTemp, Log, TEXT("[BossTrigger] '%s': 저장된 보스전이 이미 클리어된 상태입니다. 보스 소환을 건너뛰고 장벽을 개방합니다."), *GetName());
+
+			bTriggered = true;
+			TriggerBox->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+			UnlockBarriers();
+			Tags.AddUnique(TEXT("BossDefeated"));
+			if (MoodController)
+			{
+				MoodController->SetBossPhase(true, true);
+			}
+		}
+	}, 0.2f, false);
 }
 
 void ARLBossTrigger::OnTriggerBeginOverlap(UPrimitiveComponent* OverlappedComp, AActor* OtherActor,
 	UPrimitiveComponent* OtherComp, int32 OtherBodyIndex,
 	bool bFromSweep, const FHitResult& SweepResult)
 {
-	if (Cast<ARLCharacter>(OtherActor))
+	if (ARLCharacter* PlayerChar = Cast<ARLCharacter>(OtherActor))
 	{
+		if (ShouldSkipClearedBossEncounter(this, PlayerChar))
+		{
+			bTriggered = true;
+			TriggerBox->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+			UnlockBarriers();
+			Tags.AddUnique(TEXT("BossDefeated"));
+			if (MoodController)
+			{
+				MoodController->SetBossPhase(true, true);
+			}
+			return;
+		}
+
 		TriggerBossEncounter();
 	}
 }
@@ -152,5 +210,6 @@ void ARLBossTrigger::UnlockBarriers()
 
 void ARLBossTrigger::HandleBossDestroyed(AActor* DestroyedActor)
 {
+	Tags.AddUnique(TEXT("BossDefeated"));
 	UnlockBarriers();
 }

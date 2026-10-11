@@ -6,6 +6,8 @@
 #include "RLItemDataAsset.h"
 #include "RLSaveSubsystem.h"
 #include "RLPlayerController.h"
+#include "RLBossTrigger.h"
+#include "EngineUtils.h"
 #include "AIController.h"
 #include "BehaviorTree/BlackboardComponent.h"
 #include "BrainComponent.h"
@@ -188,6 +190,12 @@ void ARLEnemyCharacter::HandleDeath()
 	// 2. 보스 처치: 100% 확정 보상 상자 + 대량 골드 드롭
 	if (bIsActualBoss)
 	{
+		// 보스 처치 즉시 ARLBossTrigger에 보스 처치 태그 부여 (안개벽 해제 및 클리어 상태 마킹)
+		for (TActorIterator<ARLBossTrigger> It(GetWorld()); It; ++It)
+		{
+			It->Tags.AddUnique(TEXT("BossDefeated"));
+		}
+
 		// 보스 처치 즉시 "STAGE CLEAR" 화면 (트리거 소환/맵 직접 배치 보스 모두 해당)
 		if (ARLPlayerController* PC = Cast<ARLPlayerController>(UGameplayStatics::GetPlayerController(this, 0)))
 		{

@@ -178,6 +178,26 @@ void ARLPlayerController::WatchBossRewardChest(ARLRewardChest* Chest)
 	Chest->OnRewardClaimed.AddUniqueDynamic(this, &ARLPlayerController::HandleBossChestClaimed);
 }
 
+namespace
+{
+	void SaveBossVictoryRunProgress(ARLPlayerController* PC)
+	{
+		if (!PC) return;
+
+		if (URLSaveSubsystem* SaveSys = URLSaveSubsystem::Get(PC))
+		{
+			if (ARLCharacter* PlayerChar = Cast<ARLCharacter>(PC->GetPawn()))
+			{
+				const FString RawMapName = PC->GetWorld() ? PC->GetWorld()->GetMapName() : TEXT("L_Soul");
+				const FString CleanMapName = UWorld::RemovePIEPrefix(RawMapName);
+				const int32 StageNum = FMath::Max(1, SaveSys->GetActiveRunData().StageNumber);
+				SaveSys->SaveActiveRun(PlayerChar, FName(*CleanMapName), StageNum, PlayerChar->GetActorLocation());
+				SaveSys->RecordStageClear(StageNum);
+			}
+		}
+	}
+}
+
 void ARLPlayerController::HandleBossChestClaimed(ARLRewardChest* Chest)
 {
 	if (!Chest || Chest != WatchedBossChest.Get())
@@ -187,6 +207,9 @@ void ARLPlayerController::HandleBossChestClaimed(ARLRewardChest* Chest)
 
 	Chest->OnRewardClaimed.RemoveDynamic(this, &ARLPlayerController::HandleBossChestClaimed);
 	WatchedBossChest = nullptr;
+
+	// ★ 보스 보상 획득 시점에 진행 상황 즉시 저장
+	SaveBossVictoryRunProgress(this);
 
 	ShowVictoryScreen();
 }
@@ -263,8 +286,16 @@ void ARLPlayerController::ShowVictoryScreen()
 
 void ARLPlayerController::HandleVictoryMainMenuClicked()
 {
-	// QuitToMainMenuAfterDeath와 같은 방식으로 입력/일시정지를 원복하고 메인 메뉴로 이동.
-	// (런 정리/소울 정산은 이 단계에서 하지 않음)
+	// ★ 보스 처치 및 보상 획득 상태를 활성 런에 저장하여, 메인 메뉴에서 이어하기 시
+	//   보스가 이미 쓰러진 상태로 시작하도록 합니다.
+	SaveBossVictoryRunProgress(this);
+
+	if (VictoryWidget)
+	{
+		VictoryWidget->RemoveFromParent();
+		VictoryWidget = nullptr;
+	}
+
 	UGameplayStatics::SetGamePaused(this, false);
 
 	FInputModeGameAndUI InputMode;

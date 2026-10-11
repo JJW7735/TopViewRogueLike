@@ -12,6 +12,7 @@
 #include "GameFramework/CharacterMovementComponent.h"
 #include "RLEnemyCharacter.h"
 #include "RLArenaManager.h"
+#include "RLBossTrigger.h"
 
 void URLSaveSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
@@ -169,6 +170,7 @@ bool URLSaveSubsystem::ApplyRunDataToPlayer(ARLCharacter* PlayerCharacter)
 
 	ApplyPlayerData(PlayerCharacter, CurrentRunData);
 	bPendingRunApply = false;
+	PlayerCharacter->Tags.AddUnique(TEXT("RunResumed"));
 
 	if (GEngine)
 	{
@@ -191,6 +193,7 @@ void URLSaveSubsystem::ClearActiveRun(bool bBankSoulsToMeta)
 	}
 
 	CurrentRunData.bIsRunActive = false;
+	CurrentRunData.bIsStageCleared = false;
 	CurrentRunData.RunSouls = 0;
 	bPendingRunApply = false;
 
@@ -350,20 +353,34 @@ bool URLSaveSubsystem::IsArenaCleared(const UObject* WorldContextObject) const
 
 	TArray<AActor*> FoundArenas;
 	UGameplayStatics::GetAllActorsOfClass(World, ARLArenaManager::StaticClass(), FoundArenas);
-	if (FoundArenas.Num() == 0)
+	if (FoundArenas.Num() > 0)
 	{
+		for (AActor* Actor : FoundArenas)
+		{
+			if (ARLArenaManager* Arena = Cast<ARLArenaManager>(Actor))
+			{
+				if (Arena->GetArenaState() == ERLArenaState::Cleared)
+				{
+					return true;
+				}
+			}
+		}
 		return false;
 	}
 
-	for (AActor* Actor : FoundArenas)
+	// 보스 맵 (ARLArenaManager가 없고 ARLBossTrigger가 있는 경우)
+	TArray<AActor*> FoundBossTriggers;
+	UGameplayStatics::GetAllActorsOfClass(World, ARLBossTrigger::StaticClass(), FoundBossTriggers);
+	if (FoundBossTriggers.Num() > 0)
 	{
-		if (ARLArenaManager* Arena = Cast<ARLArenaManager>(Actor))
+		for (AActor* Actor : FoundBossTriggers)
 		{
-			if (Arena->GetArenaState() == ERLArenaState::Cleared)
+			if (Actor && Actor->ActorHasTag(TEXT("BossDefeated")))
 			{
 				return true;
 			}
 		}
+		return false;
 	}
 
 	return false;

@@ -914,9 +914,17 @@ void ARLArenaManager::CheckInitialPlayerOverlap()
 	}
 
 	// 1. 이미 클리어된 스테이지로 저장된 데이터를 로드한 경우: 포탈 즉시 개방 (보상 상자 중복 스폰 방지)
+	// ★ [중요] 반드시 "이어하기(RunResumed)"로 불러왔고 + "저장된 맵과 동일한 맵"일 때만 클리어 상태를 복원해야 함!
+	//   그렇지 않으면 다른 맵이나 에디터 PIE 테스트 시 몬스터가 전혀 안 나오는 치명적 버그 발생 방지.
 	if (URLSaveSubsystem* SaveSys = URLSaveSubsystem::Get(this))
 	{
-		if (SaveSys->HasActiveRun() && SaveSys->GetActiveRunData().bIsStageCleared)
+		ARLCharacter* PlayerChar = Cast<ARLCharacter>(UGameplayStatics::GetPlayerCharacter(this, 0));
+		const bool bIsRunResumed = PlayerChar && PlayerChar->ActorHasTag(TEXT("RunResumed"));
+		const FString CurrentMap = GetWorld() ? UWorld::RemovePIEPrefix(GetWorld()->GetMapName()) : TEXT("");
+		const FString SavedMap = UWorld::RemovePIEPrefix(SaveSys->GetActiveRunData().CurrentMapName.ToString());
+		const bool bSameMap = !SavedMap.IsEmpty() && SavedMap != TEXT("None") && CurrentMap.Equals(SavedMap, ESearchCase::IgnoreCase);
+
+		if (bIsRunResumed && bSameMap && SaveSys->HasActiveRun() && SaveSys->GetActiveRunData().bIsStageCleared)
 		{
 			UE_LOG(LogTemp, Log, TEXT("[ArenaManager] '%s': 저장된 스테이지가 이미 클리어된 상태입니다. 포탈을 즉시 개방하고 상자 재스폰을 건너뜁니다."), *GetName());
 
