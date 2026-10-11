@@ -1,4 +1,4 @@
-﻿#include "RLPortal.h"
+#include "RLPortal.h"
 #include "Components/BoxComponent.h"
 #include "RLCharacter.h"
 #include "RLSaveSubsystem.h"
@@ -25,8 +25,8 @@ void ARLPortal::BeginPlay()
     // 2. 게임이 시작되면, 누군가 포탈에 닿았을 때 OnOverlapBegin 함수가 실행되도록 연결(바인딩)합니다.
     if (PortalCollision)
     {
-        PortalCollision->OnComponentBeginOverlap.AddDynamic(this, &ARLPortal::OnOverlapBegin);
-        PortalCollision->OnComponentEndOverlap.AddDynamic(this, &ARLPortal::OnOverlapEnd); // ← 추가된 줄
+        PortalCollision->OnComponentBeginOverlap.AddUniqueDynamic(this, &ARLPortal::OnOverlapBegin);
+        PortalCollision->OnComponentEndOverlap.AddUniqueDynamic(this, &ARLPortal::OnOverlapEnd);
     }
 }
 

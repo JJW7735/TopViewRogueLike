@@ -35,12 +35,12 @@ void ARLItemDrop::BeginPlay()
 	if (MagnetSphere)
 	{
 		MagnetSphere->SetSphereRadius(MagnetRadius);
-		MagnetSphere->OnComponentBeginOverlap.AddDynamic(this, &ARLItemDrop::OnMagnetOverlapBegin);
+		MagnetSphere->OnComponentBeginOverlap.AddUniqueDynamic(this, &ARLItemDrop::OnMagnetOverlapBegin);
 	}
 
 	if (CollisionSphere)
 	{
-		CollisionSphere->OnComponentBeginOverlap.AddDynamic(this, &ARLItemDrop::OnPickupOverlapBegin);
+		CollisionSphere->OnComponentBeginOverlap.AddUniqueDynamic(this, &ARLItemDrop::OnPickupOverlapBegin);
 	}
 }
 

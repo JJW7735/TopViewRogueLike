@@ -1,4 +1,4 @@
-﻿#include "RLArenaManager.h"
+#include "RLArenaManager.h"
 #include "RLEnemyCharacter.h"
 #include "RLRewardChest.h"
 #include "RLPortal.h"
@@ -162,7 +162,7 @@ void ARLArenaManager::BeginPlay()
 
 	if (TriggerVolume)
 	{
-		TriggerVolume->OnComponentBeginOverlap.AddDynamic(this, &ARLArenaManager::OnTriggerVolumeOverlap);
+		TriggerVolume->OnComponentBeginOverlap.AddUniqueDynamic(this, &ARLArenaManager::OnTriggerVolumeOverlap);
 	}
 
 	// 기존 포탈이 지정되어 있다면 전투 전에는 숨겨두기
@@ -178,6 +178,11 @@ void ARLArenaManager::BeginPlay()
 
 void ARLArenaManager::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
+	if (TriggerVolume)
+	{
+		TriggerVolume->OnComponentBeginOverlap.RemoveDynamic(this, &ARLArenaManager::OnTriggerVolumeOverlap);
+	}
+
 	if (UWorld* World = GetWorld())
 	{
 		World->GetTimerManager().ClearTimer(WaveDelayTimerHandle);
@@ -356,7 +361,7 @@ void ARLArenaManager::SpawnSingleEnemy(TSubclassOf<ARLEnemyCharacter> EnemyClass
 	if (Enemy)
 	{
 		ActiveEnemies.Add(Enemy);
-		Enemy->OnEnemyDied.AddDynamic(this, &ARLArenaManager::HandleEnemyDied);
+		Enemy->OnEnemyDied.AddUniqueDynamic(this, &ARLArenaManager::HandleEnemyDied);
 	}
 	else
 	{
@@ -908,13 +913,57 @@ void ARLArenaManager::CheckInitialPlayerOverlap()
 		return;
 	}
 
-	// 1. 이미 클리어된 스테이지로 저장된 데이터를 로드한 경우: 포탈 즉시 개방
+	// 1. 이미 클리어된 스테이지로 저장된 데이터를 로드한 경우: 포탈 즉시 개방 (보상 상자 중복 스폰 방지)
 	if (URLSaveSubsystem* SaveSys = URLSaveSubsystem::Get(this))
 	{
 		if (SaveSys->HasActiveRun() && SaveSys->GetActiveRunData().bIsStageCleared)
 		{
-			UE_LOG(LogTemp, Log, TEXT("[ArenaManager] '%s': 저장된 스테이지가 이미 클리어된 상태입니다. 포탈을 즉시 개방합니다."), *GetName());
-			CompleteArena();
+			UE_LOG(LogTemp, Log, TEXT("[ArenaManager] '%s': 저장된 스테이지가 이미 클리어된 상태입니다. 포탈을 즉시 개방하고 상자 재스폰을 건너뜁니다."), *GetName());
+
+			CurrentState = ERLArenaState::Cleared;
+			OnArenaStateChanged.Broadcast(CurrentState);
+
+			UnlockBarriers();
+
+			// 포탈만 활성화 또는 스폰 (이미 클리어된 스테이지이므로 보상 상자는 생성하지 않음)
+			if (UWorld* World = GetWorld())
+			{
+				if (ExistingPortalActor)
+				{
+					ExistingPortalActor->SetActorHiddenInGame(false);
+					ExistingPortalActor->SetActorEnableCollision(true);
+				}
+				else if (bSpawnPortalOnClear)
+				{
+					TSubclassOf<ARLPortal> TargetPortalClass = PortalClass;
+					if (!TargetPortalClass || TargetPortalClass == ARLPortal::StaticClass())
+					{
+						TargetPortalClass = LoadClass<ARLPortal>(nullptr, TEXT("/Game/Blueprint/BP_Portal.BP_Portal_C"));
+						if (!TargetPortalClass)
+						{
+							TargetPortalClass = ARLPortal::StaticClass();
+						}
+					}
+
+					if (TargetPortalClass)
+					{
+						const FVector PortalLoc = PortalSpawnPoint ? PortalSpawnPoint->GetComponentLocation() : (GetActorLocation() + FVector(0.0f, 400.0f, 0.0f));
+						const FRotator PortalRot = PortalSpawnPoint ? PortalSpawnPoint->GetComponentRotation() : GetActorRotation();
+
+						FActorSpawnParameters SpawnParams;
+						SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
+
+						ARLPortal* NewPortal = World->SpawnActor<ARLPortal>(TargetPortalClass, PortalLoc, PortalRot, SpawnParams);
+						if (NewPortal)
+						{
+							SpawnedPortal = NewPortal;
+						}
+					}
+				}
+			}
+
+			OnArenaCleared.Broadcast();
+			BP_OnArenaCleared();
 			return;
 		}
 	}

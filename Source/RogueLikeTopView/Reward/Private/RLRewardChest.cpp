@@ -1,4 +1,4 @@
-﻿#include "RLRewardChest.h"
+#include "RLRewardChest.h"
 #include "RLRewardSubsystem.h"
 #include "RLRewardSelectWidget.h"
 #include "RLCharacter.h"
@@ -51,8 +51,8 @@ void ARLRewardChest::BeginPlay()
 	{
 		InteractionSphere->SetSphereRadius(InteractionRadius);
 		InteractionSphere->SetGenerateOverlapEvents(true);
-		InteractionSphere->OnComponentBeginOverlap.AddDynamic(this, &ARLRewardChest::OnOverlapBegin);
-		InteractionSphere->OnComponentEndOverlap.AddDynamic(this, &ARLRewardChest::OnOverlapEnd);
+		InteractionSphere->OnComponentBeginOverlap.AddUniqueDynamic(this, &ARLRewardChest::OnOverlapBegin);
+		InteractionSphere->OnComponentEndOverlap.AddUniqueDynamic(this, &ARLRewardChest::OnOverlapEnd);
 	}
 }
 

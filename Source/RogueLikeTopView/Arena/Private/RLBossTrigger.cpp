@@ -1,4 +1,4 @@
-﻿#include "RLBossTrigger.h"
+#include "RLBossTrigger.h"
 #include "RLArenaMoodController.h"
 #include "RLCharacter.h"
 #include "RLFogWall.h"
@@ -40,7 +40,7 @@ void ARLBossTrigger::BeginPlay()
 		}
 	}
 
-	TriggerBox->OnComponentBeginOverlap.AddDynamic(this, &ARLBossTrigger::OnTriggerBeginOverlap);
+	TriggerBox->OnComponentBeginOverlap.AddUniqueDynamic(this, &ARLBossTrigger::OnTriggerBeginOverlap);
 }
 
 void ARLBossTrigger::OnTriggerBeginOverlap(UPrimitiveComponent* OverlappedComp, AActor* OtherActor,
@@ -82,7 +82,7 @@ void ARLBossTrigger::TriggerBossEncounter()
 
 	if (SpawnedBoss)
 	{
-		SpawnedBoss->OnDestroyed.AddDynamic(this, &ARLBossTrigger::HandleBossDestroyed);
+		SpawnedBoss->OnDestroyed.AddUniqueDynamic(this, &ARLBossTrigger::HandleBossDestroyed);
 		OnBossSpawned(SpawnedBoss);
 	}
 
