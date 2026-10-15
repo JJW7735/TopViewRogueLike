@@ -1,4 +1,4 @@
-﻿// Fill out your copyright notice in the Description page of Project Settings.
+// Fill out your copyright notice in the Description page of Project Settings.
 #pragma once
 
 #include "CoreMinimal.h"
@@ -248,6 +248,16 @@ public:
 
 	UFUNCTION(BlueprintCallable, Exec, Category = "Cheat|Stats")
 	void TestAddExp(float Amount = 100.0f);
+
+	// ★ 상점 시스템 테스트용 콘솔 명령어
+	UFUNCTION(BlueprintCallable, Exec, Category = "Cheat|Shop")
+	void TestOpenShop();
+
+	UFUNCTION(BlueprintCallable, Exec, Category = "Cheat|Shop")
+	void TestBuyShopItem(int32 SlotIndex = 0);
+
+	UFUNCTION(BlueprintCallable, Exec, Category = "Cheat|Shop")
+	void TestRerollShop();
 
 	// ==========================================
 	// 세이브 시스템 연동 및 테스트 콘솔 명령어
