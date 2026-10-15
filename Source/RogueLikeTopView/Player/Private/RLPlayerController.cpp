@@ -1,6 +1,7 @@
-#include "RLPlayerController.h"
+﻿#include "RLPlayerController.h"
 #include "RLCharacter.h"
 #include "RLEnemyCharacter.h"
+#include "RLHealthComponent.h"
 #include "RLArenaManager.h"
 #include "EngineUtils.h"
 #include "EnhancedInputComponent.h"
@@ -98,7 +99,26 @@ void ARLPlayerController::SetupInputComponent()
 #if !UE_BUILD_SHIPPING
 	// ★ 테스트용 치트 키 (패키징 Shipping 빌드에서는 제외)
 	InputComponent->BindKey(EKeys::K, IE_Pressed, this, &ARLPlayerController::KillAllEnemies);
+	InputComponent->BindKey(EKeys::L, IE_Pressed, this, &ARLPlayerController::KillSelf);
 #endif
+}
+
+void ARLPlayerController::KillSelf()
+{
+	APawn* ControlledPawn = GetPawn();
+	URLHealthComponent* HealthComp = ControlledPawn ? ControlledPawn->FindComponentByClass<URLHealthComponent>() : nullptr;
+	if (!HealthComp || HealthComp->bIsDead)
+	{
+		return;
+	}
+
+	// 실제 피격과 같은 경로(TakeDamage → HealthComp → OnDeath → HandleDeath)로 사망시킵니다.
+	UGameplayStatics::ApplyDamage(ControlledPawn, HealthComp->CurrentHealth, this, nullptr, UDamageType::StaticClass());
+
+	if (GEngine)
+	{
+		GEngine->AddOnScreenDebugMessage(-1, 2.0f, FColor::Red, TEXT("[Cheat] 플레이어 즉사"));
+	}
 }
 
 void ARLPlayerController::KillAllEnemies()

@@ -13,6 +13,7 @@
 #include "RLEnemyCharacter.h"
 #include "RLArenaManager.h"
 #include "RLBossTrigger.h"
+#include "RLShopSubsystem.h"
 
 void URLSaveSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
@@ -196,6 +197,11 @@ void URLSaveSubsystem::ClearActiveRun(bool bBankSoulsToMeta)
 	CurrentRunData.bIsStageCleared = false;
 	CurrentRunData.RunSouls = 0;
 	bPendingRunApply = false;
+
+	if (URLShopSubsystem* ShopSub = URLShopSubsystem::Get(this))
+	{
+		ShopSub->ResetShop();
+	}
 
 	URLSaveGame* SaveObj = Cast<URLSaveGame>(UGameplayStatics::CreateSaveGameObject(URLSaveGame::StaticClass()));
 	if (SaveObj)

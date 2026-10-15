@@ -24,6 +24,11 @@ public:
 	UFUNCTION(BlueprintCallable, Exec, Category = "Cheat|Enemy")
 	void KillAllEnemies();
 
+	// 테스트용: 플레이어 즉사 (게임오버 화면 확인용). 키보드 L 또는 콘솔 "KillSelf"
+	// 실제 사망과 같은 경로를 타므로 현재 런 세이브가 삭제되고 소울이 정산됩니다.
+	UFUNCTION(BlueprintCallable, Exec, Category = "Cheat|Player")
+	void KillSelf();
+
 	// ★ 커서 아래의 "바닥" 지점. Ground 채널로 트레이스하되, 위를 향한 면(ImpactNormal.Z >= GroundMinNormalZ)이면서
 	// 조종 중인 폰의 발 높이 + GroundMaxHeightAbovePawn 이하인 지점만 채택합니다. 아치 윗면/기둥 옆면/캐릭터에 맞으면
 	// 그 컴포넌트를 무시하고 다시 쏴서 그 아래 바닥을 찾습니다. 못 찾으면 false (이동/조준 명령 무시).

@@ -1,4 +1,4 @@
-﻿// Fill out your copyright notice in the Description page of Project Settings.
+// Fill out your copyright notice in the Description page of Project Settings.
 
 #include "RLCharacter.h"
 #include "GameFramework/SpringArmComponent.h"
@@ -24,6 +24,8 @@
 #include "RLInventoryComponent.h"
 #include "RLItemDataAsset.h"
 #include "RLSaveSubsystem.h"
+#include "RLShopSubsystem.h"
+#include "RLShopWidget.h"
 #include "RLDecalIndicator.h"
 #include "NavigationSystem.h"
 #include "Engine/World.h"
@@ -535,6 +537,78 @@ void ARLCharacter::TestAddExp(float Amount)
     if (StatComp)
     {
         StatComp->AddExp(Amount);
+    }
+}
+
+void ARLCharacter::TestOpenShop()
+{
+    APlayerController* PC = Cast<APlayerController>(GetController());
+    if (!PC)
+    {
+        return;
+    }
+
+    TSubclassOf<URLShopWidget> WidgetClass = LoadClass<URLShopWidget>(
+        nullptr, TEXT("/Game/Blueprint/UI/WBP_ShopTest.WBP_ShopTest_C"));
+    if (WidgetClass)
+    {
+        URLShopWidget* Widget = CreateWidget<URLShopWidget>(PC, WidgetClass);
+        if (Widget)
+        {
+            Widget->AddToViewport(50);
+            Widget->OpenShop(this);
+            return;
+        }
+    }
+
+    TSubclassOf<UUserWidget> FallbackClass = LoadClass<UUserWidget>(
+        nullptr, TEXT("/Game/Blueprint/UI/WBP_ShopTest.WBP_ShopTest_C"));
+    if (FallbackClass)
+    {
+        UUserWidget* FallbackWidget = CreateWidget<UUserWidget>(PC, FallbackClass);
+        if (FallbackWidget)
+        {
+            FallbackWidget->AddToViewport(50);
+            PC->bShowMouseCursor = true;
+            FInputModeGameAndUI InputMode;
+            InputMode.SetWidgetToFocus(FallbackWidget->TakeWidget());
+            PC->SetInputMode(InputMode);
+            return;
+        }
+    }
+
+    if (GEngine)
+    {
+        GEngine->AddOnScreenDebugMessage(-1, 3.0f, FColor::Yellow,
+            TEXT("⚠️ WBP_ShopTest 에셋을 찾을 수 없습니다."));
+    }
+}
+
+void ARLCharacter::TestBuyShopItem(int32 SlotIndex)
+{
+    if (URLShopSubsystem* ShopSub = URLShopSubsystem::Get(this))
+    {
+        FString FailReason;
+        const bool bSuccess = ShopSub->BuyShopItem(this, SlotIndex, FailReason);
+        if (!bSuccess && GEngine)
+        {
+            GEngine->AddOnScreenDebugMessage(-1, 3.0f, FColor::Red,
+                FString::Printf(TEXT("❌ [상점 구매 실패] %s"), *FailReason));
+        }
+    }
+}
+
+void ARLCharacter::TestRerollShop()
+{
+    if (URLShopSubsystem* ShopSub = URLShopSubsystem::Get(this))
+    {
+        FString FailReason;
+        const bool bSuccess = ShopSub->RerollShop(this, FailReason);
+        if (!bSuccess && GEngine)
+        {
+            GEngine->AddOnScreenDebugMessage(-1, 3.0f, FColor::Red,
+                FString::Printf(TEXT("❌ [새로고침 실패] %s"), *FailReason));
+        }
     }
 }
 

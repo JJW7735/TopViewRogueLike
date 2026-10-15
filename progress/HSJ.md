@@ -1,7 +1,43 @@
 # HSJ
-> 최종 갱신: 2026-10-07
+> 최종 갱신: 2026-10-15
 
 ## 완료
+- **인게임 상점(Shop) 백엔드 시스템 구축** (`Source/RogueLikeTopView/Shop/`):
+  - **상점 데이터 구조 및 델리게이트 (`RLShopTypes.h`)**:
+    - `ERLShopItemCategory`: 인벤토리 아이템(`Item`), 즉시 스탯 강화(`StatUpgrade`), 응급 치료(`Heal`)
+    - `FRLShopItem`: 슬롯 번호(`SlotIndex`), 상품 분류, `URLItemDataAsset`, 스탯 보너스(`StatBonuses`), 가격(`Price`), 품절 여부(`bIsSoldOut`), 희귀도 테마 색상/이름 반환
+    - UI 연동용 델리게이트 3종: `OnShopRefreshed`, `OnShopItemPurchased`, `OnShopRerollCostChanged`
+  - **상점 총괄 서브시스템 (`RLShopSubsystem.h / .cpp`)**:
+    - `UGameInstanceSubsystem` 기반의 전역 상점 매니저 (`URLShopSubsystem::Get(WorldContext)`)
+    - **무작위 4칸 상품 진열 (`GenerateShopItems`)**:
+      - 슬롯 0: 소비 아이템(물약/회복제 등 생존 수단 확정)
+      - 슬롯 1~2: 패시브 유물 또는 스탯 강화 (희귀도 주사위 기반 무작위 추첨)
+      - 슬롯 3: 고급 유물 또는 강력한 스탯/특수 아이템 (희귀/영웅/전설 가중치 우대)
+    - **골드 결제 및 지급 (`BuyShopItem`)**:
+      - 플레이어 인벤토리 골드(`SpendGold`) 차감 검사
+      - 인벤토리 공간/중첩 검사 (아이템인 경우 가득 찼으면 친절한 사유와 함께 실패 반환)
+      - 아이템 인벤토리 추가(`AddItem`) 또는 스탯/체력 즉시 반영 + `NotifyStatsChanged()`
+      - 품절 처리(`bIsSoldOut = true`) 및 `OnShopItemPurchased` 브로드캐스트
+    - **리롤(새로고침) 시스템 (`RerollShop`, `GetRerollCost`)**:
+      - 기본 25G에서 리롤 1회당 +15G씩 점진적 증가
+      - 골드 차감 후 4칸 신규 상품 재추첨
+    - **기본 내장 상품 풀 구축 (`BuildDefaultPools`)**:
+      - 7종의 아이템(체력 물약, 상급 비약, 완력 반지, 신속 장화, 수호자 방패, 광전사 인장, 루비) 및 6종의 스탯 강화 풀 탑재
+  - **상점 UI 베이스 위젯 (`RLShopWidget.h / .cpp`)**:
+    - `WBP_ShopTest`의 위젯들을 `meta = (BindWidgetOptional)`로 자동 바인딩
+    - `Txt_Gold` 플레이어 잔액 실시간 동기화 (`OnGoldChanged` 연동)
+    - `Btn_Reroll`, `Btn_Exit` 클릭 이벤트 C++ 자동 바인딩
+    - 슬롯 1~4번의 이름, 설명, 희귀도 색상, 가격, 품절 상태 자동 갱신
+    - 마우스 커서 활성화 및 UI 입력 모드 자동 전환, 닫을 때 안전 원복
+    - 블루프린트 연출 훅 5종 제공 (`BP_OnShopOpened`, `BP_OnPurchaseSuccess`, `BP_OnPurchaseFailed`, `BP_OnRerollSuccess`, `BP_OnRerollFailed`)
+  - **캐릭터 연동 및 즉시 테스트 치트 (`RLCharacter.h / .cpp`)**:
+    - 콘솔 치트 3종 탑재: `TestOpenShop`, `TestBuyShopItem [SlotIndex]`, `TestRerollShop`
+  - **세이브 연동 (`RLSaveSubsystem.cpp`)**:
+    - `ClearActiveRun` 시 런 종료와 함께 상점 상태 리셋(`ResetShop`) 자동 연동
+- **보스 처치 완료 세이브 및 이어하기 스폰 안정화** (`Source/RogueLikeTopView/`):
+  - 보스 처치 및 보상 수령 시 활성 런에 클리어 상태(`bIsStageCleared`) 저장
+  - 이어하기 시 보스 재소환 차단 및 보스룸 분위기(Mood) 유지
+  - 이어하기 시 클리어된 아레나 보상 상자 중복 스폰 버그 방지 및 델리게이트 안전화
 - **영혼(Souls) 획득 및 게임오버/재시작 시스템 구축** (`Source/RogueLikeTopView/`):
   - **몬스터 처치 시 영혼 적립 (`RLEnemyCharacter.h / .cpp`)**:
     - `SoulReward` 속성 신설 (일반 몬스터 2, 보스 몬스터 35)
@@ -238,4 +274,42 @@
 - **`ClearCurrentRun`**: 런 세이브를 즉시 삭제 (초기화 테스트용)
 - **`AddSouls 500`**: 영구 영혼 재화 500개 즉시 지급 (상점 구매 UI 테스트용)
 - **`TestGiveTestItems`**: 물약, 장신구, 장화, 루비, 300골드 즉시 지급
+- **`TestOpenShop`**: 상점 UI 즉시 팝업
+- **`TestBuyShopItem 0`**: 0번 슬롯 상품 즉시 구매
+- **`TestRerollShop`**: 상점 상품 즉시 새로고침 (골드 소모)
+
+---
+
+## 🛒 상점 시스템(Shop) UI 연동 가이드 (for UI 담당자)
+
+> **핵심 C++ 클래스:** [`URLShopSubsystem`](file:///C:/Unreal%20Projects/TopViewRogueLike/Source/RogueLikeTopView/Shop/Public/RLShopSubsystem.h) (GameInstanceSubsystem), [`URLShopWidget`](file:///C:/Unreal%20Projects/TopViewRogueLike/Source/RogueLikeTopView/Shop/Public/RLShopWidget.h) (UUserWidget)  
+> **대상 위젯:** `WBP_ShopTest`
+
+### 1. 초간단 연동 방법 (추천: Reparent Blueprint)
+1. `Content/Blueprint/UI/WBP_ShopTest`를 엽니다.
+2. 상단 메뉴 `File` -> `Reparent Blueprint`를 클릭합니다.
+3. 부모 클래스를 **`RLShopWidget`**으로 선택합니다.
+4. **끝!** 아래 기능들이 C++에서 완전 자동으로 작동합니다:
+   - `Txt_Gold`: 현재 플레이어 골드 자동 표시 및 실시간 갱신
+   - `Btn_Reroll` / `Txt_Reroll`: 클릭 시 골드 차감 및 신규 상품 재추첨, 비용 자동 표시
+   - `Btn_Exit`: 클릭 시 상점 닫기 및 마우스 커서/GameOnly 입력 자동 복원
+   - `Border_Card1~4`, `Txt_Name1~4`, `Txt_Desc1~4`, `Txt_Rarity1~4`, `Txt_Price1~4`: 4칸의 상품 정보, 희귀도 테두리/텍스트 색상, 품절(SOLD OUT) 상태 자동 갱신
+   - 슬롯에 버튼(`Btn_Card1~4`)이 있거나 클릭 시 `BuyItem(슬롯번호)`만 호출하면 구매 완료!
+
+### 2. 블루프린트에서 직접 연동할 때의 노드 (자유 커스텀 시)
+- **서브시스템 접근:**
+  - `Get RLShopSubsystem` (또는 `Get Shop Subsystem`) 노드 호출
+- **상품 목록 가져오기:**
+  - `Get Current Shop Items` → `For Each Loop`로 각 슬롯 UI 바인딩
+- **상품 구매:**
+  - `Buy Shop Item(Buyer, SlotIndex)`
+  - Return: 성공(`bool`), 실패 사유(`OutFailReason` - "골드가 부족합니다", "인벤토리가 가득 찼습니다" 등)
+- **새로고침(리롤):**
+  - `Reroll Shop(Buyer)`
+  - 현재 리롤 비용 확인: `Get Reroll Cost`
+- **실시간 이벤트 바인딩:**
+  - `OnShopRefreshed`: 상품 새로고침 시 UI 갱신
+  - `OnShopItemPurchased`: 특정 슬롯 구매 완료 시 품절 연출
+  - `OnShopRerollCostChanged`: 리롤 비용 변경 시 버튼 텍스트 갱신
+
 
