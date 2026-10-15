@@ -2,6 +2,23 @@
 > 최종 갱신: 2026-10-15
 
 ## 완료
+- **영구 메타 강화(Permanent Upgrades) 백엔드 및 실시간 캐릭터 주입 완성** (`Source/RogueLikeTopView/Save/`, `Character/`):
+  - **영구 메타 특성 구조체 (`RLSaveGame.h`)**:
+    - `FRLMetaUpgradeInfo`: 특성 키, 이름, 설명, 현재 레벨(0~5), 최대 레벨, 다음 레벨 필요 소울 비용, 현재/다음 보너스 수치, 구매 가능 여부
+  - **공식 영구 특성 8종 카탈로그 구축 (`RLSaveSubsystem.cpp`)**:
+    - `MaxHealth_Up`(거인의 체질, HP +20), `Atk_Up`(전사의 완력, 공격력 +3), `AP_Up`(비전의 마력, 주문력 +3), `MoveSpeed_Up`(바람의 발걸음, 이속 +15), `Crit_Up`(암살자의 예리함, 치명타 +2%), `Defense_Up`(강철 피부, 방어력 +3), `StartGold_Up`(부유한 시작, 시작 골드 +50G), `SoulGain_Up`(영혼 수확자, 소울 획득량 +15% 증폭)
+  - **메타 특성 강화 & 환불 & 조회 API (`RLSaveSubsystem.h / .cpp`)**:
+    - `GetAllMetaUpgradeInfos`: 8종 전체 특성의 UI 표시용 데이터 일괄 반환
+    - `UpgradeMetaTrait(UpgradeKey)`: 소울 검사/차감, 단계 증가, 디스크 자동 저장 및 `OnMetaUpgradePurchased` 방송
+    - `ResetAllMetaUpgrades(bRefundSouls)`: 모든 특성 0단계 초기화 및 소모된 소울 전액 환불
+  - **신규 런 시작 시 캐릭터 스탯 자동 주입 (`RLCharacter.cpp`, `RLSaveSubsystem.cpp`)**:
+    - `ApplyMetaUpgradesToPlayer`: 8종 특성 레벨을 읽어 `StatComp`, `HealthComp`, `InventoryComp`에 스탯 즉각 반영
+    - `ARLCharacter::BeginPlay`: 저장된 런 이어하기가 아닌 신규 런 스폰 시 메타 강화 스탯 자동 반영
+    - `RLEnemyCharacter::HandleDeath`: 적 처치 시 `SoulGain_Up` 레벨에 따라 획득 소울 수치 자동 증폭 연동
+  - **치트 명령어 3종 (`RLCharacter.h / .cpp`)**:
+    - `UpgradeMetaTrait [Key]`: 특정 특성 즉시 강화
+    - `ResetMetaUpgrades`: 특성 초기화 및 소울 환불
+    - `ShowMetaUpgrades`: 전체 특성 단계 및 보유 소울 화면 출력
 - **인게임 상점(Shop) 백엔드 시스템 구축** (`Source/RogueLikeTopView/Shop/`):
   - **상점 데이터 구조 및 델리게이트 (`RLShopTypes.h`)**:
     - `ERLShopItemCategory`: 인벤토리 아이템(`Item`), 즉시 스탯 강화(`StatUpgrade`), 응급 치료(`Heal`)
@@ -253,12 +270,29 @@
   - 블루프린트에서 `File -> Reparent Blueprint`로 `RLGameOverWidget`을 상속받으면, 마우스 커서 표시 / 입력 모드 자동 전환 및 위의 수치 바인딩/버튼 로직이 C++에서 일괄 지원됩니다.
 
 #### ⑤ 영구 강화 / 메타 상점 UI (`WBP_MetaUpgrade`)
-- **`GetTotalSouls`**: 영구 영혼 보유 잔액 반환 (`int32`)
-- **`SpendTotalSouls(Amount)`**: 영혼 소비 (`bool`). 잔액 부족 시 false(구매 실패), 충분 시 차감 후 자동 저장 및 true 반환
-- **`AddTotalSouls(Amount)`**: 영구 영혼 지급
-- **`GetUpgradeLevel(UpgradeKey)`**: 해당 특성(예: `"MaxHealth_Up"`, `"Atk_Up"`)의 현재 강화 단계 반환 (`int32`, 기본 0)
-- **`SetUpgradeLevel(UpgradeKey, Level)`**: 해당 특성 강화 단계 저장 (자동 디스크 저장)
-- **`IsIDUnlocked(InID)`** / **`UnlockID(InID)`**: 특정 캐릭터, 무기, 유물 ID 해금 여부 확인 및 해금 처리
+- **`GetAllMetaUpgradeInfos`**: 8종 전체 특성의 구조체 배열(`TArray<FRLMetaUpgradeInfo>`)을 반환합니다. UI에서 `For Each Loop`로 손쉽게 버튼 목록을 생성할 수 있습니다:
+  - `DisplayName`: 특성 이름 (예: "거인의 체질", "전사의 완력")
+  - `Description`: 특성 설명 (예: "최대 체력이 단계당 +20 증가합니다.")
+  - `CurrentLevel`: 현재 강화 단계 (0~5)
+  - `MaxLevel`: 최대 단계 (5)
+  - `NextLevelCost`: 다음 단계에 필요한 소울 비용
+  - `bIsMaxLevel`: 최대 레벨 도달 여부
+  - `bCanAfford`: 현재 보유 소울로 구매 가능한지 여부 (`TotalSouls >= NextLevelCost`)
+- **`UpgradeMetaTrait(UpgradeKey)`**: 버튼 클릭 시 이 함수 하나만 호출하면 끝! 소울 충분 여부 자동 검사 → 소울 차감(`SpendTotalSouls`) → 단계 상승 및 디스크 자동 저장 → `OnMetaUpgradePurchased` 방송까지 원스톱 처리 (`bool` 반환).
+- **`ResetAllMetaUpgrades(bRefundSouls = true)`**: 모든 특성을 0단계로 리셋하고 소모된 소울을 전액 환불합니다.
+- **`ApplyMetaUpgradesToPlayer(Player)`**: 런 시작 시 플레이어에게 영구 특성 스탯을 자동 주입합니다 (C++ `BeginPlay`에서 자동 연동 완료).
+- **공식 영구 특성 8종 목록**:
+  | Key | 이름 | 단계당 효과 | 최대 레벨 | 기본 비용 | 비용 증가량 |
+  | :--- | :--- | :--- | :--- | :--- | :--- |
+  | **`MaxHealth_Up`** | 거인의 체질 | 최대 체력 +20 | 5 | 30 Souls | +20 / Lv |
+  | **`Atk_Up`** | 전사의 완력 | 기본 공격력 +3 | 5 | 40 Souls | +25 / Lv |
+  | **`AP_Up`** | 비전의 마력 | 기본 주문력 +3 | 5 | 40 Souls | +25 / Lv |
+  | **`MoveSpeed_Up`** | 바람의 발걸음 | 이동 속도 +15 | 5 | 35 Souls | +20 / Lv |
+  | **`Crit_Up`** | 암살자의 예리함 | 치명타 확률 +2% | 5 | 50 Souls | +30 / Lv |
+  | **`Defense_Up`** | 강철 피부 | 기본 방어력 +3 | 5 | 35 Souls | +20 / Lv |
+  | **`StartGold_Up`** | 부유한 시작 | 던전 시작 소지 골드 +50G | 5 | 45 Souls | +25 / Lv |
+  | **`SoulGain_Up`** | 영혼 수확자 | 적 처치 시 영혼 획득량 +15% 증폭 | 5 | 60 Souls | +40 / Lv |
+
 
 ### 3. UI 갱신용 이벤트 델리게이트 목록
 | 델리게이트 이름 | 파라미터 | 발생 시점 & UI 활용 추천 |

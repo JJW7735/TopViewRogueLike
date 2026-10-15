@@ -11,6 +11,7 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnRunSaveCompletedSignature, bool, 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnRunLoadedSignature, bool, bSuccess);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnMetaSavedSignature, bool, bSuccess);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnSoulsChangedSignature, int32, TotalSouls, int32, Delta);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnMetaUpgradePurchasedSignature, FName, UpgradeKey, int32, NewLevel);
 
 /**
  * 2-Track 세이브 시스템을 총괄하는 GameInstance 서브시스템
@@ -148,6 +149,26 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Save|Meta")
 	void SetUpgradeLevel(FName UpgradeKey, int32 Level);
 
+	/** 등록된 모든 메타 특성의 상태 정보(현재 레벨, 비용, 설명 등)를 가져옵니다 (UI 바인딩용) */
+	UFUNCTION(BlueprintPure, Category = "Save|Meta|Upgrade")
+	TArray<FRLMetaUpgradeInfo> GetAllMetaUpgradeInfos() const;
+
+	/** 특정 메타 특성의 상태 정보를 조회합니다 */
+	UFUNCTION(BlueprintPure, Category = "Save|Meta|Upgrade")
+	bool GetMetaUpgradeInfo(FName UpgradeKey, FRLMetaUpgradeInfo& OutInfo) const;
+
+	/** 소울을 소비하여 특정 메타 특성을 1단계 업그레이드합니다 */
+	UFUNCTION(BlueprintCallable, Category = "Save|Meta|Upgrade")
+	bool UpgradeMetaTrait(FName UpgradeKey, FString& OutFailReason);
+
+	/** 모든 메타 특성을 초기화하고 소모된 소울을 전액 환불합니다 */
+	UFUNCTION(BlueprintCallable, Category = "Save|Meta|Upgrade")
+	void ResetAllMetaUpgrades(bool bRefundSouls = true);
+
+	/** 현재 저장된 영구 특성 보너스를 플레이어 캐릭터에 실제로 가산/주입합니다 */
+	UFUNCTION(BlueprintCallable, Category = "Save|Meta|Upgrade")
+	bool ApplyMetaUpgradesToPlayer(ARLCharacter* PlayerCharacter);
+
 	/** 캐시된 영구 메타 데이터 조회 */
 	UFUNCTION(BlueprintPure, Category = "Save|Meta")
 	const FRLMetaSaveData& GetMetaData() const { return CurrentMetaData; }
@@ -167,6 +188,9 @@ public:
 
 	UPROPERTY(BlueprintAssignable, Category = "Save|Event")
 	FOnSoulsChangedSignature OnSoulsChanged;
+
+	UPROPERTY(BlueprintAssignable, Category = "Save|Event")
+	FOnMetaUpgradePurchasedSignature OnMetaUpgradePurchased;
 
 	// ==========================================
 	// 설정 및 상태 플래그

@@ -277,6 +277,16 @@ public:
 	UFUNCTION(BlueprintCallable, Exec, Category = "Save")
 	void AddSouls(int32 Amount = 100);
 
+	// ★ 영구 메타 특성 강화 테스트용 콘솔 명령어
+	UFUNCTION(BlueprintCallable, Exec, Category = "Cheat|Meta")
+	void UpgradeMetaTrait(FName UpgradeKey);
+
+	UFUNCTION(BlueprintCallable, Exec, Category = "Cheat|Meta")
+	void ResetMetaUpgrades();
+
+	UFUNCTION(BlueprintCallable, Exec, Category = "Cheat|Meta")
+	void ShowMetaUpgrades();
+
 	UFUNCTION(BlueprintImplementableEvent, Category = "Interaction")
 	void OnInteractPromptChanged(bool bVisible, const FText& Prompt);
 

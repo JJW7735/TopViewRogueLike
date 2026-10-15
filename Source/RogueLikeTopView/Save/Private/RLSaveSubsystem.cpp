@@ -559,6 +559,309 @@ void URLSaveSubsystem::SetUpgradeLevel(FName UpgradeKey, int32 Level)
 	SaveMetaProgression();
 }
 
+namespace
+{
+	struct FRLMetaUpgradeDefinition
+	{
+		FName Key;
+		FText DisplayName;
+		FText DescriptionFormat;
+		int32 MaxLevel;
+		int32 BaseCost;
+		int32 CostIncrement;
+		float ValuePerLevel;
+	};
+
+	static const TArray<FRLMetaUpgradeDefinition>& GetMetaDefinitions()
+	{
+		static const TArray<FRLMetaUpgradeDefinition> Definitions = {
+			{
+				FName("MaxHealth_Up"),
+				NSLOCTEXT("RLMeta", "HealthName", "거인의 체질"),
+				NSLOCTEXT("RLMeta", "HealthDesc", "던전 시작 시 최대 체력이 단계당 +20 증가합니다."),
+				5, 30, 20, 20.0f
+			},
+			{
+				FName("Atk_Up"),
+				NSLOCTEXT("RLMeta", "AtkName", "전사의 완력"),
+				NSLOCTEXT("RLMeta", "AtkDesc", "기본 공격력이 단계당 +3 증가합니다."),
+				5, 40, 25, 3.0f
+			},
+			{
+				FName("AP_Up"),
+				NSLOCTEXT("RLMeta", "APName", "비전의 마력"),
+				NSLOCTEXT("RLMeta", "APDesc", "기본 주문력이 단계당 +3 증가합니다."),
+				5, 40, 25, 3.0f
+			},
+			{
+				FName("MoveSpeed_Up"),
+				NSLOCTEXT("RLMeta", "SpeedName", "바람의 발걸음"),
+				NSLOCTEXT("RLMeta", "SpeedDesc", "기본 이동 속도가 단계당 +15 증가합니다."),
+				5, 35, 20, 15.0f
+			},
+			{
+				FName("Crit_Up"),
+				NSLOCTEXT("RLMeta", "CritName", "암살자의 예리함"),
+				NSLOCTEXT("RLMeta", "CritDesc", "치명타 확률이 단계당 +2% 증가합니다."),
+				5, 50, 30, 2.0f
+			},
+			{
+				FName("Defense_Up"),
+				NSLOCTEXT("RLMeta", "DefName", "강철 피부"),
+				NSLOCTEXT("RLMeta", "DefDesc", "기본 방어력이 단계당 +3 증가합니다."),
+				5, 35, 20, 3.0f
+			},
+			{
+				FName("StartGold_Up"),
+				NSLOCTEXT("RLMeta", "GoldName", "부유한 시작"),
+				NSLOCTEXT("RLMeta", "GoldDesc", "던전 시작 시 소지 골드가 단계당 +50G 증가합니다."),
+				5, 45, 25, 50.0f
+			},
+			{
+				FName("SoulGain_Up"),
+				NSLOCTEXT("RLMeta", "SoulName", "영혼 수확자"),
+				NSLOCTEXT("RLMeta", "SoulDesc", "적 처치 시 영혼 획득량이 단계당 +15% 증가합니다."),
+				5, 60, 40, 0.15f
+			}
+		};
+		return Definitions;
+	}
+
+	int32 CalculateUpgradeCost(int32 CurrentLevel, int32 BaseCost, int32 Increment)
+	{
+		return BaseCost + (CurrentLevel * Increment);
+	}
+}
+
+TArray<FRLMetaUpgradeInfo> URLSaveSubsystem::GetAllMetaUpgradeInfos() const
+{
+	TArray<FRLMetaUpgradeInfo> Results;
+	const TArray<FRLMetaUpgradeDefinition>& Defs = GetMetaDefinitions();
+
+	for (const FRLMetaUpgradeDefinition& Def : Defs)
+	{
+		FRLMetaUpgradeInfo Info;
+		Info.UpgradeKey = Def.Key;
+		Info.DisplayName = Def.DisplayName;
+		Info.Description = Def.DescriptionFormat;
+		Info.MaxLevel = Def.MaxLevel;
+		Info.CurrentLevel = FMath::Clamp(GetUpgradeLevel(Def.Key), 0, Def.MaxLevel);
+		Info.bIsMaxLevel = (Info.CurrentLevel >= Def.MaxLevel);
+
+		if (!Info.bIsMaxLevel)
+		{
+			Info.NextLevelCost = CalculateUpgradeCost(Info.CurrentLevel, Def.BaseCost, Def.CostIncrement);
+			Info.bCanAfford = (CurrentMetaData.TotalSouls >= Info.NextLevelCost);
+		}
+		else
+		{
+			Info.NextLevelCost = 0;
+			Info.bCanAfford = false;
+		}
+
+		Info.CurrentBonusValue = Info.CurrentLevel * Def.ValuePerLevel;
+		Info.NextBonusValue = (Info.CurrentLevel + 1) * Def.ValuePerLevel;
+
+		Results.Add(Info);
+	}
+
+	return Results;
+}
+
+bool URLSaveSubsystem::GetMetaUpgradeInfo(FName UpgradeKey, FRLMetaUpgradeInfo& OutInfo) const
+{
+	const TArray<FRLMetaUpgradeDefinition>& Defs = GetMetaDefinitions();
+	for (const FRLMetaUpgradeDefinition& Def : Defs)
+	{
+		if (Def.Key == UpgradeKey)
+		{
+			OutInfo.UpgradeKey = Def.Key;
+			OutInfo.DisplayName = Def.DisplayName;
+			OutInfo.Description = Def.DescriptionFormat;
+			OutInfo.MaxLevel = Def.MaxLevel;
+			OutInfo.CurrentLevel = FMath::Clamp(GetUpgradeLevel(Def.Key), 0, Def.MaxLevel);
+			OutInfo.bIsMaxLevel = (OutInfo.CurrentLevel >= Def.MaxLevel);
+
+			if (!OutInfo.bIsMaxLevel)
+			{
+				OutInfo.NextLevelCost = CalculateUpgradeCost(OutInfo.CurrentLevel, Def.BaseCost, Def.CostIncrement);
+				OutInfo.bCanAfford = (CurrentMetaData.TotalSouls >= OutInfo.NextLevelCost);
+			}
+			else
+			{
+				OutInfo.NextLevelCost = 0;
+				OutInfo.bCanAfford = false;
+			}
+
+			OutInfo.CurrentBonusValue = OutInfo.CurrentLevel * Def.ValuePerLevel;
+			OutInfo.NextBonusValue = (OutInfo.CurrentLevel + 1) * Def.ValuePerLevel;
+			return true;
+		}
+	}
+	return false;
+}
+
+bool URLSaveSubsystem::UpgradeMetaTrait(FName UpgradeKey, FString& OutFailReason)
+{
+	FRLMetaUpgradeInfo Info;
+	if (!GetMetaUpgradeInfo(UpgradeKey, Info))
+	{
+		OutFailReason = TEXT("존재하지 않는 특성 키입니다.");
+		return false;
+	}
+
+	if (Info.bIsMaxLevel)
+	{
+		OutFailReason = TEXT("이미 최대 레벨에 도달한 특성입니다.");
+		return false;
+	}
+
+	if (CurrentMetaData.TotalSouls < Info.NextLevelCost)
+	{
+		OutFailReason = FString::Printf(TEXT("영혼이 부족합니다! (필요: %d, 보유: %d)"), Info.NextLevelCost, CurrentMetaData.TotalSouls);
+		return false;
+	}
+
+	if (!SpendTotalSouls(Info.NextLevelCost))
+	{
+		OutFailReason = TEXT("영혼 차감에 실패했습니다.");
+		return false;
+	}
+
+	const int32 NewLevel = Info.CurrentLevel + 1;
+	SetUpgradeLevel(UpgradeKey, NewLevel);
+
+	OnMetaUpgradePurchased.Broadcast(UpgradeKey, NewLevel);
+
+	if (GEngine)
+	{
+		const FString Msg = FString::Printf(TEXT("🔮 [영구 특성 강화] %s %d단계 달성! (-%d Souls)"),
+			*Info.DisplayName.ToString(), NewLevel, Info.NextLevelCost);
+		GEngine->AddOnScreenDebugMessage(-1, 3.5f, FColor(180, 100, 255), Msg);
+	}
+
+	OutFailReason.Empty();
+	return true;
+}
+
+void URLSaveSubsystem::ResetAllMetaUpgrades(bool bRefundSouls)
+{
+	if (bRefundSouls)
+	{
+		int32 RefundTotal = 0;
+		const TArray<FRLMetaUpgradeDefinition>& Defs = GetMetaDefinitions();
+		for (const FRLMetaUpgradeDefinition& Def : Defs)
+		{
+			const int32 Lvl = GetUpgradeLevel(Def.Key);
+			for (int32 i = 0; i < Lvl; ++i)
+			{
+				RefundTotal += CalculateUpgradeCost(i, Def.BaseCost, Def.CostIncrement);
+			}
+		}
+
+		if (RefundTotal > 0)
+		{
+			AddTotalSouls(RefundTotal);
+		}
+	}
+
+	CurrentMetaData.PermanentUpgrades.Reset();
+	SaveMetaProgression();
+
+	if (GEngine)
+	{
+		GEngine->AddOnScreenDebugMessage(-1, 3.0f, FColor::Cyan, TEXT("🔄 모든 영구 특성이 초기화되었습니다."));
+	}
+}
+
+bool URLSaveSubsystem::ApplyMetaUpgradesToPlayer(ARLCharacter* PlayerCharacter)
+{
+	if (!PlayerCharacter)
+	{
+		return false;
+	}
+
+	URLStatComponent* StatComp = PlayerCharacter->GetStatComponent();
+	URLHealthComponent* HealthComp = PlayerCharacter->FindComponentByClass<URLHealthComponent>();
+	URLInventoryComponent* InvComp = PlayerCharacter->GetInventoryComponent();
+
+	int32 UpgradesAppliedCount = 0;
+
+	// 1. MaxHealth_Up (최대 체력)
+	const int32 HealthLvl = GetUpgradeLevel(FName("MaxHealth_Up"));
+	if (HealthLvl > 0 && HealthComp)
+	{
+		const float BonusHealth = HealthLvl * 20.0f;
+		HealthComp->IncreaseMaxHealth(BonusHealth, true);
+		UpgradesAppliedCount++;
+	}
+
+	// 2. Atk_Up (공격력)
+	const int32 AtkLvl = GetUpgradeLevel(FName("Atk_Up"));
+	if (AtkLvl > 0 && StatComp)
+	{
+		StatComp->AttackPower += AtkLvl * 3.0f;
+		UpgradesAppliedCount++;
+	}
+
+	// 3. AP_Up (주문력)
+	const int32 APLvl = GetUpgradeLevel(FName("AP_Up"));
+	if (APLvl > 0 && StatComp)
+	{
+		StatComp->AbilityPower += APLvl * 3.0f;
+		UpgradesAppliedCount++;
+	}
+
+	// 4. MoveSpeed_Up (이동 속도)
+	const int32 SpeedLvl = GetUpgradeLevel(FName("MoveSpeed_Up"));
+	if (SpeedLvl > 0 && StatComp)
+	{
+		StatComp->MoveSpeed += SpeedLvl * 15.0f;
+		if (UCharacterMovementComponent* MoveComp = PlayerCharacter->GetCharacterMovement())
+		{
+			MoveComp->MaxWalkSpeed = StatComp->MoveSpeed;
+		}
+		UpgradesAppliedCount++;
+	}
+
+	// 5. Crit_Up (치명타 확률)
+	const int32 CritLvl = GetUpgradeLevel(FName("Crit_Up"));
+	if (CritLvl > 0 && StatComp)
+	{
+		StatComp->CritChance = FMath::Clamp(StatComp->CritChance + (CritLvl * 2.0f), 0.0f, 100.0f);
+		UpgradesAppliedCount++;
+	}
+
+	// 6. Defense_Up (방어력)
+	const int32 DefLvl = GetUpgradeLevel(FName("Defense_Up"));
+	if (DefLvl > 0 && StatComp)
+	{
+		StatComp->Defense += DefLvl * 3.0f;
+		UpgradesAppliedCount++;
+	}
+
+	// 7. StartGold_Up (시작 골드)
+	const int32 GoldLvl = GetUpgradeLevel(FName("StartGold_Up"));
+	if (GoldLvl > 0 && InvComp)
+	{
+		InvComp->AddGold(GoldLvl * 50);
+		UpgradesAppliedCount++;
+	}
+
+	if (StatComp)
+	{
+		StatComp->NotifyStatsChanged();
+	}
+
+	if (GEngine && UpgradesAppliedCount > 0)
+	{
+		const FString Msg = FString::Printf(TEXT("✨ [영구 메타 강화 적용] %d종의 영구 특성 스탯이 캐릭터에 반영되었습니다."), UpgradesAppliedCount);
+		GEngine->AddOnScreenDebugMessage(-1, 4.0f, FColor(180, 100, 255), Msg);
+	}
+
+	return true;
+}
+
 // ==========================================
 // 내부 데이터 수집 및 주입 헬퍼
 // ==========================================

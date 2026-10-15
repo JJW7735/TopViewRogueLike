@@ -193,6 +193,55 @@ struct FRLRunSaveData
 };
 
 /**
+ * 영구 메타 특성 항목 정보 구조체 (UI 표시 및 계산용)
+ */
+USTRUCT(BlueprintType)
+struct FRLMetaUpgradeInfo
+{
+	GENERATED_BODY()
+
+	// 특성 고유 키 (예: "MaxHealth_Up", "Atk_Up", "StartGold_Up")
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Save|MetaUpgrade")
+	FName UpgradeKey = NAME_None;
+
+	// 화면에 표시될 특성 이름
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Save|MetaUpgrade")
+	FText DisplayName;
+
+	// 특성 설명 텍스트
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Save|MetaUpgrade")
+	FText Description;
+
+	// 현재 강화 레벨
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Save|MetaUpgrade")
+	int32 CurrentLevel = 0;
+
+	// 최대 강화 레벨
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Save|MetaUpgrade")
+	int32 MaxLevel = 5;
+
+	// 다음 레벨 강화에 필요한 소울 비용 (최대 레벨이면 0)
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Save|MetaUpgrade")
+	int32 NextLevelCost = 0;
+
+	// 현재 레벨에서 적용 중인 총 보너스 수치
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Save|MetaUpgrade")
+	float CurrentBonusValue = 0.0f;
+
+	// 다음 레벨에서 적용될 총 보너스 수치
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Save|MetaUpgrade")
+	float NextBonusValue = 0.0f;
+
+	// 최대 레벨 도달 여부
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Save|MetaUpgrade")
+	bool bIsMaxLevel = false;
+
+	// 현재 보유 소울로 업그레이드 가능한지 여부
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Save|MetaUpgrade")
+	bool bCanAfford = false;
+};
+
+/**
  * [Track 1] 영구 메타 세이브 데이터 (프로필 / 영구 진행도)
  * 런 사망/종료와 관계없이 영구 보존
  */

@@ -208,6 +208,11 @@ void ARLCharacter::BeginPlay()
                         TEXT("⚠ 저장된 런의 캐릭터가 지금 캐릭터와 달라서 복원을 건너뜁니다."));
                 }
             }
+            else
+            {
+                // ★ 신규 런 시작: 저장된 런 이어하기가 아니라면 영구 메타 강화 스탯을 플레이어에게 적용!
+                SaveSys->ApplyMetaUpgradesToPlayer(this);
+            }
         }
     }
 }
@@ -1532,6 +1537,57 @@ void ARLCharacter::AddSouls(int32 Amount)
     if (URLSaveSubsystem* SaveSys = URLSaveSubsystem::Get(this))
     {
         SaveSys->AddTotalSouls(Amount);
+    }
+}
+
+void ARLCharacter::UpgradeMetaTrait(FName UpgradeKey)
+{
+    if (URLSaveSubsystem* SaveSys = URLSaveSubsystem::Get(this))
+    {
+        FString FailReason;
+        const bool bSuccess = SaveSys->UpgradeMetaTrait(UpgradeKey, FailReason);
+        if (!bSuccess && GEngine)
+        {
+            GEngine->AddOnScreenDebugMessage(-1, 3.0f, FColor::Red,
+                FString::Printf(TEXT("❌ [특성 강화 실패] %s"), *FailReason));
+        }
+    }
+}
+
+void ARLCharacter::ResetMetaUpgrades()
+{
+    if (URLSaveSubsystem* SaveSys = URLSaveSubsystem::Get(this))
+    {
+        SaveSys->ResetAllMetaUpgrades(true);
+    }
+}
+
+void ARLCharacter::ShowMetaUpgrades()
+{
+    if (URLSaveSubsystem* SaveSys = URLSaveSubsystem::Get(this))
+    {
+        if (GEngine)
+        {
+            GEngine->AddOnScreenDebugMessage(-1, 6.0f, FColor::Cyan,
+                FString::Printf(TEXT("=== [보유 영혼: %d Souls] ==="), SaveSys->GetTotalSouls()));
+
+            const TArray<FRLMetaUpgradeInfo> Infos = SaveSys->GetAllMetaUpgradeInfos();
+            for (const FRLMetaUpgradeInfo& Info : Infos)
+            {
+                FString StatusStr;
+                if (Info.bIsMaxLevel)
+                {
+                    StatusStr = TEXT("MAX");
+                }
+                else
+                {
+                    StatusStr = FString::Printf(TEXT("Lv.%d/%d (다음: %d Souls)"), Info.CurrentLevel, Info.MaxLevel, Info.NextLevelCost);
+                }
+
+                GEngine->AddOnScreenDebugMessage(-1, 6.0f, FColor::Yellow,
+                    FString::Printf(TEXT("• %s (%s): %s"), *Info.DisplayName.ToString(), *Info.UpgradeKey.ToString(), *StatusStr));
+            }
+        }
     }
 }
 
