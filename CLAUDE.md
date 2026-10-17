@@ -19,8 +19,11 @@ Source/RogueLikeTopView/
 ├─ Stats/Public,Private       RLStatComponent
 ├─ AI/Public                  RLMonsterPatternDataAsset
 ├─ Core/Public                RLTypes
+├─ GAS/Public,Private         RLAbilitySystemComponent, RLAttributeSet, RLGameplayTags, RLGameplayEffects
 └─ Player/Public,Private      RLPlayerController
 ```
+
+**GAS 전환 중** (`feat/gas-migration`): 체력/전투 스탯의 실제 값은 `URLAttributeSet`에 있고, `RLHealthComponent`/`RLStatComponent`는 기존 API를 유지하는 Facade다. 스탯은 변수에 직접 쓰지 말고 `AddStatBonus`(런 영구, Instant GE) / `ApplyRemovableStatBonuses`(해제 가능, Infinite GE) / `IncreaseMaxHealth` / `Heal`을 쓸 것. C++ 태그는 `RLGameplayTags`에 네이티브 태그로 추가.
 
 **중요**: 언리얼 UBT는 모듈 루트 바로 아래의 `Public`/`Classes`만 자동으로 include 경로에 잡는다. 위처럼 중첩된 `Character/Public` 같은 폴더는 `RogueLikeTopView.Build.cs`의 `PublicIncludePaths`에 반드시 수동으로 등록해야 컴파일된다. **새 기능 폴더를 추가하면 Build.cs도 같이 수정할 것.**
 
