@@ -322,39 +322,14 @@ bool URLShopSubsystem::BuyShopItem(ARLCharacter* Buyer, int32 SlotIndex, FString
 
 		for (const FRLStatBonus& Bonus : TargetItem.StatBonuses)
 		{
+			// 전투 스탯 8종은 StatComp가 처리 (클램프/이동속도 반영 포함)
+			if (StatComp && StatComp->AddStatBonus(Bonus.TargetStat, Bonus.Value))
+			{
+				continue;
+			}
+
 			switch (Bonus.TargetStat)
 			{
-			case ERLTargetStat::AttackPower:
-				if (StatComp) StatComp->AttackPower += Bonus.Value;
-				break;
-			case ERLTargetStat::AbilityPower:
-				if (StatComp) StatComp->AbilityPower += Bonus.Value;
-				break;
-			case ERLTargetStat::CritChance:
-				if (StatComp) StatComp->CritChance = FMath::Clamp(StatComp->CritChance + Bonus.Value, 0.0f, 100.0f);
-				break;
-			case ERLTargetStat::CritDamageMultiplier:
-				if (StatComp) StatComp->CritDamageMultiplier += Bonus.Value;
-				break;
-			case ERLTargetStat::MoveSpeed:
-				if (StatComp)
-				{
-					StatComp->MoveSpeed += Bonus.Value;
-					if (UCharacterMovementComponent* MoveComp = Buyer->GetCharacterMovement())
-					{
-						MoveComp->MaxWalkSpeed = StatComp->MoveSpeed;
-					}
-				}
-				break;
-			case ERLTargetStat::AttackSpeed:
-				if (StatComp) StatComp->AttackSpeed += Bonus.Value;
-				break;
-			case ERLTargetStat::Defense:
-				if (StatComp) StatComp->Defense += Bonus.Value;
-				break;
-			case ERLTargetStat::DamageReduction:
-				if (StatComp) StatComp->DamageReduction = FMath::Clamp(StatComp->DamageReduction + Bonus.Value, 0.0f, 80.0f);
-				break;
 			case ERLTargetStat::MaxHealth:
 				if (HealthComp) HealthComp->IncreaseMaxHealth(Bonus.Value, true);
 				break;
@@ -364,6 +339,8 @@ bool URLShopSubsystem::BuyShopItem(ARLCharacter* Buyer, int32 SlotIndex, FString
 					const float HealAmount = HealthComp->MaxHealth * (Bonus.Value / 100.0f);
 					HealthComp->Heal(HealAmount);
 				}
+				break;
+			default:
 				break;
 			}
 		}

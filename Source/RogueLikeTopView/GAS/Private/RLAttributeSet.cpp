@@ -44,11 +44,12 @@ void URLAttributeSet::ClampAttribute(const FGameplayAttribute& Attribute, float&
 		// 0이 되면 몽타주 재생 속도가 0이 되어 멈추므로 최소값 보장
 		NewValue = FMath::Max(NewValue, 0.1f);
 	}
-	else if (Attribute == GetMoveSpeedAttribute() || Attribute == GetDefenseAttribute()
+	else if (Attribute == GetMoveSpeedAttribute()
 		|| Attribute == GetAttackPowerAttribute() || Attribute == GetAbilityPowerAttribute())
 	{
 		NewValue = FMath::Max(NewValue, 0.0f);
 	}
+	// Defense는 클램프하지 않습니다: 음수 = 방어력 감소 디버프 (URLStatComponent::CalculateDefendedDamage 참고)
 }
 
 void URLAttributeSet::PreAttributeChange(const FGameplayAttribute& Attribute, float& NewValue)

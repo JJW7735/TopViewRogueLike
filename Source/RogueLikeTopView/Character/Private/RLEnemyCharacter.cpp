@@ -695,8 +695,9 @@ void ARLEnemyCharacter::TriggerSoulCrackShatter()
 	// 피해감소 디버프: 기존 StatComp->DamageReduction을 저장해두고 덮어쓴 뒤, 지속 시간 후 복구
 	if (StatComp && !bSoulShatterDebuffActive)
 	{
+		// TODO(2단계): 저장/복구 방식 대신 Duration GE로 교체 (다른 효과와 겹쳐도 안전하게)
 		SavedDamageReduction = StatComp->DamageReduction;
-		StatComp->DamageReduction = SoulShatterDamageReduction;
+		StatComp->SetStatBase(ERLTargetStat::DamageReduction, SoulShatterDamageReduction);
 		bSoulShatterDebuffActive = true;
 
 		if (SoulShatterDebuffDuration > 0.0f)
@@ -789,7 +790,7 @@ void ARLEnemyCharacter::EndSoulShatterDebuff()
 
 	if (StatComp)
 	{
-		StatComp->DamageReduction = SavedDamageReduction;
+		StatComp->SetStatBase(ERLTargetStat::DamageReduction, SavedDamageReduction);
 	}
 	bSoulShatterDebuffActive = false;
 

@@ -805,7 +805,7 @@ bool URLSaveSubsystem::ApplyMetaUpgradesToPlayer(ARLCharacter* PlayerCharacter)
 	const int32 AtkLvl = GetUpgradeLevel(FName("Atk_Up"));
 	if (AtkLvl > 0 && StatComp)
 	{
-		StatComp->AttackPower += AtkLvl * 3.0f;
+		StatComp->AddStatBonus(ERLTargetStat::AttackPower, AtkLvl * 3.0f);
 		UpgradesAppliedCount++;
 	}
 
@@ -813,7 +813,7 @@ bool URLSaveSubsystem::ApplyMetaUpgradesToPlayer(ARLCharacter* PlayerCharacter)
 	const int32 APLvl = GetUpgradeLevel(FName("AP_Up"));
 	if (APLvl > 0 && StatComp)
 	{
-		StatComp->AbilityPower += APLvl * 3.0f;
+		StatComp->AddStatBonus(ERLTargetStat::AbilityPower, APLvl * 3.0f);
 		UpgradesAppliedCount++;
 	}
 
@@ -821,11 +821,7 @@ bool URLSaveSubsystem::ApplyMetaUpgradesToPlayer(ARLCharacter* PlayerCharacter)
 	const int32 SpeedLvl = GetUpgradeLevel(FName("MoveSpeed_Up"));
 	if (SpeedLvl > 0 && StatComp)
 	{
-		StatComp->MoveSpeed += SpeedLvl * 15.0f;
-		if (UCharacterMovementComponent* MoveComp = PlayerCharacter->GetCharacterMovement())
-		{
-			MoveComp->MaxWalkSpeed = StatComp->MoveSpeed;
-		}
+		StatComp->AddStatBonus(ERLTargetStat::MoveSpeed, SpeedLvl * 15.0f);
 		UpgradesAppliedCount++;
 	}
 
@@ -833,7 +829,7 @@ bool URLSaveSubsystem::ApplyMetaUpgradesToPlayer(ARLCharacter* PlayerCharacter)
 	const int32 CritLvl = GetUpgradeLevel(FName("Crit_Up"));
 	if (CritLvl > 0 && StatComp)
 	{
-		StatComp->CritChance = FMath::Clamp(StatComp->CritChance + (CritLvl * 2.0f), 0.0f, 100.0f);
+		StatComp->AddStatBonus(ERLTargetStat::CritChance, CritLvl * 2.0f);
 		UpgradesAppliedCount++;
 	}
 
@@ -841,7 +837,7 @@ bool URLSaveSubsystem::ApplyMetaUpgradesToPlayer(ARLCharacter* PlayerCharacter)
 	const int32 DefLvl = GetUpgradeLevel(FName("Defense_Up"));
 	if (DefLvl > 0 && StatComp)
 	{
-		StatComp->Defense += DefLvl * 3.0f;
+		StatComp->AddStatBonus(ERLTargetStat::Defense, DefLvl * 3.0f);
 		UpgradesAppliedCount++;
 	}
 

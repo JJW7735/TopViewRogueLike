@@ -73,7 +73,7 @@ public:
 	// ==========================================
 	// ★ 방어 스탯
 	// ==========================================
-	// 방어력 (받는 피해 배율: 100 / (100 + Defense))
+	// 방어력 (받는 피해 배율: 100 / (100 + Defense), 음수 허용 = 방어력 감소 디버프)
 	UPROPERTY(BlueprintReadOnly, Category = "Attributes|Defense")
 	FGameplayAttributeData Defense;
 	RL_ATTRIBUTE_ACCESSORS(URLAttributeSet, Defense)

@@ -1,13 +1,22 @@
-#pragma once
+﻿#pragma once
 
 #include "CoreMinimal.h"
 #include "Components/ActorComponent.h"
+#include "GameplayEffectTypes.h"
+#include "RLRewardTypes.h"
 #include "RLStatComponent.generated.h"
+
+class UAbilitySystemComponent;
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnStatsChangedSignature);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FOnExpChangedSignature, float, CurrentExp, float, MaxExp, float, ExpPercent);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnLevelUpSignature, int32, NewLevel);
 
+// ★ 레벨/경험치 + 전투 스탯 Facade.
+// - 레벨/경험치: 전투 스탯이 아니라서 이 컴포넌트가 직접 관리합니다.
+// - 전투 스탯 8종: 실제 값은 Owner ASC의 URLAttributeSet에 있고, 아래 변수들은 그 값을 따라가는 읽기 전용 미러입니다.
+//   BP 클래스 디폴트에서 정한 값은 BeginPlay에서 AttributeSet 시작값으로 들어갑니다.
+//   값을 바꿀 때는 반드시 AddStatBonus / SetStatBase / RestoreStatsDirect 또는 GE를 사용하세요.
 UCLASS(ClassGroup = (Custom), meta = (BlueprintSpawnableComponent))
 class ROGUELIKETOPVIEW_API URLStatComponent : public UActorComponent
 {
@@ -66,39 +75,63 @@ public:
 	                        float InDefense, float InDamageReduction);
 
 	// ==========================================
-	// ★ 핵심 스탯 4가지
+	// ★ 전투 스탯 변경 API (Inventory / Reward / Shop / Save 공용)
+	// ==========================================
+
+	/**
+	 * 전투 스탯 기본값에 Delta를 더합니다. 범위 제한(치명타 0~100 등)은 URLAttributeSet이 처리합니다.
+	 * OnStatsChanged는 방송하지 않으니 여러 개를 바꾼 뒤 NotifyStatsChanged()를 한 번 호출하세요.
+	 * @return 전투 스탯이면 true. MaxHealth / HealPercent는 체력 컴포넌트 담당이라 false를 반환합니다.
+	 * TODO(2단계): 보상/아이템별 Infinite GE로 교체 (출처별로 해제 가능하게)
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Stats")
+	bool AddStatBonus(ERLTargetStat Stat, float Delta);
+
+	/** 전투 스탯 기본값을 직접 지정합니다 (버프/GE 효과는 그대로 유지됨). */
+	UFUNCTION(BlueprintCallable, Category = "Stats")
+	bool SetStatBase(ERLTargetStat Stat, float NewBaseValue);
+
+	/** 버프/GE까지 반영된 현재 스탯 값 */
+	UFUNCTION(BlueprintPure, Category = "Stats")
+	float GetStatValue(ERLTargetStat Stat) const;
+
+	/** ERLTargetStat → AttributeSet 어트리뷰트 매핑 (전투 스탯이 아니면 무효한 어트리뷰트) */
+	static FGameplayAttribute GetAttributeForStat(ERLTargetStat Stat);
+
+	// ==========================================
+	// ★ 핵심 전투 스탯 (AttributeSet 미러, 읽기 전용)
 	// ==========================================
 
 	// 1. 공격력 (물리 데미지 기반)
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stats")
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Stats")
 	float AttackPower = 10.0f;
 
 	// 2. 주문력 (마법/스킬 데미지 기반)
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stats")
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Stats")
 	float AbilityPower = 10.0f;
 
 	// 3. 치명타 확률 (0.0% ~ 100.0%, 예: 15.0 = 15%)
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stats", meta = (ClampMin = "0.0", ClampMax = "100.0"))
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Stats", meta = (ClampMin = "0.0", ClampMax = "100.0"))
 	float CritChance = 10.0f;
 
 	// 4. 치명타 피해 배율 (예: 1.5 = 150% 피해, 2.0 = 200% 피해)
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stats", meta = (ClampMin = "1.0"))
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Stats", meta = (ClampMin = "1.0"))
 	float CritDamageMultiplier = 1.5f;
 
-	// 5. 이동 속도
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stats")
+	// 5. 이동 속도 (변경 시 CharacterMovement의 MaxWalkSpeed에 자동 반영)
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Stats")
 	float MoveSpeed = 600.0f;
 
 	// 6. 공격 속도 배율 (1.0 = 기본 속도 100%, 1.5 = 150% 빠름)
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stats")
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Stats")
 	float AttackSpeed = 1.0f;
 
 	// 7. 방어력 (수치형: 높을수록 받는 피해 감소, 피해 배율: 100 / (100 + Defense))
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stats")
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Stats")
 	float Defense = 10.0f;
 
 	// 8. 받는 피해 감소율 (0.0% ~ 80.0%, 버프/유물/스킬에 의한 추가 퍼센트 피해 감소)
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stats", meta = (ClampMin = "0.0", ClampMax = "80.0"))
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Stats", meta = (ClampMin = "0.0", ClampMax = "80.0"))
 	float DamageReduction = 0.0f;
 
 	/**
@@ -122,4 +155,19 @@ public:
 
 protected:
 	virtual void BeginPlay() override;
+	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
+
+private:
+	UPROPERTY()
+	TObjectPtr<UAbilitySystemComponent> AbilitySystemComp;
+
+	// 전투 스탯 8종 (ERLTargetStat 순서)
+	static const TArray<ERLTargetStat>& GetCombatStats();
+
+	void HandleStatAttributeChanged(const FOnAttributeChangeData& ChangeData);
+	void SyncFromAttributes();
+	void ApplyMoveSpeedToMovement() const;
+
+	// AddStatBonus 등 일괄 변경 중에는 OnStatsChanged 자동 방송을 막습니다 (호출 측에서 NotifyStatsChanged 1회)
+	bool bSuppressBroadcast = false;
 };

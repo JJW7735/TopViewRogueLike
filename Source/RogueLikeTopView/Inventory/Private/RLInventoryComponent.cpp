@@ -302,44 +302,21 @@ void URLInventoryComponent::ApplyPassiveItemBonuses(URLItemDataAsset* ItemData, 
 	{
 		const float Delta = Bonus.Value * Multiplier * Sign;
 
+		// 전투 스탯 8종은 StatComp가 처리 (클램프/이동속도 반영 포함)
+		if (StatComp && StatComp->AddStatBonus(Bonus.TargetStat, Delta))
+		{
+			continue;
+		}
+
 		switch (Bonus.TargetStat)
 		{
-		case ERLTargetStat::AttackPower:
-			if (StatComp) StatComp->AttackPower += Delta;
-			break;
-		case ERLTargetStat::AbilityPower:
-			if (StatComp) StatComp->AbilityPower += Delta;
-			break;
-		case ERLTargetStat::CritChance:
-			if (StatComp) StatComp->CritChance = FMath::Clamp(StatComp->CritChance + Delta, 0.0f, 100.0f);
-			break;
-		case ERLTargetStat::CritDamageMultiplier:
-			if (StatComp) StatComp->CritDamageMultiplier += Delta;
-			break;
-		case ERLTargetStat::MoveSpeed:
-			if (StatComp)
-			{
-				StatComp->MoveSpeed += Delta;
-				if (UCharacterMovementComponent* MoveComp = OwnerChar->GetCharacterMovement())
-				{
-					MoveComp->MaxWalkSpeed = StatComp->MoveSpeed;
-				}
-			}
-			break;
-		case ERLTargetStat::AttackSpeed:
-			if (StatComp) StatComp->AttackSpeed += Delta;
-			break;
-		case ERLTargetStat::Defense:
-			if (StatComp) StatComp->Defense += Delta;
-			break;
-		case ERLTargetStat::DamageReduction:
-			if (StatComp) StatComp->DamageReduction = FMath::Clamp(StatComp->DamageReduction + Delta, 0.0f, 80.0f);
-			break;
 		case ERLTargetStat::MaxHealth:
 			if (HealthComp) HealthComp->IncreaseMaxHealth(Delta, bApply);
 			break;
 		case ERLTargetStat::HealPercent:
 			// 일회성 회복은 패시브로 적용하지 않음
+			break;
+		default:
 			break;
 		}
 	}
