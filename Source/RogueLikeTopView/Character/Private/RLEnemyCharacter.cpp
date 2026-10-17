@@ -103,7 +103,8 @@ bool ARLEnemyCharacter::DebugKill()
 		return false;
 	}
 
-	UGameplayStatics::ApplyDamage(this, HealthComp->CurrentHealth, nullptr, nullptr, UDamageType::StaticClass());
+	// 방어력/보호막에 깎이지 않도록 트루 데미지로 남은 체력만큼 넣어 정상 사망 루트를 탑니다.
+	HealthComp->ApplyIncomingDamage(HealthComp->CurrentHealth, nullptr, true);
 	return true;
 }
 

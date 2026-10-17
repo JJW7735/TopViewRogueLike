@@ -1196,8 +1196,9 @@ void ARLCharacter::ResetDashCooldown()
     bCanDash = true;
 }
 
-// ★ 엔진 기본 ApplyDamage 경로 (BP의 ApplyDamage 노드, 테스트용 즉사 명령 등)
-// 절대 방어막: 무적이면 전부 무시. 그 외에는 예전과 같이 경감 없이(트루 데미지) GAS 피해로 넘깁니다.
+// ★ 엔진 기본 ApplyDamage 경로 (BP_EnemyBase의 몬스터 공격 등)
+// 절대 방어막: 무적이면 전부 무시. 그 외에는 ReceiveCustomDamage와 똑같이 방어력/피해감소를 적용해 GAS 피해로 넘깁니다.
+// (예전엔 이 경로가 경감 없이 들어가서, 플레이어 방어력이 일반 몬스터 공격에 효과가 없었음)
 float ARLCharacter::TakeDamage(float DamageAmount, struct FDamageEvent const& DamageEvent, class AController* EventInstigator, AActor* DamageCauser)
 {
     if (IsInvulnerable())
@@ -1206,15 +1207,15 @@ float ARLCharacter::TakeDamage(float DamageAmount, struct FDamageEvent const& Da
         return 0.0f;
     }
 
-    // Super는 BP의 Event AnyDamage / OnTakeAnyDamage 알림을 보냅니다 (피해 자체는 아래 GAS가 처리)
-    const float NotifiedDamage = Super::TakeDamage(DamageAmount, DamageEvent, EventInstigator, DamageCauser);
-
     AActor* Causer = DamageCauser ? DamageCauser : (EventInstigator ? EventInstigator->GetPawn() : nullptr);
-    if (HealthComp && NotifiedDamage > 0.0f)
+    const float FinalDamage = HealthComp ? HealthComp->ApplyIncomingDamage(DamageAmount, Causer, false) : 0.0f;
+    if (FinalDamage <= 0.0f)
     {
-        HealthComp->ApplyIncomingDamage(NotifiedDamage, Causer, true);
+        return 0.0f;
     }
-    return NotifiedDamage;
+
+    // Super는 BP의 Event AnyDamage / OnTakeAnyDamage 알림만 보냅니다 (피해는 위에서 이미 적용). 경감 후 값으로 알림.
+    return Super::TakeDamage(FinalDamage, DamageEvent, EventInstigator, DamageCauser);
 }
 
 // ★ 부드러운 대시 이동 시작

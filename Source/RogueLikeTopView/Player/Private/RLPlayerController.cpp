@@ -112,8 +112,9 @@ void ARLPlayerController::KillSelf()
 		return;
 	}
 
-	// 실제 피격과 같은 경로(TakeDamage → HealthComp → OnDeath → HandleDeath)로 사망시킵니다.
-	UGameplayStatics::ApplyDamage(ControlledPawn, HealthComp->CurrentHealth, this, nullptr, UDamageType::StaticClass());
+	// 실제 피격과 같은 경로(GAS 피해 → HealthComp → OnDeath → HandleDeath)로 사망시킵니다.
+	// 방어력에 깎이지 않도록 트루 데미지로 남은 체력만큼 넣습니다.
+	HealthComp->ApplyIncomingDamage(HealthComp->CurrentHealth, nullptr, true);
 
 	if (GEngine)
 	{
