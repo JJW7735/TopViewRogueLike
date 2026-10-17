@@ -141,6 +141,12 @@ struct FRLRunSaveData
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Save|Run")
 	bool bIsRunActive = false;
 
+	// ★ 체력/스탯 저장 방식 버전 (GAS 전환으로 의미가 바뀜)
+	//   0 = 패시브 아이템 보너스가 포함된 최종값 (GAS 전환 전 저장 파일. 필드가 없으면 기본값 0)
+	//   1 = 패시브 아이템을 뺀 기본값. 아이템 보너스는 로드 시 인벤토리가 GE로 다시 적용
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Save|Run")
+	int32 StatSaveVersion = 0;
+
 	// ★ 이 런이 어느 캐릭터(블레이드/소서리스/디스트로이어 등)로 저장된 것인지 식별.
 	//   저장 시점의 캐릭터와 지금 스폰되는 캐릭터가 다르면 복원하지 않기 위한 안전장치.
 	//   (이 필드가 추가되기 전 저장 파일은 비어있으므로, 비어있을 땐 구분 없이 복원 허용)

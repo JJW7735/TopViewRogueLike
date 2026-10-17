@@ -4,6 +4,7 @@
 #include "GameFramework/Character.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "RLAttributeSet.h"
+#include "RLGameplayEffects.h"
 
 URLStatComponent::URLStatComponent()
 {
@@ -42,15 +43,22 @@ FGameplayAttribute URLStatComponent::GetAttributeForStat(ERLTargetStat Stat)
 	}
 }
 
+void URLStatComponent::OnRegister()
+{
+	Super::OnRegister();
+
+	// BeginPlay가 아닌 여기서 찾아두는 이유: 컴포넌트 BeginPlay 순서는 보장되지 않아서,
+	// 인벤토리의 시작 지급 아이템이 이 컴포넌트 BeginPlay보다 먼저 스탯 GE를 걸 수 있기 때문입니다.
+	AbilitySystemComp = UAbilitySystemGlobals::GetAbilitySystemComponentFromActor(GetOwner());
+}
+
 void URLStatComponent::BeginPlay()
 {
 	Super::BeginPlay();
 
-	AActor* MyOwner = GetOwner();
-	AbilitySystemComp = UAbilitySystemGlobals::GetAbilitySystemComponentFromActor(MyOwner);
 	if (!AbilitySystemComp)
 	{
-		UE_LOG(LogTemp, Error, TEXT("[RLStatComponent] %s에 AbilitySystemComponent가 없습니다. ARLCharacter 파생 클래스에서만 사용하세요."), *GetNameSafe(MyOwner));
+		UE_LOG(LogTemp, Error, TEXT("[RLStatComponent] %s에 AbilitySystemComponent가 없습니다. ARLCharacter 파생 클래스에서만 사용하세요."), *GetNameSafe(GetOwner()));
 		return;
 	}
 
@@ -152,9 +160,52 @@ bool URLStatComponent::AddStatBonus(ERLTargetStat Stat, float Delta)
 	if (!FMath::IsNearlyZero(Delta))
 	{
 		TGuardValue<bool> SuppressGuard(bSuppressBroadcast, true);
-		AbilitySystemComp->SetNumericAttributeBase(Attribute, AbilitySystemComp->GetNumericAttributeBase(Attribute) + Delta);
+		RLGameplayEffectUtils::ApplyStatBonusEffect(AbilitySystemComp, URLGE_StatBonus_Instant::StaticClass(), { { Attribute, Delta } });
 	}
 	return true;
+}
+
+FActiveGameplayEffectHandle URLStatComponent::ApplyRemovableStatBonuses(const TArray<FRLStatBonus>& Bonuses, float Multiplier)
+{
+	if (!AbilitySystemComp)
+	{
+		return FActiveGameplayEffectHandle();
+	}
+
+	// 같은 스탯이 여러 번 나와도 합산해서 GE 하나로 적용
+	TMap<FGameplayAttribute, float> Values;
+	for (const FRLStatBonus& Bonus : Bonuses)
+	{
+		const FGameplayAttribute Attribute = Bonus.TargetStat == ERLTargetStat::MaxHealth
+			? URLAttributeSet::GetMaxHealthAttribute()
+			: GetAttributeForStat(Bonus.TargetStat);
+
+		if (Attribute.IsValid())
+		{
+			Values.FindOrAdd(Attribute) += Bonus.Value * Multiplier;
+		}
+	}
+
+	return RLGameplayEffectUtils::ApplyStatBonusEffect(AbilitySystemComp, URLGE_StatBonus_Infinite::StaticClass(), Values);
+}
+
+void URLStatComponent::RemoveStatBonusEffect(FActiveGameplayEffectHandle& Handle)
+{
+	if (AbilitySystemComp && Handle.IsValid())
+	{
+		AbilitySystemComp->RemoveActiveGameplayEffect(Handle);
+	}
+	Handle.Invalidate();
+}
+
+float URLStatComponent::GetStatBase(ERLTargetStat Stat) const
+{
+	const FGameplayAttribute Attribute = GetAttributeForStat(Stat);
+	if (!Attribute.IsValid() || !AbilitySystemComp)
+	{
+		return 0.0f;
+	}
+	return AbilitySystemComp->GetNumericAttributeBase(Attribute);
 }
 
 bool URLStatComponent::SetStatBase(ERLTargetStat Stat, float NewBaseValue)

@@ -17,5 +17,14 @@ namespace RLGameplayTags
 
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Data_Damage, "Data.Damage", "SetByCaller: 피해량");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Data_Heal, "Data.Heal", "SetByCaller: 회복량");
-	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Data_StatBonus, "Data.StatBonus", "SetByCaller: 보상/상점/아이템 스탯 증가량");
+
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Data_Stat_MaxHealth, "Data.Stat.MaxHealth", "SetByCaller: 최대 체력 증감량");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Data_Stat_AttackPower, "Data.Stat.AttackPower", "SetByCaller: 공격력 증감량");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Data_Stat_AbilityPower, "Data.Stat.AbilityPower", "SetByCaller: 주문력 증감량");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Data_Stat_CritChance, "Data.Stat.CritChance", "SetByCaller: 치명타 확률 증감량");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Data_Stat_CritDamageMultiplier, "Data.Stat.CritDamageMultiplier", "SetByCaller: 치명타 피해 배율 증감량");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Data_Stat_MoveSpeed, "Data.Stat.MoveSpeed", "SetByCaller: 이동 속도 증감량");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Data_Stat_AttackSpeed, "Data.Stat.AttackSpeed", "SetByCaller: 공격 속도 증감량");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Data_Stat_Defense, "Data.Stat.Defense", "SetByCaller: 방어력 증감량");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Data_Stat_DamageReduction, "Data.Stat.DamageReduction", "SetByCaller: 피해 감소율 증감량(덮어쓰기 GE에서는 고정값)");
 }

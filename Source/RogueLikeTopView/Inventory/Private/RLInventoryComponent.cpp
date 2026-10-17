@@ -84,7 +84,7 @@ int32 URLInventoryComponent::AddItem(URLItemDataAsset* ItemData, int32 Amount)
 		// 패시브 유물 아이템인 경우 획득 즉시 캐릭터 스탯에 반영
 		if (ItemData->ItemType == ERLItemType::Passive)
 		{
-			ApplyPassiveItemBonuses(ItemData, Added, true);
+			RefreshPassiveItemEffects();
 		}
 
 		OnInventoryUpdated.Broadcast();
@@ -119,7 +119,7 @@ bool URLInventoryComponent::RemoveItemAtIndex(int32 SlotIndex, int32 Amount)
 	// 패시브 아이템 제거 시 스탯 차감
 	if (TargetItem && TargetItem->ItemType == ERLItemType::Passive)
 	{
-		ApplyPassiveItemBonuses(TargetItem, ActualRemoved, false);
+		RefreshPassiveItemEffects();
 	}
 
 	OnSlotUpdated.Broadcast(SlotIndex, Slots[SlotIndex]);
@@ -280,51 +280,47 @@ int32 URLInventoryComponent::FindFirstEmptySlotIndex() const
 	return INDEX_NONE;
 }
 
-void URLInventoryComponent::ApplyPassiveItemBonuses(URLItemDataAsset* ItemData, int32 Multiplier, bool bApply)
+void URLInventoryComponent::RefreshPassiveItemEffects()
 {
-	if (!ItemData || Multiplier <= 0)
-	{
-		return;
-	}
-
 	ARLCharacter* OwnerChar = Cast<ARLCharacter>(GetOwner());
-	if (!OwnerChar)
+	URLStatComponent* StatComp = OwnerChar ? OwnerChar->GetStatComponent() : nullptr;
+	if (!StatComp)
 	{
 		return;
 	}
 
-	URLStatComponent* StatComp = OwnerChar->FindComponentByClass<URLStatComponent>();
 	URLHealthComponent* HealthComp = OwnerChar->FindComponentByClass<URLHealthComponent>();
+	const float OldMaxHealth = HealthComp ? HealthComp->MaxHealth : 0.0f;
 
-	const float Sign = bApply ? 1.0f : -1.0f;
-
-	for (const FRLStatBonus& Bonus : ItemData->PassiveStatBonuses)
+	// 새 효과를 먼저 걸고 옛 효과를 나중에 지웁니다.
+	// 반대로 하면 최대 체력이 잠깐 기본값까지 내려가면서 현재 체력이 clamp되어 깎여버립니다.
+	TArray<FActiveGameplayEffectHandle> NewHandles;
+	for (const FRLInventorySlot& Slot : Slots)
 	{
-		const float Delta = Bonus.Value * Multiplier * Sign;
-
-		// 전투 스탯 8종은 StatComp가 처리 (클램프/이동속도 반영 포함)
-		if (StatComp && StatComp->AddStatBonus(Bonus.TargetStat, Delta))
+		if (Slot.IsValid() && Slot.ItemData->ItemType == ERLItemType::Passive && Slot.ItemData->PassiveStatBonuses.Num() > 0)
 		{
-			continue;
-		}
-
-		switch (Bonus.TargetStat)
-		{
-		case ERLTargetStat::MaxHealth:
-			if (HealthComp) HealthComp->IncreaseMaxHealth(Delta, bApply);
-			break;
-		case ERLTargetStat::HealPercent:
-			// 일회성 회복은 패시브로 적용하지 않음
-			break;
-		default:
-			break;
+			// HealPercent(일회성 회복)는 ApplyRemovableStatBonuses가 무시합니다.
+			const FActiveGameplayEffectHandle Handle = StatComp->ApplyRemovableStatBonuses(Slot.ItemData->PassiveStatBonuses, Slot.Quantity);
+			if (Handle.IsValid())
+			{
+				NewHandles.Add(Handle);
+			}
 		}
 	}
 
-	if (StatComp)
+	for (FActiveGameplayEffectHandle& OldHandle : PassiveItemEffectHandles)
 	{
-		StatComp->NotifyStatsChanged();
+		StatComp->RemoveStatBonusEffect(OldHandle);
 	}
+	PassiveItemEffectHandles = MoveTemp(NewHandles);
+
+	// 기존 동작 유지: 최대 체력 아이템을 얻으면 늘어난 만큼 현재 체력도 채워줌 (해제 시에는 clamp만)
+	if (HealthComp && HealthComp->MaxHealth > OldMaxHealth)
+	{
+		HealthComp->FillHealthForMaxHealthIncrease(HealthComp->MaxHealth - OldMaxHealth);
+	}
+
+	StatComp->NotifyStatsChanged();
 }
 
 void URLInventoryComponent::RestoreInventoryDirect(int32 InGold, const TArray<FRLInventorySlot>& InSlots)
@@ -343,6 +339,10 @@ void URLInventoryComponent::RestoreInventoryDirect(int32 InGold, const TArray<FR
 			Slots[i].Clear();
 		}
 	}
+
+	// 복원된 슬롯 기준으로 아이템 GE를 다시 겁니다 (시작 지급 아이템의 GE는 여기서 정리됨).
+	// 세이브에는 아이템을 뺀 기본 스탯만 저장되므로 이중 적용되지 않습니다.
+	RefreshPassiveItemEffects();
 
 	OnInventoryUpdated.Broadcast();
 	OnGoldChanged.Broadcast(Gold);

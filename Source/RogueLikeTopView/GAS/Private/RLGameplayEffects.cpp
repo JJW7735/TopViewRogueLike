@@ -1,17 +1,19 @@
 ﻿#include "RLGameplayEffects.h"
+#include "AbilitySystemComponent.h"
 #include "RLAttributeSet.h"
 #include "RLGameplayTags.h"
 
 namespace
 {
-	FGameplayModifierInfo MakeSetByCallerModifier(const FGameplayAttribute& Attribute, const FGameplayTag& DataTag)
+	FGameplayModifierInfo MakeSetByCallerModifier(const FGameplayAttribute& Attribute, const FGameplayTag& DataTag,
+		EGameplayModOp::Type ModOp = EGameplayModOp::Additive)
 	{
 		FSetByCallerFloat SetByCaller;
 		SetByCaller.DataTag = DataTag;
 
 		FGameplayModifierInfo Modifier;
 		Modifier.Attribute = Attribute;
-		Modifier.ModifierOp = EGameplayModOp::Additive;
+		Modifier.ModifierOp = ModOp;
 		Modifier.ModifierMagnitude = FGameplayEffectModifierMagnitude(SetByCaller);
 		return Modifier;
 	}
@@ -27,4 +29,72 @@ URLGE_Heal::URLGE_Heal()
 {
 	DurationPolicy = EGameplayEffectDurationType::Instant;
 	Modifiers.Add(MakeSetByCallerModifier(URLAttributeSet::GetHealthAttribute(), RLGameplayTags::Data_Heal));
+}
+
+URLGE_StatBonusBase::URLGE_StatBonusBase()
+{
+	for (const TPair<FGameplayAttribute, FGameplayTag>& Channel : RLGameplayEffectUtils::GetStatBonusChannels())
+	{
+		Modifiers.Add(MakeSetByCallerModifier(Channel.Key, Channel.Value));
+	}
+}
+
+URLGE_StatBonus_Instant::URLGE_StatBonus_Instant()
+{
+	DurationPolicy = EGameplayEffectDurationType::Instant;
+}
+
+URLGE_StatBonus_Infinite::URLGE_StatBonus_Infinite()
+{
+	DurationPolicy = EGameplayEffectDurationType::Infinite;
+}
+
+URLGE_SoulShatterDebuff::URLGE_SoulShatterDebuff()
+{
+	DurationPolicy = EGameplayEffectDurationType::Infinite;
+	// 중복 적용 방지는 ARLEnemyCharacter::bSoulShatterDebuffActive가 담당합니다.
+	Modifiers.Add(MakeSetByCallerModifier(URLAttributeSet::GetDamageReductionAttribute(), RLGameplayTags::Data_Stat_DamageReduction, EGameplayModOp::Override));
+}
+
+namespace RLGameplayEffectUtils
+{
+	const TArray<TPair<FGameplayAttribute, FGameplayTag>>& GetStatBonusChannels()
+	{
+		static const TArray<TPair<FGameplayAttribute, FGameplayTag>> Channels = {
+			{ URLAttributeSet::GetMaxHealthAttribute(), RLGameplayTags::Data_Stat_MaxHealth },
+			{ URLAttributeSet::GetAttackPowerAttribute(), RLGameplayTags::Data_Stat_AttackPower },
+			{ URLAttributeSet::GetAbilityPowerAttribute(), RLGameplayTags::Data_Stat_AbilityPower },
+			{ URLAttributeSet::GetCritChanceAttribute(), RLGameplayTags::Data_Stat_CritChance },
+			{ URLAttributeSet::GetCritDamageMultiplierAttribute(), RLGameplayTags::Data_Stat_CritDamageMultiplier },
+			{ URLAttributeSet::GetMoveSpeedAttribute(), RLGameplayTags::Data_Stat_MoveSpeed },
+			{ URLAttributeSet::GetAttackSpeedAttribute(), RLGameplayTags::Data_Stat_AttackSpeed },
+			{ URLAttributeSet::GetDefenseAttribute(), RLGameplayTags::Data_Stat_Defense },
+			{ URLAttributeSet::GetDamageReductionAttribute(), RLGameplayTags::Data_Stat_DamageReduction }
+		};
+		return Channels;
+	}
+
+	FActiveGameplayEffectHandle ApplyStatBonusEffect(UAbilitySystemComponent* ASC,
+		TSubclassOf<URLGE_StatBonusBase> EffectClass, const TMap<FGameplayAttribute, float>& Values)
+	{
+		if (!ASC || !EffectClass || Values.IsEmpty())
+		{
+			return FActiveGameplayEffectHandle();
+		}
+
+		const FGameplayEffectSpecHandle Spec = ASC->MakeOutgoingSpec(EffectClass, 1.0f, ASC->MakeEffectContext());
+		if (!Spec.IsValid())
+		{
+			return FActiveGameplayEffectHandle();
+		}
+
+		// SetByCaller 값이 하나라도 비어 있으면 GAS가 에러 로그를 남기므로 모든 채널을 채웁니다.
+		for (const TPair<FGameplayAttribute, FGameplayTag>& Channel : GetStatBonusChannels())
+		{
+			const float* Value = Values.Find(Channel.Key);
+			Spec.Data->SetSetByCallerMagnitude(Channel.Value, Value ? *Value : 0.0f);
+		}
+
+		return ASC->ApplyGameplayEffectSpecToSelf(*Spec.Data.Get());
+	}
 }

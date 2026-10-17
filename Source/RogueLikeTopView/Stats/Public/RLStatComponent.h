@@ -67,7 +67,7 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Stats|Level")
 	float GetExpPercent() const { return MaxExp > 0.0f ? FMath::Clamp(CurrentExp / MaxExp, 0.0f, 1.0f) : 0.0f; }
 
-	/** 세이브 로드 시 스탯 및 레벨 정보를 직접 복원하고 UI/이동속도를 갱신 */
+	/** 세이브 로드 시 스탯 및 레벨 정보를 직접 복원하고 UI/이동속도를 갱신 (스탯 인자는 GetStatBase 기준 기본값) */
 	UFUNCTION(BlueprintCallable, Category = "Stats")
 	void RestoreStatsDirect(int32 InLevel, float InCurrentExp, float InMaxExp, float InExpGrowth,
 	                        float InAttackPower, float InAbilityPower, float InCritChance,
@@ -79,21 +79,35 @@ public:
 	// ==========================================
 
 	/**
-	 * 전투 스탯 기본값에 Delta를 더합니다. 범위 제한(치명타 0~100 등)은 URLAttributeSet이 처리합니다.
+	 * 런 동안 영구적인 전투 스탯 보너스 (보상 카드 / 상점 / 메타 강화). Instant GE로 기본값을 바꿉니다.
+	 * 범위 제한(치명타 0~100 등)은 URLAttributeSet이 처리합니다.
 	 * OnStatsChanged는 방송하지 않으니 여러 개를 바꾼 뒤 NotifyStatsChanged()를 한 번 호출하세요.
 	 * @return 전투 스탯이면 true. MaxHealth / HealPercent는 체력 컴포넌트 담당이라 false를 반환합니다.
-	 * TODO(2단계): 보상/아이템별 Infinite GE로 교체 (출처별로 해제 가능하게)
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Stats")
 	bool AddStatBonus(ERLTargetStat Stat, float Delta);
 
-	/** 전투 스탯 기본값을 직접 지정합니다 (버프/GE 효과는 그대로 유지됨). */
+	/**
+	 * 해제 가능한 스탯 보너스 묶음 (패시브 아이템, 버프). Infinite GE 하나로 적용하고 핸들을 돌려줍니다.
+	 * MaxHealth도 포함되며 HealPercent는 무시합니다. 현재 체력은 건드리지 않습니다.
+	 * 해제는 RemoveStatBonusEffect(핸들).
+	 */
+	FActiveGameplayEffectHandle ApplyRemovableStatBonuses(const TArray<FRLStatBonus>& Bonuses, float Multiplier = 1.0f);
+
+	/** ApplyRemovableStatBonuses로 건 효과를 해제합니다. */
+	void RemoveStatBonusEffect(FActiveGameplayEffectHandle& Handle);
+
+	/** 전투 스탯 기본값을 직접 지정합니다 (세이브 복원용. 아이템/버프 GE 효과는 그대로 유지됨). */
 	UFUNCTION(BlueprintCallable, Category = "Stats")
 	bool SetStatBase(ERLTargetStat Stat, float NewBaseValue);
 
-	/** 버프/GE까지 반영된 현재 스탯 값 */
+	/** 버프/아이템까지 반영된 현재 스탯 값 */
 	UFUNCTION(BlueprintPure, Category = "Stats")
 	float GetStatValue(ERLTargetStat Stat) const;
+
+	/** 아이템/버프를 뺀 기본값 (보상/상점/메타 강화는 포함). 세이브에는 이 값을 저장합니다. */
+	UFUNCTION(BlueprintPure, Category = "Stats")
+	float GetStatBase(ERLTargetStat Stat) const;
 
 	/** ERLTargetStat → AttributeSet 어트리뷰트 매핑 (전투 스탯이 아니면 무효한 어트리뷰트) */
 	static FGameplayAttribute GetAttributeForStat(ERLTargetStat Stat);
@@ -154,11 +168,12 @@ public:
 	float CalculateDefendedDamage(float InRawDamage, float& OutReducedDamage) const;
 
 protected:
+	virtual void OnRegister() override;
 	virtual void BeginPlay() override;
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 
 private:
-	UPROPERTY()
+	UPROPERTY(Transient)
 	TObjectPtr<UAbilitySystemComponent> AbilitySystemComp;
 
 	// 전투 스탯 8종 (ERLTargetStat 순서)

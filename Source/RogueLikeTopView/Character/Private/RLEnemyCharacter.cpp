@@ -22,6 +22,9 @@
 #include "GameFramework/CharacterMovementComponent.h"
 #include "RLDecalIndicator.h"
 #include "Materials/MaterialInterface.h"
+#include "RLAbilitySystemComponent.h"
+#include "RLGameplayEffects.h"
+#include "RLGameplayTags.h"
 
 ARLEnemyCharacter::ARLEnemyCharacter()
 {
@@ -692,12 +695,17 @@ void ARLEnemyCharacter::TriggerSoulCrackShatter()
 
 	PauseAIForSoulCrack(SoulShatterStunDuration);
 
-	// 피해감소 디버프: 기존 StatComp->DamageReduction을 저장해두고 덮어쓴 뒤, 지속 시간 후 복구
-	if (StatComp && !bSoulShatterDebuffActive)
+	// 피해감소 디버프: DamageReduction을 덮어쓰는 GE를 걸고, 지속 시간 후 GE를 해제합니다.
+	// (예전에는 원래 값을 저장해뒀다가 되돌려서, 디버프 도중 다른 효과로 바뀐 값이 사라지는 문제가 있었음)
+	const float PrevDamageReduction = StatComp ? StatComp->DamageReduction : 0.0f; // 디버그 메시지용
+	if (AbilitySystemComp && !bSoulShatterDebuffActive)
 	{
-		// TODO(2단계): 저장/복구 방식 대신 Duration GE로 교체 (다른 효과와 겹쳐도 안전하게)
-		SavedDamageReduction = StatComp->DamageReduction;
-		StatComp->SetStatBase(ERLTargetStat::DamageReduction, SoulShatterDamageReduction);
+		const FGameplayEffectSpecHandle Spec = AbilitySystemComp->MakeOutgoingSpec(URLGE_SoulShatterDebuff::StaticClass(), 1.0f, AbilitySystemComp->MakeEffectContext());
+		if (Spec.IsValid())
+		{
+			Spec.Data->SetSetByCallerMagnitude(RLGameplayTags::Data_Stat_DamageReduction, SoulShatterDamageReduction);
+			SoulShatterDebuffHandle = AbilitySystemComp->ApplyGameplayEffectSpecToSelf(*Spec.Data.Get());
+		}
 		bSoulShatterDebuffActive = true;
 
 		if (SoulShatterDebuffDuration > 0.0f)
@@ -714,7 +722,7 @@ void ARLEnemyCharacter::TriggerSoulCrackShatter()
 	{
 		GEngine->AddOnScreenDebugMessage(-1, 4.0f, FColor::Emerald,
 			FString::Printf(TEXT("💥 [영혼의 균열] %s 보호막 붕괴! %.1f초 경직, %.1f초간 피해감소 %.0f%% → %.0f%%"),
-				*GetName(), SoulShatterStunDuration, SoulShatterDebuffDuration, SavedDamageReduction, SoulShatterDamageReduction));
+				*GetName(), SoulShatterStunDuration, SoulShatterDebuffDuration, PrevDamageReduction, SoulShatterDamageReduction));
 	}
 
 	OnSoulCrackShattered();
@@ -788,10 +796,11 @@ void ARLEnemyCharacter::EndSoulShatterDebuff()
 		return;
 	}
 
-	if (StatComp)
+	if (AbilitySystemComp && SoulShatterDebuffHandle.IsValid())
 	{
-		StatComp->SetStatBase(ERLTargetStat::DamageReduction, SavedDamageReduction);
+		AbilitySystemComp->RemoveActiveGameplayEffect(SoulShatterDebuffHandle);
 	}
+	SoulShatterDebuffHandle.Invalidate();
 	bSoulShatterDebuffActive = false;
 
 	OnSoulShatterDebuffEnded();

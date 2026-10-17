@@ -3,6 +3,7 @@
 
 #include "CoreMinimal.h"
 #include "RLCharacter.h"
+#include "GameplayEffectTypes.h"
 #include "RLEnemyCharacter.generated.h"
 
 // ★ ARLCharacter와 BP_EnemyBase 사이에 끼워넣는 "적 전용" C++ 계층입니다.
@@ -362,7 +363,7 @@ private:
 	bool bSoulCrackAIStopped = false;                    // 균열 경직으로 BT를 멈춰둔 상태인지 (Tick에서 재가동 감시)
 	float SoulCrackAIStopEndTime = 0.0f;
 	bool bSoulShatterDebuffActive = false;
-	float SavedDamageReduction = 0.0f;
+	FActiveGameplayEffectHandle SoulShatterDebuffHandle; // URLGE_SoulShatterDebuff (해제하면 피해감소율이 자동으로 원래 값 복귀)
 
 	FTimerHandle SoulCrackAITimerHandle;
 	FTimerHandle SoulShatterDebuffTimerHandle;

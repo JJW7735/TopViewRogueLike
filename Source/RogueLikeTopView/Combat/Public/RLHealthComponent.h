@@ -47,7 +47,7 @@ public:
     bool bIsDead;
 
     /* 체력 변경 및 사망 신호 (블루프린트 체력바에서 이 신호를 받아서 씁니다) */
-    // HealthDelta: 데미지 = 양수, 회복 = 음수, 최대치 변경/복원 = 0
+    // HealthDelta: 데미지 = 양수, 회복 = 음수, 최대치 변경/복원/최대치 감소로 인한 clamp = 0
     UPROPERTY(BlueprintAssignable, Category = "Health")
     FOnHealthChangedSignature OnHealthChanged;
 
@@ -58,14 +58,21 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Health")
     void Heal(float Amount);
 
-    // ★ 최대 체력 증감 (패시브 아이템 장착/해제, 영구 보상 등에서 사용).
-    // bApply: true면 늘어난 만큼 현재 체력도 채워주고, false면 현재 체력은 새 최대치를 넘지 않게 clamp만 합니다
-    //         (장비 해제가 곧바로 피해로 취급되지 않도록 하기 위함).
-    // TODO(2단계): Infinite GE(핸들로 해제)로 교체 예정. 지금은 AttributeSet 기본값(Base)을 직접 바꿉니다.
+    // ★ 런 동안 영구적인 최대 체력 증감 (보상 / 상점 / 메타 강화). Instant GE로 기본값을 바꿉니다.
+    // 패시브 아이템은 이 함수가 아니라 URLInventoryComponent가 Infinite GE로 처리합니다.
+    // bApply: true면 늘어난 만큼 현재 체력도 채워주고, false면 현재 체력은 새 최대치를 넘지 않게 clamp만 합니다.
     UFUNCTION(BlueprintCallable, Category = "Health")
     void IncreaseMaxHealth(float Delta, bool bApply);
 
-    /** 세이브 로드 시 체력 상태를 직접 안전하게 복원 (OnDeath는 방송하지 않음) */
+    // ★ 최대 체력이 다른 경로(아이템 GE 등)로 늘어났을 때, 늘어난 만큼 현재 체력을 채웁니다.
+    // 회복 연출로 취급되지 않도록 HealthDelta 0으로 한 번만 방송합니다.
+    void FillHealthForMaxHealthIncrease(float Amount);
+
+    /** 아이템/버프를 뺀 최대 체력 기본값. 세이브에는 이 값을 저장합니다. */
+    UFUNCTION(BlueprintPure, Category = "Health")
+    float GetMaxHealthBase() const;
+
+    /** 세이브 로드 시 체력 상태를 직접 안전하게 복원 (InMaxHealth = GetMaxHealthBase 기준 기본값, OnDeath는 방송하지 않음) */
     UFUNCTION(BlueprintCallable, Category = "Health")
     void RestoreHealthDirect(float InCurrentHealth, float InMaxHealth);
 

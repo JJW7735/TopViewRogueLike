@@ -878,11 +878,16 @@ void URLSaveSubsystem::GatherPlayerData(ARLCharacter* PlayerCharacter, FRLRunSav
 	OutData.PlayerLocation = PlayerCharacter->GetActorLocation();
 	OutData.PlayerRotation = PlayerCharacter->GetActorRotation();
 
+	// ★ 체력/스탯은 "패시브 아이템을 뺀 기본값"으로 저장합니다 (버전 1).
+	//   아이템 보너스는 로드 시 인벤토리가 GE로 다시 걸어주므로, 최종값을 저장하면 이중 적용됩니다.
+	//   보상/상점/메타 강화는 Instant GE로 기본값에 이미 들어가 있어서 그대로 저장됩니다.
+	OutData.StatSaveVersion = 1;
+
 	// 1. 체력 수집
 	if (URLHealthComponent* HealthComp = PlayerCharacter->FindComponentByClass<URLHealthComponent>())
 	{
 		OutData.Health.CurrentHealth = HealthComp->CurrentHealth;
-		OutData.Health.MaxHealth = HealthComp->MaxHealth;
+		OutData.Health.MaxHealth = HealthComp->GetMaxHealthBase();
 	}
 
 	// 2. 스탯 수집
@@ -892,14 +897,14 @@ void URLSaveSubsystem::GatherPlayerData(ARLCharacter* PlayerCharacter, FRLRunSav
 		OutData.Stats.CurrentExp = StatComp->CurrentExp;
 		OutData.Stats.MaxExp = StatComp->MaxExp;
 		OutData.Stats.ExpGrowthMultiplier = StatComp->ExpGrowthMultiplier;
-		OutData.Stats.AttackPower = StatComp->AttackPower;
-		OutData.Stats.AbilityPower = StatComp->AbilityPower;
-		OutData.Stats.CritChance = StatComp->CritChance;
-		OutData.Stats.CritDamageMultiplier = StatComp->CritDamageMultiplier;
-		OutData.Stats.MoveSpeed = StatComp->MoveSpeed;
-		OutData.Stats.AttackSpeed = StatComp->AttackSpeed;
-		OutData.Stats.Defense = StatComp->Defense;
-		OutData.Stats.DamageReduction = StatComp->DamageReduction;
+		OutData.Stats.AttackPower = StatComp->GetStatBase(ERLTargetStat::AttackPower);
+		OutData.Stats.AbilityPower = StatComp->GetStatBase(ERLTargetStat::AbilityPower);
+		OutData.Stats.CritChance = StatComp->GetStatBase(ERLTargetStat::CritChance);
+		OutData.Stats.CritDamageMultiplier = StatComp->GetStatBase(ERLTargetStat::CritDamageMultiplier);
+		OutData.Stats.MoveSpeed = StatComp->GetStatBase(ERLTargetStat::MoveSpeed);
+		OutData.Stats.AttackSpeed = StatComp->GetStatBase(ERLTargetStat::AttackSpeed);
+		OutData.Stats.Defense = StatComp->GetStatBase(ERLTargetStat::Defense);
+		OutData.Stats.DamageReduction = StatComp->GetStatBase(ERLTargetStat::DamageReduction);
 	}
 
 	// 3. 인벤토리 수집
@@ -961,14 +966,14 @@ void URLSaveSubsystem::ApplyPlayerData(ARLCharacter* PlayerCharacter, const FRLR
 		}
 	}
 
-	// 1. 체력 복원
-	if (URLHealthComponent* HealthComp = PlayerCharacter->FindComponentByClass<URLHealthComponent>())
-	{
-		HealthComp->RestoreHealthDirect(InData.Health.CurrentHealth, InData.Health.MaxHealth);
-	}
+	// ★ 복원 순서: 스탯 기본값 → 인벤토리(아이템 GE 재적용) → 체력
+	//   체력을 마지막에 하는 이유: 저장된 현재 체력이 아이템 최대 체력 보너스를 포함할 수 있어서,
+	//   아이템 GE가 걸리기 전에 복원하면 기본 최대 체력에 clamp되어 깎입니다.
+	URLStatComponent* StatComp = PlayerCharacter->GetStatComponent();
+	URLHealthComponent* HealthComp = PlayerCharacter->FindComponentByClass<URLHealthComponent>();
 
-	// 2. 스탯 복원
-	if (URLStatComponent* StatComp = PlayerCharacter->GetStatComponent())
+	// 1. 스탯 복원
+	if (StatComp)
 	{
 		StatComp->RestoreStatsDirect(
 			InData.Stats.CurrentLevel,
@@ -986,7 +991,7 @@ void URLSaveSubsystem::ApplyPlayerData(ARLCharacter* PlayerCharacter, const FRLR
 		);
 	}
 
-	// 3. 인벤토리 복원
+	// 2. 인벤토리 복원 (패시브 아이템 GE가 여기서 다시 걸림)
 	if (URLInventoryComponent* InvComp = PlayerCharacter->GetInventoryComponent())
 	{
 		TArray<FRLInventorySlot> RestoredSlots;
@@ -1006,6 +1011,40 @@ void URLSaveSubsystem::ApplyPlayerData(ARLCharacter* PlayerCharacter, const FRLR
 		}
 
 		InvComp->RestoreInventoryDirect(InData.Inventory.Gold, RestoredSlots);
+	}
+
+	// 버전 0(GAS 전환 전) 저장 파일: 저장값이 아이템 보너스를 포함한 최종값이므로,
+	// 방금 다시 걸린 아이템 보너스만큼 기본값을 빼서 최종값이 저장 당시와 같아지게 맞춥니다.
+	const bool bLegacyFinalValues = InData.StatSaveVersion < 1;
+	if (bLegacyFinalValues && StatComp)
+	{
+		const TArray<TPair<ERLTargetStat, float>> SavedFinals = {
+			{ ERLTargetStat::AttackPower, InData.Stats.AttackPower },
+			{ ERLTargetStat::AbilityPower, InData.Stats.AbilityPower },
+			{ ERLTargetStat::CritChance, InData.Stats.CritChance },
+			{ ERLTargetStat::CritDamageMultiplier, InData.Stats.CritDamageMultiplier },
+			{ ERLTargetStat::MoveSpeed, InData.Stats.MoveSpeed },
+			{ ERLTargetStat::AttackSpeed, InData.Stats.AttackSpeed },
+			{ ERLTargetStat::Defense, InData.Stats.Defense },
+			{ ERLTargetStat::DamageReduction, InData.Stats.DamageReduction }
+		};
+		for (const TPair<ERLTargetStat, float>& Pair : SavedFinals)
+		{
+			const float ItemBonus = StatComp->GetStatValue(Pair.Key) - StatComp->GetStatBase(Pair.Key);
+			StatComp->SetStatBase(Pair.Key, Pair.Value - ItemBonus);
+		}
+		StatComp->NotifyStatsChanged();
+	}
+
+	// 3. 체력 복원
+	if (HealthComp)
+	{
+		float MaxHealthBase = InData.Health.MaxHealth;
+		if (bLegacyFinalValues)
+		{
+			MaxHealthBase -= HealthComp->MaxHealth - HealthComp->GetMaxHealthBase();
+		}
+		HealthComp->RestoreHealthDirect(InData.Health.CurrentHealth, MaxHealthBase);
 	}
 
 	// 4. 스킬 복원

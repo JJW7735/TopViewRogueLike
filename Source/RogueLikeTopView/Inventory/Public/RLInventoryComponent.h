@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "Components/ActorComponent.h"
+#include "GameplayEffectTypes.h"
 #include "RLItemTypes.h"
 #include "RLInventoryComponent.generated.h"
 
@@ -143,6 +144,11 @@ protected:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Inventory|Config")
 	TArray<FRLInventorySlot> DefaultStartingItems;
 
-	// 패시브 아이템 획득/제거 시 스탯 반영 헬퍼
-	void ApplyPassiveItemBonuses(URLItemDataAsset* ItemData, int32 Multiplier, bool bApply);
+	// ★ 패시브 아이템 스탯 반영: 현재 슬롯 내용을 기준으로 아이템 GE(Infinite)를 다시 겁니다.
+	// 획득/제거/세이브 복원 등 슬롯이 바뀔 때마다 호출합니다. (슬롯 최대 20칸이라 매번 재계산해도 저렴하고,
+	// 기존 방식처럼 +=/-= 짝을 정확히 맞출 필요가 없어 어긋날 일이 없습니다)
+	void RefreshPassiveItemEffects();
+
+	// 현재 걸려 있는 패시브 아이템 GE 핸들 (슬롯당 하나)
+	TArray<FActiveGameplayEffectHandle> PassiveItemEffectHandles;
 };

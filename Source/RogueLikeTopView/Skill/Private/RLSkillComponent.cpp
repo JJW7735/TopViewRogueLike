@@ -221,9 +221,14 @@ void URLSkillComponent::OnSkillInputStarted(ESkillSlot Slot)
 			ActiveBuffVFXComp = SpawnSkillVFX(Skill->ReleaseVFX, OwnerCharacter->GetActorLocation(), true, NAME_None);
 		}
 
-		if (UCharacterMovementComponent* MoveComp = OwnerCharacter->GetCharacterMovement())
+		if (URLStatComponent* StatComp = OwnerCharacter->GetStatComponent())
 		{
-			MoveComp->MaxWalkSpeed *= Skill->SpeedMultiplier;
+			// 이동속도 스탯에 GE로 보너스를 겁니다 (MaxWalkSpeed는 StatComp가 자동 반영).
+			// 예전엔 MaxWalkSpeed를 직접 곱해서 재시전하면 배율이 중첩되고, 끝나면 600으로 고정돼 이속 보너스가 사라졌음.
+			StatComp->RemoveStatBonusEffect(SpeedBuffEffectHandle); // 재시전: 이전 버프를 먼저 해제해 중첩 방지
+
+			const float SpeedBonus = StatComp->MoveSpeed * (Skill->SpeedMultiplier - 1.0f);
+			SpeedBuffEffectHandle = StatComp->ApplyRemovableStatBonuses({ { ERLTargetStat::MoveSpeed, SpeedBonus } });
 			GetWorld()->GetTimerManager().SetTimer(SpeedBuffTimerHandle, this, &URLSkillComponent::EndSpeedBuff, Skill->BuffDuration, false);
 		}
 
@@ -581,9 +586,9 @@ FVector URLSkillComponent::GetMouseGroundLocation() const
 
 void URLSkillComponent::EndSpeedBuff()
 {
-	if (OwnerCharacter && OwnerCharacter->GetCharacterMovement())
+	if (URLStatComponent* StatComp = OwnerCharacter ? OwnerCharacter->GetStatComponent() : nullptr)
 	{
-		OwnerCharacter->GetCharacterMovement()->MaxWalkSpeed = 600.0f;
+		StatComp->RemoveStatBonusEffect(SpeedBuffEffectHandle);
 	}
 
 	if (ActiveBuffVFXComp)

@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "Components/ActorComponent.h"
+#include "GameplayEffectTypes.h"
 #include "RLSkillData.h"
 #include "TimerManager.h"
 #include "RLSkillComponent.generated.h"
@@ -148,6 +149,9 @@ protected:
 
 	UPROPERTY()
 	FTimerHandle SpeedBuffTimerHandle;
+
+	// 버프 스킬의 이동속도 증가 GE (URLGE_StatBonus_Infinite). 끝날 때 해제하면 원래 속도로 돌아감
+	FActiveGameplayEffectHandle SpeedBuffEffectHandle;
 
 	UPROPERTY()
 	bool bHasTriggeredPreCastMotion = false;

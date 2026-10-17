@@ -60,6 +60,15 @@ void URLAttributeSet::PreAttributeChange(const FGameplayAttribute& Attribute, fl
 	ClampAttribute(Attribute, NewValue);
 }
 
+void URLAttributeSet::PreAttributeBaseChange(const FGameplayAttribute& Attribute, float& NewValue) const
+{
+	Super::PreAttributeBaseChange(Attribute, NewValue);
+
+	// Instant GE(보상/상점/메타 강화)는 기본값을 바꾸므로 기본값도 같은 범위로 제한합니다.
+	// (예: 치명타 확률 기본값이 100을 넘게 쌓였다가 디버프를 받아도 계속 100%로 남는 문제 방지)
+	ClampAttribute(Attribute, NewValue);
+}
+
 void URLAttributeSet::PostAttributeChange(const FGameplayAttribute& Attribute, float OldValue, float NewValue)
 {
 	Super::PostAttributeChange(Attribute, OldValue, NewValue);

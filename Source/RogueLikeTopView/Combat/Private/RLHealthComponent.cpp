@@ -36,9 +36,11 @@ void URLHealthComponent::BeginPlay()
 
     // BP 클래스 디폴트에서 정한 MaxHealth를 시작값으로 AttributeSet에 넣습니다.
     // (세이브 복원 / 영구 강화는 이보다 나중인 ARLCharacter::BeginPlay 후반부에서 적용됨)
+    // 현재 체력은 아이템 보너스까지 반영된 최대치로 채웁니다 (시작 지급 아이템이 먼저 적용됐을 수도 있음).
     bSuppressBroadcast = true;
     AbilitySystemComp->SetNumericAttributeBase(URLAttributeSet::GetMaxHealthAttribute(), FMath::Max(1.0f, MaxHealth));
-    AbilitySystemComp->SetNumericAttributeBase(URLAttributeSet::GetHealthAttribute(), FMath::Max(1.0f, MaxHealth));
+    AbilitySystemComp->SetNumericAttributeBase(URLAttributeSet::GetHealthAttribute(),
+        AbilitySystemComp->GetNumericAttribute(URLAttributeSet::GetMaxHealthAttribute()));
     bSuppressBroadcast = false;
 
     AbilitySystemComp->GetGameplayAttributeValueChangeDelegate(URLAttributeSet::GetHealthAttribute())
@@ -86,7 +88,16 @@ void URLHealthComponent::HandleHealthAttributeChanged(const FOnAttributeChangeDa
     }
 
     // 데미지 = 양수, 회복 = 음수 (기존 규칙 유지)
-    const float HealthDelta = PendingDamageForBroadcast > 0.0f ? PendingDamageForBroadcast : (ChangeData.OldValue - ChangeData.NewValue);
+    // 데미지 경로(HandleTakeAnyDamage)가 아닌데 체력이 줄었다면 최대 체력 감소(아이템 해제 등)로 인한 clamp이므로 0
+    float HealthDelta = 0.0f;
+    if (PendingDamageForBroadcast > 0.0f)
+    {
+        HealthDelta = PendingDamageForBroadcast;
+    }
+    else if (ChangeData.NewValue > ChangeData.OldValue)
+    {
+        HealthDelta = ChangeData.OldValue - ChangeData.NewValue;
+    }
     OnHealthChanged.Broadcast(CurrentHealth, MaxHealth, HealthDelta);
 
     if (CurrentHealth <= 0.0f && !bIsDead)
@@ -174,22 +185,44 @@ void URLHealthComponent::IncreaseMaxHealth(float Delta, bool bApply)
     // 최대 체력과 현재 체력을 한 번에 바꾸고, 방송은 마지막에 한 번만 합니다.
     bSuppressBroadcast = true;
 
-    const float NewMaxHealth = FMath::Max(1.0f, AbilitySystemComp->GetNumericAttributeBase(MaxHealthAttr) + Delta);
-    AbilitySystemComp->SetNumericAttributeBase(MaxHealthAttr, NewMaxHealth);
+    const float OldMaxHealth = AbilitySystemComp->GetNumericAttribute(MaxHealthAttr);
+    RLGameplayEffectUtils::ApplyStatBonusEffect(AbilitySystemComp, URLGE_StatBonus_Instant::StaticClass(), { { MaxHealthAttr, Delta } });
+    const float ActualDelta = AbilitySystemComp->GetNumericAttribute(MaxHealthAttr) - OldMaxHealth;
 
-    if (bApply)
+    if (bApply && ActualDelta > 0.0f)
     {
-        // 장착/획득으로 최대 체력이 늘어난 경우, 늘어난 만큼 현재 체력도 함께 채워줍니다.
-        const float NewHealth = FMath::Clamp(AbilitySystemComp->GetNumericAttribute(HealthAttr) + Delta, 0.0f, AbilitySystemComp->GetNumericAttribute(MaxHealthAttr));
-        AbilitySystemComp->SetNumericAttributeBase(HealthAttr, NewHealth);
+        // 획득으로 최대 체력이 늘어난 경우, 늘어난 만큼 현재 체력도 함께 채워줍니다.
+        AbilitySystemComp->SetNumericAttributeBase(HealthAttr, AbilitySystemComp->GetNumericAttribute(HealthAttr) + ActualDelta);
     }
-    // bApply == false: 현재 체력이 새 최대치를 넘는 경우의 clamp는 URLAttributeSet::PostAttributeChange가 처리합니다.
+    // 최대치가 줄어 현재 체력이 넘치는 경우의 clamp는 URLAttributeSet::PostAttributeChange가 처리합니다.
 
     bSuppressBroadcast = false;
 
     SyncFromAttributes();
     // 데미지/회복이 아닌 최대치 변경 이벤트이므로 HealthDelta는 0으로 방송합니다 (체력바 갱신용).
     OnHealthChanged.Broadcast(CurrentHealth, MaxHealth, 0.0f);
+}
+
+void URLHealthComponent::FillHealthForMaxHealthIncrease(float Amount)
+{
+    if (Amount <= 0.0f || bIsDead || !AbilitySystemComp)
+    {
+        return;
+    }
+
+    {
+        TGuardValue<bool> SuppressGuard(bSuppressBroadcast, true);
+        const FGameplayAttribute HealthAttr = URLAttributeSet::GetHealthAttribute();
+        AbilitySystemComp->SetNumericAttributeBase(HealthAttr, AbilitySystemComp->GetNumericAttribute(HealthAttr) + Amount);
+    }
+
+    SyncFromAttributes();
+    OnHealthChanged.Broadcast(CurrentHealth, MaxHealth, 0.0f);
+}
+
+float URLHealthComponent::GetMaxHealthBase() const
+{
+    return AbilitySystemComp ? AbilitySystemComp->GetNumericAttributeBase(URLAttributeSet::GetMaxHealthAttribute()) : MaxHealth;
 }
 
 void URLHealthComponent::RestoreHealthDirect(float InCurrentHealth, float InMaxHealth)
@@ -202,7 +235,8 @@ void URLHealthComponent::RestoreHealthDirect(float InCurrentHealth, float InMaxH
     bSuppressBroadcast = true;
     const float NewMaxHealth = FMath::Max(1.0f, InMaxHealth);
     AbilitySystemComp->SetNumericAttributeBase(URLAttributeSet::GetMaxHealthAttribute(), NewMaxHealth);
-    AbilitySystemComp->SetNumericAttributeBase(URLAttributeSet::GetHealthAttribute(), FMath::Clamp(InCurrentHealth, 0.0f, NewMaxHealth));
+    // 현재 체력은 아이템 보너스까지 포함한 최대치 기준으로 clamp (AttributeSet::PreAttributeBaseChange)
+    AbilitySystemComp->SetNumericAttributeBase(URLAttributeSet::GetHealthAttribute(), FMath::Max(0.0f, InCurrentHealth));
     bSuppressBroadcast = false;
 
     SyncFromAttributes();
