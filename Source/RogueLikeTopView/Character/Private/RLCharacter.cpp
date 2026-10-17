@@ -570,13 +570,21 @@ void ARLCharacter::TestToggleMaxHealthItem()
     }
     else
     {
-        URLItemDataAsset* GemItem = NewObject<URLItemDataAsset>(this);
-        GemItem->ItemID = TestItemID;
-        GemItem->ItemName = FText::FromString(TEXT("[테스트] 생명의 보석"));
-        GemItem->Description = FText::FromString(TEXT("소지 시 최대 체력 +80"));
-        GemItem->ItemType = ERLItemType::Passive;
-        GemItem->MaxStackSize = 1;
-        GemItem->PassiveStatBonuses.Add({ ERLTargetStat::MaxHealth, 80.0f });
+        // 맵 이동 후 세이브 복원 때 이 객체를 경로로 다시 찾으므로 GC되면 안 됩니다.
+        // Outer는 GC 생존과 무관해서(누가 UPROPERTY로 참조해야 살아남음), 트랜지언트 패키지에 두고 루트에 고정합니다.
+        // (상점 아이템은 URLShopSubsystem::ItemPool UPROPERTY가 붙잡고 있어서 같은 문제가 없음)
+        URLItemDataAsset* GemItem = FindObject<URLItemDataAsset>(GetTransientPackage(), TEXT("Test_VitalityGem"));
+        if (!GemItem)
+        {
+            GemItem = NewObject<URLItemDataAsset>(GetTransientPackage(), TEXT("Test_VitalityGem"));
+            GemItem->AddToRoot();
+            GemItem->ItemID = TestItemID;
+            GemItem->ItemName = FText::FromString(TEXT("[테스트] 생명의 보석"));
+            GemItem->Description = FText::FromString(TEXT("소지 시 최대 체력 +80"));
+            GemItem->ItemType = ERLItemType::Passive;
+            GemItem->MaxStackSize = 1;
+            GemItem->PassiveStatBonuses.Add({ ERLTargetStat::MaxHealth, 80.0f });
+        }
         InventoryComp->AddItem(GemItem, 1);
     }
 
