@@ -7,6 +7,7 @@ namespace RLGameplayTags
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(State_SuperArmor, "State.SuperArmor", "경직 면역 (기존 CanBeStaggered() == false 대체)");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(State_Stunned, "State.Stunned", "기절. 이동/스킬 사용 불가");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(State_Casting, "State.Casting", "시전 중");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(State_IgnoreDefense, "State.IgnoreDefense", "받는 피해에 방어력/피해감소 미적용 (보스 대경직 등)");
 
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(InputTag_Skill_LMB, "InputTag.Skill.LMB", "기본 공격 입력");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(InputTag_Skill_Q, "InputTag.Skill.Q", "Q 스킬 입력");

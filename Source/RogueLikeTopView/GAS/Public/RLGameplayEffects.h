@@ -63,14 +63,14 @@ public:
 	URLGE_StatBonus_Infinite();
 };
 
-// 소울 셰터 디버프: DamageReduction을 Data.Stat.DamageReduction 값으로 덮어씀 (해제되면 원래 값으로 자동 복귀)
+// 보스 영혼 보호막: DamageReduction에 Data.Stat.DamageReduction 만큼 더함 (균열 성공마다 낮은 값으로 다시 걸림)
 UCLASS()
-class ROGUELIKETOPVIEW_API URLGE_SoulShatterDebuff : public UGameplayEffect
+class ROGUELIKETOPVIEW_API URLGE_SoulCrackShield : public UGameplayEffect
 {
 	GENERATED_BODY()
 
 public:
-	URLGE_SoulShatterDebuff();
+	URLGE_SoulCrackShield();
 };
 
 namespace RLGameplayEffectUtils

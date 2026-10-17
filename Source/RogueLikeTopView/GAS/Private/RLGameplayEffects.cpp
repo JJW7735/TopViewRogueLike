@@ -49,11 +49,11 @@ URLGE_StatBonus_Infinite::URLGE_StatBonus_Infinite()
 	DurationPolicy = EGameplayEffectDurationType::Infinite;
 }
 
-URLGE_SoulShatterDebuff::URLGE_SoulShatterDebuff()
+URLGE_SoulCrackShield::URLGE_SoulCrackShield()
 {
 	DurationPolicy = EGameplayEffectDurationType::Infinite;
-	// 중복 적용 방지는 ARLEnemyCharacter::bSoulShatterDebuffActive가 담당합니다.
-	Modifiers.Add(MakeSetByCallerModifier(URLAttributeSet::GetDamageReductionAttribute(), RLGameplayTags::Data_Stat_DamageReduction, EGameplayModOp::Override));
+	// Override가 아닌 Additive: 다른 피해감소 효과(유물/버프)와 겹쳐도 보호막 몫만 빠지도록
+	Modifiers.Add(MakeSetByCallerModifier(URLAttributeSet::GetDamageReductionAttribute(), RLGameplayTags::Data_Stat_DamageReduction));
 }
 
 namespace RLGameplayEffectUtils

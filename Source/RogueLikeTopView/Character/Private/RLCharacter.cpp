@@ -30,6 +30,7 @@
 #include "RLDecalIndicator.h"
 #include "RLAbilitySystemComponent.h"
 #include "RLAttributeSet.h"
+#include "RLGameplayTags.h"
 #include "NavigationSystem.h"
 #include "Engine/World.h"
 
@@ -256,10 +257,13 @@ void ARLCharacter::ReceiveCustomDamage(const FRLDamageData& DamageData, const FH
     }
 
     // 피격자(나)의 방어력 및 피해 감소율 적용
+    // State.IgnoreDefense 태그(보스 대경직 등)가 붙어 있으면 트루 데미지처럼 방어 계산을 건너뜁니다.
     float FinalDamageAmount = DamageData.BaseDamage;
     float ReducedAmount = 0.0f;
+    const bool bIgnoreDefense = DamageData.bTrueDamage
+        || (AbilitySystemComp && AbilitySystemComp->HasMatchingGameplayTag(RLGameplayTags::State_IgnoreDefense));
 
-    if (StatComp && !DamageData.bTrueDamage)
+    if (StatComp && !bIgnoreDefense)
     {
         FinalDamageAmount = StatComp->CalculateDefendedDamage(DamageData.BaseDamage, ReducedAmount);
     }
@@ -547,6 +551,40 @@ void ARLCharacter::TestGiveTestItems()
     {
         GEngine->AddOnScreenDebugMessage(-1, 4.0f, FColor::Green,
             TEXT("🎁 [치트] 테스트용 아이템 4종(물약 5개, 전사 반지 1개, 신속 장화 1개, 루비 3개)과 300 골드가 인벤토리에 지급되었습니다!"));
+    }
+}
+
+void ARLCharacter::TestToggleMaxHealthItem()
+{
+    if (!InventoryComp)
+    {
+        return;
+    }
+
+    const FName TestItemID(TEXT("Item_TestVitalityGem"));
+    const bool bHadItem = InventoryComp->HasItem(TestItemID);
+
+    if (bHadItem)
+    {
+        InventoryComp->RemoveItemByID(TestItemID, 1);
+    }
+    else
+    {
+        URLItemDataAsset* GemItem = NewObject<URLItemDataAsset>(this);
+        GemItem->ItemID = TestItemID;
+        GemItem->ItemName = FText::FromString(TEXT("[테스트] 생명의 보석"));
+        GemItem->Description = FText::FromString(TEXT("소지 시 최대 체력 +80"));
+        GemItem->ItemType = ERLItemType::Passive;
+        GemItem->MaxStackSize = 1;
+        GemItem->PassiveStatBonuses.Add({ ERLTargetStat::MaxHealth, 80.0f });
+        InventoryComp->AddItem(GemItem, 1);
+    }
+
+    if (GEngine && HealthComp)
+    {
+        GEngine->AddOnScreenDebugMessage(-1, 4.0f, FColor::Green,
+            FString::Printf(TEXT("💎 [치트] 생명의 보석 %s → 체력 %.0f / %.0f (기본 최대 %.0f)"),
+                bHadItem ? TEXT("제거") : TEXT("지급"), HealthComp->CurrentHealth, HealthComp->MaxHealth, HealthComp->GetMaxHealthBase()));
     }
 }
 

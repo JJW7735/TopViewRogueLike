@@ -172,8 +172,8 @@ public:
 	// 흐름: BTT_Attack이 몽타주 재생 직후 BeginSoulCrackPattern(패턴)을 호출 → 패턴이 강화판(bSoulCrackVariant)이면
 	// 녹색 신호 훅(OnSoulCrackVariantStarted) + 균열 판정 구간이 열림 → 그 구간 동안 플레이어가
 	// bCanTriggerSoulCrack 스킬로 올바른 각도 구역에서 맞히면 ReceiveCustomDamage에서 TriggerSoulCrackHit
-	// (CanBeStaggered 무시 강제 경직 + 스택 +1) → SoulCrackMaxStack 도달 시 TriggerSoulCrackShatter
-	// (큰 경직 + 피해감소 디버프, 한 전투 1회 한정).
+	// (CanBeStaggered 무시 강제 경직 + 스택 +1 + 보호막 감소) → SoulCrackMaxStack 도달 시 TriggerSoulCrackShatter
+	// (보호막 소멸 + 대경직 동안 방어력/피해감소 무시, 한 전투 1회 한정).
 
 	// 스택 변경 알림 (UI 아이콘 갱신용)
 	UPROPERTY(BlueprintAssignable, Category = "Enemy|SoulCrack")
@@ -199,13 +199,18 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Enemy|SoulCrack", meta = (ClampMin = "0.0"))
 	float SoulShatterStunDuration = 5.0f;
 
-	// 대균열 디버프 동안 StatComp->DamageReduction을 이 값으로 덮어씀 (기본 0 = 피해감소 제거)
+	// ★ 영혼 보호막: 전투 시작 시 보스가 갖는 받는 피해 감소율(%). 보스에게만 적용되며 0이면 보호막 없음.
+	// 균열 성공마다 SoulCrackShieldReductionPerHit만큼 깎이고, 대균열 시 완전히 사라져 그 전투 동안 복구되지 않습니다.
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Enemy|SoulCrack", meta = (ClampMin = "0.0", ClampMax = "80.0"))
-	float SoulShatterDamageReduction = 0.0f;
+	float SoulCrackShieldDamageReduction = 30.0f;
 
-	// 대균열 디버프 지속 시간(초). 끝나면 원래 DamageReduction으로 복구
+	// 균열 성공 1회당 깎이는 보호막(%)
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Enemy|SoulCrack", meta = (ClampMin = "0.0"))
-	float SoulShatterDebuffDuration = 8.0f;
+	float SoulCrackShieldReductionPerHit = 10.0f;
+
+	// 현재 남은 보호막(%) — UI 표시용
+	UFUNCTION(BlueprintPure, Category = "Enemy|SoulCrack")
+	float GetCurrentSoulCrackShield() const { return CurrentSoulCrackShield; }
 
 	// ★ 카운터 방향 안내: 강화판 패턴이 시작되면 보스 발밑에 균열 가능 구역(정면/후방 각도)을 부채꼴 데칼로 표시.
 	// 비워두면 /Game/Effect/Material/MI_SoulCrack_Zone을 실행 중에 불러와 씁니다 (레벨 배치 인스턴스 전파 문제 회피).
@@ -312,7 +317,7 @@ protected:
 	UFUNCTION(BlueprintImplementableEvent, Category = "Enemy|SoulCrack")
 	void OnSoulCrackShattered();
 
-	// ★ 대균열 디버프 종료 훅
+	// ★ 대균열 디버프(대경직 동안 방어 무시) 종료 훅
 	UFUNCTION(BlueprintImplementableEvent, Category = "Enemy|SoulCrack")
 	void OnSoulShatterDebuffEnded();
 
@@ -362,8 +367,12 @@ private:
 
 	bool bSoulCrackAIStopped = false;                    // 균열 경직으로 BT를 멈춰둔 상태인지 (Tick에서 재가동 감시)
 	float SoulCrackAIStopEndTime = 0.0f;
-	bool bSoulShatterDebuffActive = false;
-	FActiveGameplayEffectHandle SoulShatterDebuffHandle; // URLGE_SoulShatterDebuff (해제하면 피해감소율이 자동으로 원래 값 복귀)
+	bool bSoulShatterDebuffActive = false;               // 대경직 중 (State.IgnoreDefense 태그 부여 중)
+
+	// 보호막 GE(URLGE_SoulCrackShield)를 NewDamageReduction 값으로 다시 겁니다. 0 이하면 해제만 합니다.
+	void SetSoulCrackShield(float NewDamageReduction);
+	FActiveGameplayEffectHandle SoulCrackShieldHandle;
+	float CurrentSoulCrackShield = 0.0f;
 
 	FTimerHandle SoulCrackAITimerHandle;
 	FTimerHandle SoulShatterDebuffTimerHandle;

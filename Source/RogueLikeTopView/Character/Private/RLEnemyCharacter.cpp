@@ -42,6 +42,39 @@ void ARLEnemyCharacter::BeginPlay()
 	{
 		HealthComp->OnHealthChanged.AddDynamic(this, &ARLEnemyCharacter::HandleEnemyHealthChanged);
 	}
+
+	// ★ 영혼 보호막: 보스만 전투 시작부터 받는 피해 감소를 가집니다 (균열 카운터로 깎아내는 대상)
+	if (IsBossEnemy() && SoulCrackShieldDamageReduction > 0.0f)
+	{
+		SetSoulCrackShield(SoulCrackShieldDamageReduction);
+	}
+}
+
+void ARLEnemyCharacter::SetSoulCrackShield(float NewDamageReduction)
+{
+	if (!AbilitySystemComp)
+	{
+		return;
+	}
+
+	if (SoulCrackShieldHandle.IsValid())
+	{
+		AbilitySystemComp->RemoveActiveGameplayEffect(SoulCrackShieldHandle);
+		SoulCrackShieldHandle.Invalidate();
+	}
+
+	CurrentSoulCrackShield = FMath::Max(0.0f, NewDamageReduction);
+	if (CurrentSoulCrackShield <= 0.0f)
+	{
+		return;
+	}
+
+	const FGameplayEffectSpecHandle Spec = AbilitySystemComp->MakeOutgoingSpec(URLGE_SoulCrackShield::StaticClass(), 1.0f, AbilitySystemComp->MakeEffectContext());
+	if (Spec.IsValid())
+	{
+		Spec.Data->SetSetByCallerMagnitude(RLGameplayTags::Data_Stat_DamageReduction, CurrentSoulCrackShield);
+		SoulCrackShieldHandle = AbilitySystemComp->ApplyGameplayEffectSpecToSelf(*Spec.Data.Get());
+	}
 }
 
 bool ARLEnemyCharacter::IsBossEnemy() const
@@ -645,12 +678,18 @@ void ARLEnemyCharacter::TriggerSoulCrackHit()
 	{
 		SoulCrackStackCount = FMath::Min(SoulCrackStackCount + 1, SoulCrackMaxStack);
 		OnSoulCrackStackChanged.Broadcast(SoulCrackStackCount, SoulCrackMaxStack);
+
+		// 균열 성공마다 보호막이 깎임 (30 → 20 → 10 → 대균열 시 0)
+		if (CurrentSoulCrackShield > 0.0f)
+		{
+			SetSoulCrackShield(SoulCrackShieldDamageReduction - SoulCrackShieldReductionPerHit * SoulCrackStackCount);
+		}
 	}
 
 	if (GEngine)
 	{
 		GEngine->AddOnScreenDebugMessage(-1, 2.5f, FColor::Green,
-			FString::Printf(TEXT("💚 [영혼의 균열] %s 균열 성공! (%d/%d)"), *GetName(), SoulCrackStackCount, SoulCrackMaxStack));
+			FString::Printf(TEXT("💚 [영혼의 균열] %s 균열 성공! (%d/%d) 남은 보호막 %.0f%%"), *GetName(), SoulCrackStackCount, SoulCrackMaxStack, CurrentSoulCrackShield));
 	}
 
 	OnSoulCrackHit(SoulCrackStackCount);
@@ -695,22 +734,19 @@ void ARLEnemyCharacter::TriggerSoulCrackShatter()
 
 	PauseAIForSoulCrack(SoulShatterStunDuration);
 
-	// 피해감소 디버프: DamageReduction을 덮어쓰는 GE를 걸고, 지속 시간 후 GE를 해제합니다.
-	// (예전에는 원래 값을 저장해뒀다가 되돌려서, 디버프 도중 다른 효과로 바뀐 값이 사라지는 문제가 있었음)
-	const float PrevDamageReduction = StatComp ? StatComp->DamageReduction : 0.0f; // 디버그 메시지용
+	// 보호막 완전 소멸 (이번 전투 동안 복구 안 됨)
+	SetSoulCrackShield(0.0f);
+
+	// 대경직 동안 방어 무시(트루뎀): State.IgnoreDefense 태그가 있으면 ARLCharacter::ReceiveCustomDamage가
+	// 방어력/피해감소 계산을 건너뜁니다. 경직이 끝나면 태그만 떼고, 방어력은 원래 값 그대로 다시 적용됩니다.
 	if (AbilitySystemComp && !bSoulShatterDebuffActive)
 	{
-		const FGameplayEffectSpecHandle Spec = AbilitySystemComp->MakeOutgoingSpec(URLGE_SoulShatterDebuff::StaticClass(), 1.0f, AbilitySystemComp->MakeEffectContext());
-		if (Spec.IsValid())
-		{
-			Spec.Data->SetSetByCallerMagnitude(RLGameplayTags::Data_Stat_DamageReduction, SoulShatterDamageReduction);
-			SoulShatterDebuffHandle = AbilitySystemComp->ApplyGameplayEffectSpecToSelf(*Spec.Data.Get());
-		}
+		AbilitySystemComp->AddLooseGameplayTag(RLGameplayTags::State_IgnoreDefense);
 		bSoulShatterDebuffActive = true;
 
-		if (SoulShatterDebuffDuration > 0.0f)
+		if (SoulShatterStunDuration > 0.0f)
 		{
-			GetWorldTimerManager().SetTimer(SoulShatterDebuffTimerHandle, this, &ARLEnemyCharacter::EndSoulShatterDebuff, SoulShatterDebuffDuration, false);
+			GetWorldTimerManager().SetTimer(SoulShatterDebuffTimerHandle, this, &ARLEnemyCharacter::EndSoulShatterDebuff, SoulShatterStunDuration, false);
 		}
 		else
 		{
@@ -721,8 +757,7 @@ void ARLEnemyCharacter::TriggerSoulCrackShatter()
 	if (GEngine)
 	{
 		GEngine->AddOnScreenDebugMessage(-1, 4.0f, FColor::Emerald,
-			FString::Printf(TEXT("💥 [영혼의 균열] %s 보호막 붕괴! %.1f초 경직, %.1f초간 피해감소 %.0f%% → %.0f%%"),
-				*GetName(), SoulShatterStunDuration, SoulShatterDebuffDuration, PrevDamageReduction, SoulShatterDamageReduction));
+			FString::Printf(TEXT("💥 [영혼의 균열] %s 보호막 붕괴! %.1f초 대경직 동안 방어 무시"), *GetName(), SoulShatterStunDuration));
 	}
 
 	OnSoulCrackShattered();
@@ -796,11 +831,10 @@ void ARLEnemyCharacter::EndSoulShatterDebuff()
 		return;
 	}
 
-	if (AbilitySystemComp && SoulShatterDebuffHandle.IsValid())
+	if (AbilitySystemComp)
 	{
-		AbilitySystemComp->RemoveActiveGameplayEffect(SoulShatterDebuffHandle);
+		AbilitySystemComp->RemoveLooseGameplayTag(RLGameplayTags::State_IgnoreDefense);
 	}
-	SoulShatterDebuffHandle.Invalidate();
 	bSoulShatterDebuffActive = false;
 
 	OnSoulShatterDebuffEnded();

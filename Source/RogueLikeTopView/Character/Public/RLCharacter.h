@@ -262,6 +262,10 @@ public:
 	UFUNCTION(BlueprintCallable, Exec, Category = "Cheat|Inventory")
 	void TestAddGold(int32 Amount = 100);
 
+	// 최대 체력 +80 패시브 아이템을 없으면 지급, 있으면 제거 (아이템 GE 획득/해제 확인용)
+	UFUNCTION(BlueprintCallable, Exec, Category = "Cheat|Inventory")
+	void TestToggleMaxHealthItem();
+
 	UFUNCTION(BlueprintCallable, Exec, Category = "Cheat|Stats")
 	void TestAddExp(float Amount = 100.0f);
 
