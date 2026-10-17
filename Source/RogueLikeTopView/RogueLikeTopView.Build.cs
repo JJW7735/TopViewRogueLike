@@ -21,7 +21,10 @@ public class RogueLikeTopView : ModuleRules
 			"Niagara",
 			"UMG",
 			"Slate",
-			"SlateCore"
+			"SlateCore",
+			"GameplayAbilities",
+			"GameplayTags",
+			"GameplayTasks"
 		});
 
 		PrivateDependencyModuleNames.AddRange(new string[] { });
@@ -40,7 +43,8 @@ public class RogueLikeTopView : ModuleRules
 			"RogueLikeTopView/Arena/Public",
 			"RogueLikeTopView/Save/Public",
 			"RogueLikeTopView/Shop/Public",
-			"RogueLikeTopView/Meta/Public"
+			"RogueLikeTopView/Meta/Public",
+			"RogueLikeTopView/GAS/Public"
 		});
 
 		// Uncomment if you are using Slate UI

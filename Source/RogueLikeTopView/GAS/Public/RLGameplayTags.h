@@ -1,0 +1,29 @@
+﻿#pragma once
+
+#include "NativeGameplayTags.h"
+
+// ★ C++에서 쓰는 게임플레이 태그는 전부 여기서 네이티브 태그로 선언합니다.
+// 문자열 오타로 RequestGameplayTag가 실패하는 일을 막고, 에디터 태그 목록에도 자동으로 등록됩니다.
+// BP/데이터 에셋 전용 태그(특정 스킬 이름 등)는 에디터의 Project Settings → GameplayTags에서 추가해도 됩니다.
+namespace RLGameplayTags
+{
+	// ── 상태 (기존 bool 플래그 대체) ──
+	ROGUELIKETOPVIEW_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(State_Dead);
+	ROGUELIKETOPVIEW_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(State_Invulnerable);
+	ROGUELIKETOPVIEW_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(State_SuperArmor);
+	ROGUELIKETOPVIEW_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(State_Stunned);
+	ROGUELIKETOPVIEW_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(State_Casting);
+
+	// ── 입력 (Enhanced Input ↔ GA 연결, 4단계에서 사용) ──
+	ROGUELIKETOPVIEW_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(InputTag_Skill_LMB);
+	ROGUELIKETOPVIEW_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(InputTag_Skill_Q);
+	ROGUELIKETOPVIEW_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(InputTag_Skill_W);
+	ROGUELIKETOPVIEW_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(InputTag_Skill_E);
+	ROGUELIKETOPVIEW_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(InputTag_Skill_R);
+	ROGUELIKETOPVIEW_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(InputTag_Dodge);
+
+	// ── SetByCaller 데이터 키 (GE에 런타임 수치를 넘길 때) ──
+	ROGUELIKETOPVIEW_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Data_Damage);
+	ROGUELIKETOPVIEW_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Data_Heal);
+	ROGUELIKETOPVIEW_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Data_StatBonus);
+}

@@ -3,6 +3,7 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Character.h"
+#include "AbilitySystemInterface.h"
 #include "RLTypes.h"
 #include "RLCharacter.generated.h"
 
@@ -18,14 +19,22 @@ class ARLRewardChest;
 class ARLMetaUpgradeStation;
 class ARLDecalIndicator;
 class UMaterialInterface;
+class URLAbilitySystemComponent;
+class URLAttributeSet;
 
 UCLASS()
-class ROGUELIKETOPVIEW_API ARLCharacter : public ACharacter
+class ROGUELIKETOPVIEW_API ARLCharacter : public ACharacter, public IAbilitySystemInterface
 {
 	GENERATED_BODY()
 
 public:
 	ARLCharacter();
+
+	// ★ GAS 진입점. 플레이어/몬스터 공통으로 캐릭터 자신이 ASC를 가집니다.
+	virtual UAbilitySystemComponent* GetAbilitySystemComponent() const override;
+
+	UFUNCTION(BlueprintPure, Category = "GAS")
+	URLAttributeSet* GetAttributeSet() const { return AttributeSet; }
 
 	UFUNCTION(BlueprintPure, Category = "Inventory")
 	URLInventoryComponent* GetInventoryComponent() const { return InventoryComp; }
@@ -322,6 +331,13 @@ protected:
 	// ★ 추가: 인벤토리 컴포넌트
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
 	class URLInventoryComponent* InventoryComp;
+
+	// ★ GAS: 어빌리티 시스템 + 전투 스탯 (HealthComp/StatComp를 단계적으로 대체 중)
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GAS")
+	URLAbilitySystemComponent* AbilitySystemComp;
+
+	UPROPERTY()
+	URLAttributeSet* AttributeSet;
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Skill|Default")
 	URLSkillData* DefaultSkill_Q;

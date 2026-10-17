@@ -28,6 +28,8 @@
 #include "RLShopSubsystem.h"
 #include "RLShopWidget.h"
 #include "RLDecalIndicator.h"
+#include "RLAbilitySystemComponent.h"
+#include "RLAttributeSet.h"
 #include "NavigationSystem.h"
 #include "Engine/World.h"
 
@@ -121,10 +123,26 @@ ARLCharacter::ARLCharacter()
     SkillComp = CreateDefaultSubobject<URLSkillComponent>(TEXT("SkillComp"));
     StatComp = CreateDefaultSubobject<URLStatComponent>(TEXT("StatComp"));
     InventoryComp = CreateDefaultSubobject<URLInventoryComponent>(TEXT("InventoryComp"));
+
+    // AttributeSet은 Owner 액터의 서브오브젝트로 만들어두면 ASC가 초기화될 때 자동으로 등록합니다.
+    AbilitySystemComp = CreateDefaultSubobject<URLAbilitySystemComponent>(TEXT("AbilitySystemComp"));
+    AttributeSet = CreateDefaultSubobject<URLAttributeSet>(TEXT("AttributeSet"));
+}
+
+UAbilitySystemComponent* ARLCharacter::GetAbilitySystemComponent() const
+{
+    return AbilitySystemComp;
 }
 
 void ARLCharacter::BeginPlay()
 {
+    // BP의 BeginPlay에서도 ASC를 쓸 수 있도록 Super 호출 전에 초기화합니다.
+    // 싱글플레이라 Owner(논리적 소유자)와 Avatar(월드에 있는 몸)가 모두 캐릭터 자신입니다.
+    if (AbilitySystemComp)
+    {
+        AbilitySystemComp->InitAbilityActorInfo(this, this);
+    }
+
     Super::BeginPlay();
 
     // ★ 바닥 예고/안내 데칼이 캐릭터 몸(메시, 붙어있는 무기 등)에 문신처럼 투영되지 않도록 데칼 수신을 끕니다.
