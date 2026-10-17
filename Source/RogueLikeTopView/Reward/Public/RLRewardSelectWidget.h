@@ -18,10 +18,11 @@ class ROGUELIKETOPVIEW_API URLRewardSelectWidget : public UUserWidget
 
 public:
 	/**
-	 * 위젯 생성 직후 호출되어 플레이어 정보와 3개의 카드 데이터를 설정하고 게임을 일시정지합니다.
+	 * 위젯 생성 직후 호출되어 플레이어 정보와 3개의 카드 데이터를 설정합니다.
+	 * TriggerSource가 Chest면 게임을 일시정지하고, LevelUp이면 전투가 끊기지 않도록 일시정지하지 않습니다.
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Reward")
-	void InitializeWidget(ARLCharacter* InPlayer, const TArray<FRLRewardData>& InRewards, ARLRewardChest* InSourceChest = nullptr);
+	void InitializeWidget(ARLCharacter* InPlayer, const TArray<FRLRewardData>& InRewards, ARLRewardChest* InSourceChest = nullptr, ERLRewardTriggerSource InTriggerSource = ERLRewardTriggerSource::Chest);
 
 	/**
 	 * 플레이어가 특정 카드(0, 1, 2번)를 클릭했을 때 호출됩니다.
@@ -46,7 +47,14 @@ public:
 	UPROPERTY(BlueprintReadOnly, Category = "Reward")
 	TWeakObjectPtr<ARLRewardChest> SourceChest;
 
+	/** 이 보상 UI가 상자에서 떴는지, 레벨업으로 자동으로 떴는지 구분. WBP에서 타이틀/배경/연출을 다르게 분기할 때 사용 */
+	UPROPERTY(BlueprintReadOnly, Category = "Reward")
+	ERLRewardTriggerSource TriggerSource = ERLRewardTriggerSource::Chest;
+
 protected:
+	/** InitializeWidget에서 이 위젯이 직접 게임을 일시정지시켰는지 여부 (CloseWidget에서 본인이 멈춘 경우에만 해제) */
+	bool bPausedGameOnOpen = false;
+
 	/**
 	 * C++에서 데이터 준비 완료 시 블루프린트로 알려주는 이벤트.
 	 * 블루프린트에서 각 카드 위젯(이름, 설명, 아이콘, 희귀도 색상 등)을 갱신할 때 이 이벤트를 사용합니다.

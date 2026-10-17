@@ -131,7 +131,7 @@ void ARLRewardChest::OpenChest(ARLCharacter* Interactor)
 		if (Widget)
 		{
 			Widget->AddToViewport(50);
-			Widget->InitializeWidget(Interactor, Rewards, this);
+			Widget->InitializeWidget(Interactor, Rewards, this, ERLRewardTriggerSource::Chest);
 			return;
 		}
 	}

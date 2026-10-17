@@ -16,6 +16,17 @@ enum class ERLRewardRarity : uint8
 };
 
 /**
+ * 보상 선택 UI가 어떤 경로로 떴는지 구분하는 값.
+ * 상자(Chest)는 게임을 멈추고 신중하게 고르는 연출, 레벨업(LevelUp)은 전투 흐름을 끊지 않는 가벼운 연출로 분기할 때 사용.
+ */
+UENUM(BlueprintType)
+enum class ERLRewardTriggerSource : uint8
+{
+	Chest     UMETA(DisplayName = "보상 상자"),
+	LevelUp   UMETA(DisplayName = "레벨업")
+};
+
+/**
  * 강화 대상 스탯/효과 종류
  */
 UENUM(BlueprintType)

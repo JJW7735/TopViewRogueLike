@@ -373,6 +373,9 @@ protected:
 	FTimerHandle DashCooldownTimerHandle;
 	FTimerHandle InvincibilityTimerHandle;
 
+	// 레벨업 시 보상 선택창을 살짝 지연 팝업시키기 위한 타이머 (처치 연출이 먼저 보이도록)
+	FTimerHandle LevelUpRewardTimerHandle;
+
 	void ResetDashCooldown();
 	void EndInvincibility();
 

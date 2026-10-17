@@ -371,8 +371,8 @@ void ARLCharacter::HandleLevelUp(int32 NewLevel)
     // 2. 블루프린트 연출 훅 호출
     OnCharacterLevelUp(NewLevel);
 
-    // 3. 3지선다 보상 카드 선택창 자동 팝업
-    TestOpenRewardUI();
+    // 3. 3지선다 보상 카드 선택창 자동 팝업 (처치 연출/드롭이 먼저 보이도록 살짝 지연, 게임은 멈추지 않음)
+    GetWorldTimerManager().SetTimer(LevelUpRewardTimerHandle, this, &ARLCharacter::TestOpenRewardUI, 0.4f, false);
 }
 
 void ARLCharacter::SetNearbyPortal(ARLPortal* Portal)
@@ -466,7 +466,7 @@ void ARLCharacter::TestOpenRewardUI()
         if (Widget)
         {
             Widget->AddToViewport(50);
-            Widget->InitializeWidget(this, Rewards);
+            Widget->InitializeWidget(this, Rewards, nullptr, ERLRewardTriggerSource::LevelUp);
         }
     }
     else

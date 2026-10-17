@@ -5,14 +5,19 @@
 #include "GameFramework/PlayerController.h"
 #include "Kismet/GameplayStatics.h"
 
-void URLRewardSelectWidget::InitializeWidget(ARLCharacter* InPlayer, const TArray<FRLRewardData>& InRewards, ARLRewardChest* InSourceChest)
+void URLRewardSelectWidget::InitializeWidget(ARLCharacter* InPlayer, const TArray<FRLRewardData>& InRewards, ARLRewardChest* InSourceChest, ERLRewardTriggerSource InTriggerSource)
 {
 	TargetPlayer = InPlayer;
 	RewardOptions = InRewards;
 	SourceChest = InSourceChest;
+	TriggerSource = InTriggerSource;
 
-	// 게임 일시정지 (안전하게 보상 선택할 수 있도록)
-	UGameplayStatics::SetGamePaused(this, true);
+	// 상자: 신중하게 고를 수 있도록 게임 일시정지. 레벨업: 전투 흐름이 끊기지 않도록 멈추지 않음.
+	bPausedGameOnOpen = (TriggerSource == ERLRewardTriggerSource::Chest);
+	if (bPausedGameOnOpen)
+	{
+		UGameplayStatics::SetGamePaused(this, true);
+	}
 
 	// 마우스 커서 활성화 및 UI 입력 모드 설정
 	if (TargetPlayer.IsValid())
@@ -59,8 +64,12 @@ void URLRewardSelectWidget::SelectReward(int32 OptionIndex)
 
 void URLRewardSelectWidget::CloseWidget()
 {
-	// 게임 일시정지 해제
-	UGameplayStatics::SetGamePaused(this, false);
+	// 이 위젯이 직접 일시정지시켰을 때만 해제 (레벨업 경로는 애초에 멈추지 않았음)
+	if (bPausedGameOnOpen)
+	{
+		UGameplayStatics::SetGamePaused(this, false);
+		bPausedGameOnOpen = false;
+	}
 
 	// 플레이어 기본 입력 모드로 원복
 	if (TargetPlayer.IsValid())
