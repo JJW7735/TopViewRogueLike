@@ -11,6 +11,7 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnRunSaveCompletedSignature, bool, 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnRunLoadedSignature, bool, bSuccess);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnMetaSavedSignature, bool, bSuccess);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnSoulsChangedSignature, int32, TotalSouls, int32, Delta);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnRunSoulsChangedSignature, int32, RunSouls, int32, Delta);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnMetaUpgradePurchasedSignature, FName, UpgradeKey, int32, NewLevel);
 
 /**
@@ -188,6 +189,10 @@ public:
 
 	UPROPERTY(BlueprintAssignable, Category = "Save|Event")
 	FOnSoulsChangedSignature OnSoulsChanged;
+
+	/** 이번 런 임시 소울(RunSouls)이 바뀔 때 방송 (몬스터 처치 적립, 런 종료 시 0으로 리셋) */
+	UPROPERTY(BlueprintAssignable, Category = "Save|Event")
+	FOnRunSoulsChangedSignature OnRunSoulsChanged;
 
 	UPROPERTY(BlueprintAssignable, Category = "Save|Event")
 	FOnMetaUpgradePurchasedSignature OnMetaUpgradePurchased;

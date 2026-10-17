@@ -19,6 +19,7 @@
 #include "GameFramework/ProjectileMovementComponent.h"
 #include "RLPortal.h"
 #include "RLRewardChest.h"
+#include "RLMetaUpgradeStation.h"
 #include "RLRewardSubsystem.h"
 #include "RLRewardSelectWidget.h"
 #include "RLInventoryComponent.h"
@@ -362,9 +363,15 @@ void ARLCharacter::SetNearbyChest(ARLRewardChest* Chest)
     RefreshInteractPrompt();
 }
 
+void ARLCharacter::SetNearbyMetaStation(ARLMetaUpgradeStation* Station)
+{
+    NearbyMetaStation = Station;
+    RefreshInteractPrompt();
+}
+
 void ARLCharacter::RefreshInteractPrompt()
 {
-    // TryInteract와 같은 우선순위: 상자가 있으면 상자 문구, 없으면 포탈 문구
+    // TryInteract와 같은 우선순위: 상자 > 포탈 > 강화소
     if (NearbyChest)
     {
         OnInteractPromptChanged(true, NearbyChest->InteractPromptText);
@@ -372,6 +379,10 @@ void ARLCharacter::RefreshInteractPrompt()
     else if (NearbyPortal)
     {
         OnInteractPromptChanged(true, NearbyPortal->InteractPromptText);
+    }
+    else if (NearbyMetaStation)
+    {
+        OnInteractPromptChanged(true, NearbyMetaStation->InteractPromptText);
     }
     else
     {
@@ -395,9 +406,16 @@ void ARLCharacter::TryInteract()
         return;
     }
 
+    // 영구 강화소가 근처에 있으면 강화 상점 UI 열기
+    if (NearbyMetaStation)
+    {
+        NearbyMetaStation->Interact(this);
+        return;
+    }
+
     if (GEngine)
     {
-        GEngine->AddOnScreenDebugMessage(-1, 1.5f, FColor::Silver, TEXT("주변에 상호작용할 대상(상자/포탈)이 없습니다."));
+        GEngine->AddOnScreenDebugMessage(-1, 1.5f, FColor::Silver, TEXT("주변에 상호작용할 대상(상자/포탈/강화소)이 없습니다."));
     }
 }
 

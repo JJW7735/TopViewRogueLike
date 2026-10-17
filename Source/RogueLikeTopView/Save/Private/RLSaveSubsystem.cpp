@@ -197,6 +197,10 @@ void URLSaveSubsystem::ClearActiveRun(bool bBankSoulsToMeta)
 	CurrentRunData.bIsStageCleared = false;
 	CurrentRunData.RunSouls = 0;
 	bPendingRunApply = false;
+	if (LastSettledRunSouls > 0)
+	{
+		OnRunSoulsChanged.Broadcast(0, -LastSettledRunSouls);
+	}
 
 	if (URLShopSubsystem* ShopSub = URLShopSubsystem::Get(this))
 	{
@@ -515,6 +519,7 @@ void URLSaveSubsystem::AddRunSouls(int32 Amount)
 {
 	if (Amount <= 0) return;
 	CurrentRunData.RunSouls += Amount;
+	OnRunSoulsChanged.Broadcast(CurrentRunData.RunSouls, Amount);
 }
 
 void URLSaveSubsystem::RecordStageClear(int32 StageNumber)
