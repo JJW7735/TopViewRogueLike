@@ -93,10 +93,13 @@ void URLAttributeSet::PostGameplayEffectExecute(const FGameplayEffectModCallback
 		const float LocalDamage = GetIncomingDamage();
 		SetIncomingDamage(0.0f);
 
+		// SetHealth보다 먼저 기록해야 Health 변경 콜백(URLHealthComponent)에서 이번 피해량을 읽을 수 있습니다.
+		LastDamageTaken = FMath::Max(0.0f, LocalDamage);
+
 		if (LocalDamage > 0.0f)
 		{
+			// 사망 판정은 Health 변경 콜백을 받는 URLHealthComponent가 처리합니다.
 			SetHealth(FMath::Clamp(GetHealth() - LocalDamage, 0.0f, GetMaxHealth()));
-			// TODO(1단계): 체력 0 도달 시 사망 처리 → URLHealthComponent(Facade)의 OnDeath로 전달
 		}
 	}
 	else if (Data.EvaluatedData.Attribute == GetHealthAttribute())

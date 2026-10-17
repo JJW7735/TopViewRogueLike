@@ -3,7 +3,7 @@
 namespace RLGameplayTags
 {
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(State_Dead, "State.Dead", "사망 상태. 피해/스킬 사용 불가");
-	UE_DEFINE_GAMEPLAY_TAG_COMMENT(State_Invulnerable, "State.Invulnerable", "무적. 피해 GE 적용 차단 (기존 bIsInvulnerable 대체)");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(State_Invulnerable, "State.Invulnerable", "무적. ReceiveCustomDamage/TakeDamage에서 피해 무시 (기존 bIsInvulnerable 대체)");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(State_SuperArmor, "State.SuperArmor", "경직 면역 (기존 CanBeStaggered() == false 대체)");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(State_Stunned, "State.Stunned", "기절. 이동/스킬 사용 불가");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(State_Casting, "State.Casting", "시전 중");
@@ -18,6 +18,7 @@ namespace RLGameplayTags
 
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Data_Damage, "Data.Damage", "SetByCaller: 피해량");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Data_Heal, "Data.Heal", "SetByCaller: 회복량");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Data_TrueDamage, "Data.TrueDamage", "SetByCaller: 1이면 방어력/피해감소 무시 (고정 피해)");
 
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Data_Stat_MaxHealth, "Data.Stat.MaxHealth", "SetByCaller: 최대 체력 증감량");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Data_Stat_AttackPower, "Data.Stat.AttackPower", "SetByCaller: 공격력 증감량");

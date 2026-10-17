@@ -85,11 +85,12 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Combat")
 	void ReceiveCustomDamageAtLocation(const FRLDamageData& DamageData, FVector ImpactPoint);
 
+	// ★ 무적은 State.Invulnerable 게임플레이 태그로 관리합니다 (예전 bIsInvulnerable bool 대체).
 	UFUNCTION(BlueprintCallable, Category = "Combat")
-	void SetInvulnerable(bool bNewState) { bIsInvulnerable = bNewState; }
+	void SetInvulnerable(bool bNewState);
 
 	UFUNCTION(BlueprintPure, Category = "Combat")
-	bool IsInvulnerable() const { return bIsInvulnerable; }
+	bool IsInvulnerable() const;
 
 	UFUNCTION(BlueprintCallable, Category = "Combat")
 	void CreateBoxHitbox(FVector BoxExtent, float ForwardOffset, const FRLDamageData& DamageData, bool bDrawDebug = true);
@@ -318,9 +319,6 @@ protected:
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Camera")
 	class UCameraComponent* TopDownCamera;
-
-	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = "Combat")
-	bool bIsInvulnerable = false;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
 	class URLHealthComponent* HealthComp;

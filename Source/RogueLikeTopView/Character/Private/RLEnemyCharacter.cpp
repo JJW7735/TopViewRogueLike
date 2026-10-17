@@ -653,7 +653,7 @@ void ARLEnemyCharacter::ReceiveCustomDamage(const FRLDamageData& DamageData, con
 			return;
 		}
 	}
-	if (bIsInvulnerable && !DamageData.bIgnoreInvincibility)
+	if (IsInvulnerable() && !DamageData.bIgnoreInvincibility)
 	{
 		return;
 	}

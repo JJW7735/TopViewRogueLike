@@ -101,7 +101,13 @@ public:
 	FGameplayAttributeData IncomingDamage;
 	RL_ATTRIBUTE_ACCESSORS(URLAttributeSet, IncomingDamage)
 
+	// 마지막으로 받은 피해량(경감 후, 체력 clamp 전). 피격 메시지/흡혈/HealthDelta 방송용.
+	// 피해 GE 적용은 동기라서 적용 직후 읽으면 그 피해의 값입니다.
+	float GetLastDamageTaken() const { return LastDamageTaken; }
+
 private:
+	float LastDamageTaken = 0.0f;
+
 	// 어트리뷰트별 허용 범위를 한 곳에서 정의
 	void ClampAttribute(const FGameplayAttribute& Attribute, float& NewValue) const;
 };

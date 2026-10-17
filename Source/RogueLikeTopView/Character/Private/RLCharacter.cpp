@@ -250,23 +250,28 @@ void ARLCharacter::ReceiveCustomDamage(const FRLDamageData& DamageData, const FH
         }
     }
 
-    if (bIsInvulnerable && !DamageData.bIgnoreInvincibility)
+    if (IsInvulnerable() && !DamageData.bIgnoreInvincibility)
     {
         GEngine->AddOnScreenDebugMessage(-1, 1.5f, FColor::Yellow, TEXT("Dodge / Invulnerable!"));
         return;
     }
 
-    // 피격자(나)의 방어력 및 피해 감소율 적용
-    // State.IgnoreDefense 태그(보스 대경직 등)가 붙어 있으면 트루 데미지처럼 방어 계산을 건너뜁니다.
-    float FinalDamageAmount = DamageData.BaseDamage;
-    float ReducedAmount = 0.0f;
-    const bool bIgnoreDefense = DamageData.bTrueDamage
-        || (AbilitySystemComp && AbilitySystemComp->HasMatchingGameplayTag(RLGameplayTags::State_IgnoreDefense));
+    // 보스/엘리트처럼 경직 면역(CanBeStaggered == false)인 대상은 넉백으로 밀려나지 않습니다.
+    const bool bCanBeStaggered = CanBeStaggered();
 
-    if (StatComp && !bIgnoreDefense)
+    if (bCanBeStaggered && DamageData.KnockbackForce > 0.0f)
     {
-        FinalDamageAmount = StatComp->CalculateDefendedDamage(DamageData.BaseDamage, ReducedAmount);
+        float KnockbackMultiplier = DamageData.bIsCritical ? 1.25f : 1.0f;
+        FVector KnockbackDir = (GetActorLocation() - HitInfo.ImpactPoint).GetSafeNormal2D();
+        LaunchClampedToNav(KnockbackDir * (DamageData.KnockbackForce * KnockbackMultiplier) + FVector(0.f, 0.f, 150.f), true, true);
     }
+
+    // ★ 피해 적용 (GAS): 공격자 ASC → URLGE_Damage → URLDamageExecution(방어력/피해감소 경감) → Health 감소.
+    // State.IgnoreDefense 태그(보스 대경직 등)나 bTrueDamage면 Execution이 경감을 건너뜁니다.
+    const float FinalDamageAmount = HealthComp
+        ? HealthComp->ApplyIncomingDamage(DamageData.BaseDamage, DamageData.DamageCauser, DamageData.bTrueDamage)
+        : 0.0f;
+    const float ReducedAmount = FMath::Max(0.0f, DamageData.BaseDamage - FinalDamageAmount);
 
     FString CauserName = DamageData.DamageCauser ? DamageData.DamageCauser->GetName() : TEXT("Environment");
     FString DefenseMsg = (ReducedAmount > 0.0f) ? FString::Printf(TEXT(" (방어 감쇄: -%.1f)"), ReducedAmount) : TEXT("");
@@ -284,18 +289,15 @@ void ARLCharacter::ReceiveCustomDamage(const FRLDamageData& DamageData, const FH
         GEngine->AddOnScreenDebugMessage(-1, 2.0f, FColor::Red, Msg);
     }
 
-    // 보스/엘리트처럼 경직 면역(CanBeStaggered == false)인 대상은 넉백으로 밀려나지 않습니다.
-    const bool bCanBeStaggered = CanBeStaggered();
-
-    if (bCanBeStaggered && DamageData.KnockbackForce > 0.0f)
+    // 기존 BP 호환: 예전엔 여기서 UGameplayStatics::ApplyDamage를 불러서 BP의 Event AnyDamage /
+    // OnTakeAnyDamage가 발동했습니다. 피해는 이미 GAS로 들어갔으니 알림만 똑같이 보냅니다 (이중 피해 없음).
+    if (FinalDamageAmount > 0.0f)
     {
-        float KnockbackMultiplier = DamageData.bIsCritical ? 1.25f : 1.0f;
-        FVector KnockbackDir = (GetActorLocation() - HitInfo.ImpactPoint).GetSafeNormal2D();
-        LaunchClampedToNav(KnockbackDir * (DamageData.KnockbackForce * KnockbackMultiplier) + FVector(0.f, 0.f, 150.f), true, true);
+        AController* InstigatorController = DamageData.DamageCauser ? DamageData.DamageCauser->GetInstigatorController() : nullptr;
+        const UDamageType* DamageTypeCDO = GetDefault<UDamageType>();
+        ReceiveAnyDamage(FinalDamageAmount, DamageTypeCDO, InstigatorController, DamageData.DamageCauser);
+        OnTakeAnyDamage.Broadcast(this, FinalDamageAmount, DamageTypeCDO, InstigatorController, DamageData.DamageCauser);
     }
-
-    AController* InstigatorController = DamageData.DamageCauser ? DamageData.DamageCauser->GetInstigatorController() : nullptr;
-    UGameplayStatics::ApplyDamage(this, FinalDamageAmount, InstigatorController, DamageData.DamageCauser, UDamageType::StaticClass());
 
     // ★ 흡혈(라이프스틸): 방어력 적용 후 "실제로 들어간" 데미지(FinalDamageAmount) 기준으로 가해자를 회복시킵니다.
     // BaseDamage(방어 전 원본)가 아니라 FinalDamageAmount를 기준으로 삼은 이유는, 방어력이 높은 대상을 때렸을 때
@@ -1135,7 +1137,7 @@ void ARLCharacter::Dodge(FVector CursorLocation)
     DashDirection.Normalize();
 
     bCanDash = false;
-    bIsInvulnerable = true;
+    SetInvulnerable(true);
 
     // 기존 이동 정지
     if (AController* PC = GetController())
@@ -1173,7 +1175,20 @@ void ARLCharacter::Dodge(FVector CursorLocation)
 
 void ARLCharacter::EndInvincibility()
 {
-    bIsInvulnerable = false;
+    SetInvulnerable(false);
+}
+
+void ARLCharacter::SetInvulnerable(bool bNewState)
+{
+    if (AbilitySystemComp)
+    {
+        AbilitySystemComp->SetLooseGameplayTagCount(RLGameplayTags::State_Invulnerable, bNewState ? 1 : 0);
+    }
+}
+
+bool ARLCharacter::IsInvulnerable() const
+{
+    return AbilitySystemComp && AbilitySystemComp->HasMatchingGameplayTag(RLGameplayTags::State_Invulnerable);
 }
 
 void ARLCharacter::ResetDashCooldown()
@@ -1181,15 +1196,25 @@ void ARLCharacter::ResetDashCooldown()
     bCanDash = true;
 }
 
-// ★ 절대 방어막 (적 AI가 ApplyDamage를 써도 무적이면 다 씹어버림)
+// ★ 엔진 기본 ApplyDamage 경로 (BP의 ApplyDamage 노드, 테스트용 즉사 명령 등)
+// 절대 방어막: 무적이면 전부 무시. 그 외에는 예전과 같이 경감 없이(트루 데미지) GAS 피해로 넘깁니다.
 float ARLCharacter::TakeDamage(float DamageAmount, struct FDamageEvent const& DamageEvent, class AController* EventInstigator, AActor* DamageCauser)
 {
-    if (bIsInvulnerable)
+    if (IsInvulnerable())
     {
         GEngine->AddOnScreenDebugMessage(-1, 2.0f, FColor::Yellow, TEXT("대쉬 무적 판정! 대미지 무효화!"));
         return 0.0f;
     }
-    return Super::TakeDamage(DamageAmount, DamageEvent, EventInstigator, DamageCauser);
+
+    // Super는 BP의 Event AnyDamage / OnTakeAnyDamage 알림을 보냅니다 (피해 자체는 아래 GAS가 처리)
+    const float NotifiedDamage = Super::TakeDamage(DamageAmount, DamageEvent, EventInstigator, DamageCauser);
+
+    AActor* Causer = DamageCauser ? DamageCauser : (EventInstigator ? EventInstigator->GetPawn() : nullptr);
+    if (HealthComp && NotifiedDamage > 0.0f)
+    {
+        HealthComp->ApplyIncomingDamage(NotifiedDamage, Causer, true);
+    }
+    return NotifiedDamage;
 }
 
 // ★ 부드러운 대시 이동 시작

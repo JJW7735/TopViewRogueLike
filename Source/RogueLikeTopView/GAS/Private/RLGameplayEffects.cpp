@@ -1,6 +1,7 @@
 ﻿#include "RLGameplayEffects.h"
 #include "AbilitySystemComponent.h"
 #include "RLAttributeSet.h"
+#include "RLDamageExecution.h"
 #include "RLGameplayTags.h"
 
 namespace
@@ -22,7 +23,11 @@ namespace
 URLGE_Damage::URLGE_Damage()
 {
 	DurationPolicy = EGameplayEffectDurationType::Instant;
-	Modifiers.Add(MakeSetByCallerModifier(URLAttributeSet::GetIncomingDamageAttribute(), RLGameplayTags::Data_Damage));
+
+	// 방어력/피해감소 경감은 ExecutionCalculation이 대상의 어트리뷰트를 캡처해서 계산합니다.
+	FGameplayEffectExecutionDefinition DamageExecution;
+	DamageExecution.CalculationClass = URLDamageExecution::StaticClass();
+	Executions.Add(DamageExecution);
 }
 
 URLGE_Heal::URLGE_Heal()

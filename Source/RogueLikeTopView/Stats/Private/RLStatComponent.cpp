@@ -5,6 +5,7 @@
 #include "GameFramework/CharacterMovementComponent.h"
 #include "RLAttributeSet.h"
 #include "RLGameplayEffects.h"
+#include "RLDamageExecution.h"
 
 URLStatComponent::URLStatComponent()
 {
@@ -262,7 +263,8 @@ void URLStatComponent::AddExp(float Amount)
 	OnExpChanged.Broadcast(CurrentExp, MaxExp, Percent);
 }
 
-// TODO(3단계): 치명타/방어력 계산은 데미지 ExecutionCalculation으로 이동
+// 치명타는 공격자 쪽에서 스킬 시전 시 한 번 굴립니다 (URLSkillComponent::CalculateFinalDamage).
+// 방어력/피해감소 경감은 URLDamageExecution이 피격자 쪽에서 처리합니다.
 float URLStatComponent::EvaluateDamage(float InRawDamage, bool& bOutIsCritical) const
 {
 	bOutIsCritical = false;
@@ -282,34 +284,9 @@ float URLStatComponent::EvaluateDamage(float InRawDamage, bool& bOutIsCritical) 
 
 float URLStatComponent::CalculateDefendedDamage(float InRawDamage, float& OutReducedDamage) const
 {
-	OutReducedDamage = 0.0f;
-	if (InRawDamage <= 0.0f)
-	{
-		return 0.0f;
-	}
-
-	// 1. 방어력(Defense) 기반 데미지 배율 계산 (점근적 공식: 100 / (100 + Defense))
-	float DefenseMultiplier = 1.0f;
-	if (Defense >= 0.0f)
-	{
-		DefenseMultiplier = 100.0f / (100.0f + Defense);
-	}
-	else
-	{
-		// 음수 방어력(방어력 감소 디버프)일 때 추가 피해 적용
-		DefenseMultiplier = 2.0f - (100.0f / (100.0f - Defense));
-	}
-
-	// 2. 퍼센트 피해 감소율(DamageReduction) 적용 (최대 80% 상한선)
-	const float ClampedReduction = FMath::Clamp(DamageReduction, 0.0f, 80.0f);
-	const float ReductionMultiplier = 1.0f - (ClampedReduction / 100.0f);
-
-	// 3. 최종 받는 데미지 산출 (최소 1.0f 데미지 보장)
-	const float CalculatedDamage = InRawDamage * DefenseMultiplier * ReductionMultiplier;
-	const float FinalDamage = FMath::Max(1.0f, CalculatedDamage);
-
-	OutReducedDamage = FMath::Max(0.0f, InRawDamage - FinalDamage);
-	return FinalDamage;
+	// 실제 피해 적용은 URLDamageExecution이 하고, 이 함수는 BP/UI에서 "예상 피해"를 볼 때 쓰는 미리보기입니다.
+	// 공식은 한 곳(URLDamageExecution::CalculateMitigatedDamage)만 씁니다.
+	return URLDamageExecution::CalculateMitigatedDamage(InRawDamage, Defense, DamageReduction, OutReducedDamage);
 }
 
 void URLStatComponent::NotifyStatsChanged()

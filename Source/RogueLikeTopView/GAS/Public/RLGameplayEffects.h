@@ -12,7 +12,8 @@ class UAbilitySystemComponent;
 //   - Instant  : 런 동안 영구 (보상 카드, 상점 스탯 구매, 영구 메타 강화) → 기본값(Base)이 바뀌고 세이브에 그대로 저장됨
 //   - Infinite : 출처가 사라지면 해제 (패시브 아이템, 버프 스킬, 디버프) → 핸들로 제거, 세이브에는 저장 안 함(아이템이 다시 적용)
 
-// 피해: IncomingDamage 메타 어트리뷰트에 Data.Damage 만큼 더함 → URLAttributeSet::PostGameplayEffectExecute에서 Health 감소
+// 피해: URLDamageExecution이 Data.Damage를 대상의 방어력/피해감소로 경감해 IncomingDamage에 넣음
+//       → URLAttributeSet::PostGameplayEffectExecute에서 Health 감소. Data.TrueDamage = 1이면 경감 없음.
 UCLASS()
 class ROGUELIKETOPVIEW_API URLGE_Damage : public UGameplayEffect
 {

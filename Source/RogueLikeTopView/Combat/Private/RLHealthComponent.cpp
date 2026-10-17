@@ -51,9 +51,8 @@ void URLHealthComponent::BeginPlay()
     SyncFromAttributes();
     bIsDead = false;
 
-    // [협업의 핵심] 주인이 언리얼 기본 데미지를 입으면, HandleTakeAnyDamage가 자동으로 대신 맞게끔 연결합니다.
-    // TODO(3단계): ApplyDamage 경로를 걷어내고 공격자 ASC에서 데미지 GE를 직접 적용하도록 교체
-    MyOwner->OnTakeAnyDamage.AddDynamic(this, &URLHealthComponent::HandleTakeAnyDamage);
+    // 엔진 기본 ApplyDamage(OnTakeAnyDamage)는 더 이상 직접 듣지 않습니다.
+    // ARLCharacter::TakeDamage가 받아서 ApplyIncomingDamage로 넘겨줍니다 (피해 진입점 일원화).
 }
 
 void URLHealthComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
@@ -88,11 +87,12 @@ void URLHealthComponent::HandleHealthAttributeChanged(const FOnAttributeChangeDa
     }
 
     // 데미지 = 양수, 회복 = 음수 (기존 규칙 유지)
-    // 데미지 경로(HandleTakeAnyDamage)가 아닌데 체력이 줄었다면 최대 체력 감소(아이템 해제 등)로 인한 clamp이므로 0
+    // 피해 GE 적용 중이 아닌데 체력이 줄었다면 최대 체력 감소(아이템 해제 등)로 인한 clamp이므로 0
     float HealthDelta = 0.0f;
-    if (PendingDamageForBroadcast > 0.0f)
+    if (bApplyingDamage)
     {
-        HealthDelta = PendingDamageForBroadcast;
+        const URLAttributeSet* AttributeSet = AbilitySystemComp->GetSet<URLAttributeSet>();
+        HealthDelta = AttributeSet ? AttributeSet->GetLastDamageTaken() : (ChangeData.OldValue - ChangeData.NewValue);
     }
     else if (ChangeData.NewValue > ChangeData.OldValue)
     {
@@ -126,32 +126,44 @@ void URLHealthComponent::HandleOutOfHealth()
     OnDeath.Broadcast(); // 사망 방송을 보냅니다.
 }
 
-// 데미지를 입었을 때 실행되는 핵심 로직
-void URLHealthComponent::HandleTakeAnyDamage(AActor* DamagedActor, float Damage, const class UDamageType* DamageType, class AController* InstigatedBy, AActor* DamageCauser)
+float URLHealthComponent::ApplyIncomingDamage(float RawDamage, AActor* DamageCauser, bool bTrueDamage)
 {
     // 데미지가 없거나 이미 죽었다면 무시합니다.
-    if (Damage <= 0.0f || bIsDead || !AbilitySystemComp)
+    if (RawDamage <= 0.0f || bIsDead || !AbilitySystemComp)
     {
-        return;
+        return 0.0f;
     }
 
-    FGameplayEffectContextHandle Context = AbilitySystemComp->MakeEffectContext();
-    Context.AddInstigator(InstigatedBy ? InstigatedBy->GetPawn() : nullptr, DamageCauser);
+    // 공격자의 ASC가 GE를 "보내는" 쪽(Source)이 됩니다. 환경 피해 등 공격자 ASC가 없으면 자기 자신이 Source.
+    UAbilitySystemComponent* SourceASC = UAbilitySystemGlobals::GetAbilitySystemComponentFromActor(DamageCauser);
+    if (!SourceASC)
+    {
+        SourceASC = AbilitySystemComp;
+    }
 
-    const FGameplayEffectSpecHandle Spec = AbilitySystemComp->MakeOutgoingSpec(URLGE_Damage::StaticClass(), 1.0f, Context);
+    FGameplayEffectContextHandle Context = SourceASC->MakeEffectContext();
+    Context.AddInstigator(DamageCauser, DamageCauser);
+
+    const FGameplayEffectSpecHandle Spec = SourceASC->MakeOutgoingSpec(URLGE_Damage::StaticClass(), 1.0f, Context);
     if (!Spec.IsValid())
     {
-        return;
+        return 0.0f;
     }
-    Spec.Data->SetSetByCallerMagnitude(RLGameplayTags::Data_Damage, Damage);
+    Spec.Data->SetSetByCallerMagnitude(RLGameplayTags::Data_Damage, RawDamage);
+    Spec.Data->SetSetByCallerMagnitude(RLGameplayTags::Data_TrueDamage, bTrueDamage ? 1.0f : 0.0f);
 
-    // 체력 감소 → HandleHealthAttributeChanged → OnHealthChanged / OnDeath 순서로 동기 호출됩니다.
-    PendingDamageForBroadcast = Damage;
-    AbilitySystemComp->ApplyGameplayEffectSpecToSelf(*Spec.Data.Get());
-    PendingDamageForBroadcast = 0.0f;
+    // 경감 계산(URLDamageExecution) → IncomingDamage → Health 감소 → HandleHealthAttributeChanged
+    // → OnHealthChanged / OnDeath 까지 전부 이 호출 안에서 동기로 끝납니다.
+    {
+        TGuardValue<bool> DamageGuard(bApplyingDamage, true);
+        SourceASC->ApplyGameplayEffectSpecToTarget(*Spec.Data.Get(), AbilitySystemComp);
+    }
+
+    const URLAttributeSet* AttributeSet = AbilitySystemComp->GetSet<URLAttributeSet>();
+    return AttributeSet ? AttributeSet->GetLastDamageTaken() : 0.0f;
 }
 
-// ★ 체력 회복 (흡혈 등에서 사용). HandleTakeAnyDamage와 대칭되는 형태로 작성했습니다.
+// ★ 체력 회복 (흡혈 등에서 사용). ApplyIncomingDamage와 대칭되는 형태로 작성했습니다.
 void URLHealthComponent::Heal(float Amount)
 {
     // 회복량이 없거나 이미 죽었다면 무시합니다 (죽은 뒤에 흡혈로 살아나는 걸 방지).

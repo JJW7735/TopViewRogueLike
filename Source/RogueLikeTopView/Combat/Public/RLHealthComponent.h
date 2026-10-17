@@ -30,12 +30,18 @@ protected:
     virtual void BeginPlay() override;
     virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 
-    // 팀원이 만든 히트박스에서 데미지가 들어왔을 때 자동으로 실행될 방어 함수입니다.
-    // 내부적으로 URLGE_Damage를 적용합니다.
-    UFUNCTION()
-    void HandleTakeAnyDamage(AActor* DamagedActor, float Damage, const class UDamageType* DamageType, class AController* InstigatedBy, AActor* DamageCauser);
-
 public:
+    /**
+     * ★ 모든 피해의 단일 진입점. 공격자(DamageCauser)의 ASC에서 URLGE_Damage를 만들어 이 캐릭터에게 적용합니다.
+     * 방어력/피해감소 경감은 URLDamageExecution이 처리합니다.
+     * - ARLCharacter::ReceiveCustomDamage (스킬/근접/투사체/장판)
+     * - ARLCharacter::TakeDamage (BP/엔진 ApplyDamage 경로, 기존처럼 경감 없음 = bTrueDamage)
+     * @param RawDamage 공격자가 계산한 피해량 (스킬 계수/치명타 반영 완료)
+     * @param bTrueDamage true면 방어력/피해감소 무시
+     * @return 실제로 들어간 피해량 (경감 후, 체력 clamp 전). 이미 죽었거나 피해가 없으면 0
+     */
+    float ApplyIncomingDamage(float RawDamage, AActor* DamageCauser, bool bTrueDamage);
+
     /* 체력 변수들 (BeginPlay 이후로는 AttributeSet 미러) */
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Health")
     float MaxHealth;
@@ -90,6 +96,7 @@ private:
     // 여러 어트리뷰트를 한 번에 바꿀 때 중간 방송을 막고 마지막에 한 번만 방송하기 위한 플래그
     bool bSuppressBroadcast = false;
 
-    // 기존 동작 유지: 데미지 방송의 HealthDelta는 실제 깎인 양이 아니라 "들어온 피해량"입니다 (막타 데미지 숫자 표시용).
-    float PendingDamageForBroadcast = 0.0f;
+    // 피해 GE 적용 중인지. 이 동안의 체력 감소만 "피해"로 방송하고(HealthDelta = 경감 후 피해량, 막타도 clamp 전 값),
+    // 그 외의 체력 감소(최대 체력 감소로 인한 clamp)는 HealthDelta 0으로 방송합니다.
+    bool bApplyingDamage = false;
 };
