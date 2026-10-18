@@ -1,4 +1,4 @@
-// Fill out your copyright notice in the Description page of Project Settings.
+﻿// Fill out your copyright notice in the Description page of Project Settings.
 
 #include "RLCharacter.h"
 #include "GameFramework/SpringArmComponent.h"
@@ -27,6 +27,7 @@
 #include "RLSaveSubsystem.h"
 #include "RLShopSubsystem.h"
 #include "RLShopWidget.h"
+#include "RLShopStation.h"
 #include "RLDecalIndicator.h"
 #include "RLAbilitySystemComponent.h"
 #include "RLAttributeSet.h"
@@ -393,9 +394,15 @@ void ARLCharacter::SetNearbyMetaStation(ARLMetaUpgradeStation* Station)
     RefreshInteractPrompt();
 }
 
+void ARLCharacter::SetNearbyShop(ARLShopStation* Shop)
+{
+    NearbyShop = Shop;
+    RefreshInteractPrompt();
+}
+
 void ARLCharacter::RefreshInteractPrompt()
 {
-    // TryInteract와 같은 우선순위: 상자 > 포탈 > 강화소
+    // TryInteract와 같은 우선순위: 상자 > 포탈 > 강화소 > 상점
     if (NearbyChest)
     {
         OnInteractPromptChanged(true, NearbyChest->InteractPromptText);
@@ -407,6 +414,10 @@ void ARLCharacter::RefreshInteractPrompt()
     else if (NearbyMetaStation)
     {
         OnInteractPromptChanged(true, NearbyMetaStation->InteractPromptText);
+    }
+    else if (NearbyShop)
+    {
+        OnInteractPromptChanged(true, NearbyShop->InteractPromptText);
     }
     else
     {
@@ -437,9 +448,16 @@ void ARLCharacter::TryInteract()
         return;
     }
 
+    // 상점이 근처에 있으면 상점 UI 열기
+    if (NearbyShop)
+    {
+        NearbyShop->Interact(this);
+        return;
+    }
+
     if (GEngine)
     {
-        GEngine->AddOnScreenDebugMessage(-1, 1.5f, FColor::Silver, TEXT("주변에 상호작용할 대상(상자/포탈/강화소)이 없습니다."));
+        GEngine->AddOnScreenDebugMessage(-1, 1.5f, FColor::Silver, TEXT("주변에 상호작용할 대상(상자/포탈/강화소/상점)이 없습니다."));
     }
 }
 

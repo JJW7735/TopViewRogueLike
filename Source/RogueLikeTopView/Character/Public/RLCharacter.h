@@ -1,4 +1,4 @@
-// Fill out your copyright notice in the Description page of Project Settings.
+﻿// Fill out your copyright notice in the Description page of Project Settings.
 #pragma once
 
 #include "CoreMinimal.h"
@@ -17,6 +17,7 @@ class URLInventoryComponent;
 class ARLPortal;
 class ARLRewardChest;
 class ARLMetaUpgradeStation;
+class ARLShopStation;
 class ARLDecalIndicator;
 class UMaterialInterface;
 class URLAbilitySystemComponent;
@@ -244,6 +245,12 @@ public:
 	ARLMetaUpgradeStation* GetNearbyMetaStation() const { return NearbyMetaStation; }
 
 	UFUNCTION(BlueprintCallable, Category = "Interaction")
+	void SetNearbyShop(ARLShopStation* Shop);
+
+	UFUNCTION(BlueprintPure, Category = "Interaction")
+	ARLShopStation* GetNearbyShop() const { return NearbyShop; }
+
+	UFUNCTION(BlueprintCallable, Category = "Interaction")
 	void TryInteract();
 
 	// TryInteract와 같은 우선순위(상자 > 포탈 > 강화소)로 표시할 안내 문구를 골라 OnInteractPromptChanged로 알림
@@ -405,6 +412,9 @@ protected:
 
 	UPROPERTY()
 	ARLMetaUpgradeStation* NearbyMetaStation = nullptr;
+
+	UPROPERTY()
+	ARLShopStation* NearbyShop = nullptr;
 
 	// ★ ShowBoxAttackIndicator 호출 시 처음 한 번만 스폰되고 이후로는 재사용되는 예고 데칼 액터.
 	// (URLSkillComponent::DecalIndicator와 같은 지연 스폰 패턴)
