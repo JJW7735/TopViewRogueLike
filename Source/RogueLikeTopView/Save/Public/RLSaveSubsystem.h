@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include "CoreMinimal.h"
 #include "Subsystems/GameInstanceSubsystem.h"
@@ -157,6 +157,10 @@ public:
 	/** 특정 메타 특성의 상태 정보를 조회합니다 */
 	UFUNCTION(BlueprintPure, Category = "Save|Meta|Upgrade")
 	bool GetMetaUpgradeInfo(FName UpgradeKey, FRLMetaUpgradeInfo& OutInfo) const;
+
+	/** 진행 중인 런(이어하기 가능한 세이브)이 있으면 영구 강화/초기화를 막습니다 (다회차 유도) */
+	UFUNCTION(BlueprintPure, Category = "Save|Meta|Upgrade")
+	bool IsMetaUpgradeLocked() const { return HasActiveRun(); }
 
 	/** 소울을 소비하여 특정 메타 특성을 1단계 업그레이드합니다 */
 	UFUNCTION(BlueprintCallable, Category = "Save|Meta|Upgrade")

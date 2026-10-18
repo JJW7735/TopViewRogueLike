@@ -7,6 +7,7 @@
 class UTextBlock;
 class UButton;
 class UPanelWidget;
+class UWidget;
 class ARLCharacter;
 class URLMetaUpgradeRowWidget;
 
@@ -65,6 +66,17 @@ protected:
 	UFUNCTION(BlueprintImplementableEvent, Category = "Meta|UI")
 	void BP_OnUpgradeFailed(FName UpgradeKey, const FString& FailReason);
 
+	/** 런 진행 중이라 강화/초기화가 막혔을 때 BP 연출 훅 (커스텀 안내 팝업 등) */
+	UFUNCTION(BlueprintImplementableEvent, Category = "Meta|UI")
+	void BP_OnUpgradeBlockedByActiveRun();
+
+	/** 진행 중인 런이 있어 강화/초기화가 잠겼는지 */
+	UFUNCTION(BlueprintPure, Category = "Meta|UI")
+	bool IsUpgradeLocked() const;
+
+	/** 런 진행 중 안내 표시 (Txt_FailReason + Panel_RunLockNotice) */
+	void ShowRunLockNotice();
+
 	UFUNCTION()
 	void HandleSoulsChanged(int32 TotalSouls, int32 Delta);
 
@@ -117,6 +129,10 @@ protected:
 
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UTextBlock> Txt_FailReason;
+
+	/** 런 진행 중 강화 시도 시 띄울 안내창 (Border/Overlay 등, 없으면 Txt_FailReason만 사용). 시작 시 숨김 */
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UWidget> Panel_RunLockNotice;
 
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UButton> Btn_Reset;

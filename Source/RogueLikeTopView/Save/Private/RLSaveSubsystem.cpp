@@ -710,6 +710,12 @@ bool URLSaveSubsystem::GetMetaUpgradeInfo(FName UpgradeKey, FRLMetaUpgradeInfo& 
 
 bool URLSaveSubsystem::UpgradeMetaTrait(FName UpgradeKey, FString& OutFailReason)
 {
+	if (IsMetaUpgradeLocked())
+	{
+		OutFailReason = TEXT("게임 진행 중에는 영혼 강화를 할 수 없습니다.");
+		return false;
+	}
+
 	FRLMetaUpgradeInfo Info;
 	if (!GetMetaUpgradeInfo(UpgradeKey, Info))
 	{

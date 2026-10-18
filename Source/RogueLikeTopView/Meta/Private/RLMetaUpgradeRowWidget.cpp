@@ -60,14 +60,28 @@ void URLMetaUpgradeRowWidget::SetUpgradeInfo(const FRLMetaUpgradeInfo& InInfo)
 			: NSLOCTEXT("RLMeta", "RowUpgrade", "강화"));
 	}
 
-	if (Btn_Upgrade)
-	{
-		// MAX면 비활성화. 소울 부족이면 클릭은 허용해 실패 사유를 띄우되 흐리게 표시
-		Btn_Upgrade->SetIsEnabled(!InInfo.bIsMaxLevel);
-		Btn_Upgrade->SetRenderOpacity((InInfo.bIsMaxLevel || InInfo.bCanAfford) ? 1.0f : CannotAffordOpacity);
-	}
+	UpdateUpgradeButtonState();
 
 	BP_OnUpgradeInfoUpdated(InInfo);
+}
+
+void URLMetaUpgradeRowWidget::SetRunLocked(bool bInLocked)
+{
+	bRunLocked = bInLocked;
+	UpdateUpgradeButtonState();
+}
+
+void URLMetaUpgradeRowWidget::UpdateUpgradeButtonState()
+{
+	if (!Btn_Upgrade)
+	{
+		return;
+	}
+
+	// MAX면 비활성화. 소울 부족/런 진행 중이면 클릭은 허용해 실패 사유를 띄우되 흐리게 표시
+	Btn_Upgrade->SetIsEnabled(!CachedInfo.bIsMaxLevel);
+	const bool bUsable = CachedInfo.bIsMaxLevel || (CachedInfo.bCanAfford && !bRunLocked);
+	Btn_Upgrade->SetRenderOpacity(bUsable ? 1.0f : CannotAffordOpacity);
 }
 
 FText URLMetaUpgradeRowWidget::FormatBonusValue_Implementation(FName UpgradeKey, float Value) const

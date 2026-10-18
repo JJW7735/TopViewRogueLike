@@ -24,11 +24,21 @@ void URLMetaUpgradeWidget::NativeConstruct()
 	{
 		Txt_FailReason->SetVisibility(ESlateVisibility::Hidden);
 	}
+	if (Panel_RunLockNotice)
+	{
+		Panel_RunLockNotice->SetVisibility(ESlateVisibility::Collapsed);
+	}
 
 	if (URLSaveSubsystem* SaveSys = URLSaveSubsystem::Get(this))
 	{
 		SaveSys->OnSoulsChanged.AddUniqueDynamic(this, &URLMetaUpgradeWidget::HandleSoulsChanged);
 		UpdateSoulsText(SaveSys->GetTotalSouls());
+	}
+
+	// 런 진행 중이면 초기화 버튼도 흐리게 (클릭 시 안내)
+	if (Btn_Reset && IsUpgradeLocked())
+	{
+		Btn_Reset->SetRenderOpacity(0.4f);
 	}
 
 	RebuildRows();
@@ -52,9 +62,16 @@ void URLMetaUpgradeWidget::NativeTick(const FGeometry& MyGeometry, float InDelta
 	if (FailReasonRemaining > 0.0f)
 	{
 		FailReasonRemaining -= InDeltaTime;
-		if (FailReasonRemaining <= 0.0f && Txt_FailReason)
+		if (FailReasonRemaining <= 0.0f)
 		{
-			Txt_FailReason->SetVisibility(ESlateVisibility::Hidden);
+			if (Txt_FailReason)
+			{
+				Txt_FailReason->SetVisibility(ESlateVisibility::Hidden);
+			}
+			if (Panel_RunLockNotice)
+			{
+				Panel_RunLockNotice->SetVisibility(ESlateVisibility::Collapsed);
+			}
 		}
 	}
 }
@@ -177,6 +194,7 @@ void URLMetaUpgradeWidget::RebuildRows()
 		return;
 	}
 
+	const bool bLocked = IsUpgradeLocked();
 	for (const FRLMetaUpgradeInfo& Info : SaveSys->GetAllMetaUpgradeInfos())
 	{
 		URLMetaUpgradeRowWidget* Row = CreateWidget<URLMetaUpgradeRowWidget>(this, TargetRowClass);
@@ -186,6 +204,7 @@ void URLMetaUpgradeWidget::RebuildRows()
 		}
 
 		Box_Upgrades->AddChild(Row);
+		Row->SetRunLocked(bLocked);
 		Row->SetUpgradeInfo(Info);
 		Row->OnUpgradeClicked.AddUniqueDynamic(this, &URLMetaUpgradeWidget::HandleRowUpgradeClicked);
 		RowWidgets.Add(Row);
@@ -218,6 +237,12 @@ bool URLMetaUpgradeWidget::RequestUpgrade(FName UpgradeKey)
 		return false;
 	}
 
+	if (IsUpgradeLocked())
+	{
+		ShowRunLockNotice();
+		return false;
+	}
+
 	FString FailReason;
 	if (!SaveSys->UpgradeMetaTrait(UpgradeKey, FailReason))
 	{
@@ -242,6 +267,13 @@ bool URLMetaUpgradeWidget::RequestUpgrade(FName UpgradeKey)
 
 void URLMetaUpgradeWidget::RequestResetAll()
 {
+	// 런 진행 중 초기화(전액 환불)도 막음 — 강화와 같은 이유
+	if (IsUpgradeLocked())
+	{
+		ShowRunLockNotice();
+		return;
+	}
+
 	if (URLSaveSubsystem* SaveSys = URLSaveSubsystem::Get(this))
 	{
 		SaveSys->ResetAllMetaUpgrades(true);
@@ -291,4 +323,23 @@ void URLMetaUpgradeWidget::ShowFailReason(const FString& Reason)
 	Txt_FailReason->SetText(FText::FromString(Reason));
 	Txt_FailReason->SetVisibility(ESlateVisibility::HitTestInvisible);
 	FailReasonRemaining = FailReasonDisplayTime;
+}
+
+bool URLMetaUpgradeWidget::IsUpgradeLocked() const
+{
+	const URLSaveSubsystem* SaveSys = URLSaveSubsystem::Get(this);
+	return SaveSys && SaveSys->IsMetaUpgradeLocked();
+}
+
+void URLMetaUpgradeWidget::ShowRunLockNotice()
+{
+	ShowFailReason(TEXT("게임 진행 중에는 영혼 강화를 할 수 없습니다."));
+
+	if (Panel_RunLockNotice)
+	{
+		Panel_RunLockNotice->SetVisibility(ESlateVisibility::HitTestInvisible);
+		FailReasonRemaining = FailReasonDisplayTime;
+	}
+
+	BP_OnUpgradeBlockedByActiveRun();
 }

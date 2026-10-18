@@ -27,6 +27,10 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Meta|UI")
 	void SetUpgradeInfo(const FRLMetaUpgradeInfo& InInfo);
 
+	/** 진행 중인 런이 있어 강화가 잠겼는지 설정 (버튼을 흐리게, 클릭은 허용해 안내를 띄움) */
+	UFUNCTION(BlueprintCallable, Category = "Meta|UI")
+	void SetRunLocked(bool bInLocked);
+
 	UFUNCTION(BlueprintPure, Category = "Meta|UI")
 	FName GetUpgradeKey() const { return CachedInfo.UpgradeKey; }
 
@@ -55,6 +59,11 @@ protected:
 
 	UPROPERTY(BlueprintReadOnly, Category = "Meta|UI")
 	FRLMetaUpgradeInfo CachedInfo;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Meta|UI")
+	bool bRunLocked = false;
+
+	void UpdateUpgradeButtonState();
 
 	// ==========================================
 	// WBP_MetaUpgradeRow 자동 바인딩 위젯 (Optional)
