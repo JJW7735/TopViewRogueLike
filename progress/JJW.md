@@ -1,5 +1,76 @@
 # JJW
-> 최종 갱신: 2026-09-23
+> 최종 갱신: 2026-10-18
+
+## GAS(Gameplay Ability System) 구조 전환 — 2026-10-17 ~ 10-18 완료, main 머지됨
+커스텀 스탯/체력/스킬 시스템을 언리얼 GAS 기반으로 단계적으로 옮김. 브랜치 `feat/gas-migration` → main 머지(98b5596e).
+
+### 뭐가 바뀌었나 (단계별)
+| 단계 | 내용 | 커밋 |
+|---|---|---|
+| 0 | GAS 플러그인/모듈 추가, `GAS/` 폴더 신설, `ARLCharacter`에 ASC 부착 (싱글플레이라 캐릭터가 Owner=Avatar) | fbc0fd0c |
+| 1-체력 | `RLHealthComponent`를 GAS Facade로 전환. 피해/회복은 `URLGE_Damage`/`URLGE_Heal`(SetByCaller), 사망은 `State.Dead` 태그 | df0d06af |
+| 1-스탯 | `RLStatComponent` 전투 스탯 8종을 AttributeSet으로 이전. 인벤토리/보상/상점/세이브에 흩어져 있던 스탯 switch문을 `AddStatBonus` 하나로 통합 | 0ddb62f3 |
+| 2 | 스탯 변경을 지속시간별 GE로 분리: 보상·상점·메타강화=Instant(영구), 패시브 아이템=Infinite(해제 가능), 소울 셰터=Override, 스킬 속도 버프=Duration (기존 이동속도 600 고정 버그도 수정). 세이브는 아이템 효과 뺀 기본값만 저장 | b9b3859d |
+| 3 | 데미지 파이프라인을 `URLDamageExecution`(ExecutionCalculation)으로 전환. 대상의 Defense/DamageReduction을 캡처해서 경감. 몬스터 `ApplyDamage` 공격에도 플레이어 방어력이 적용되도록 수정(예전엔 무시됐음) | 7380ffc2, 38d8accb |
+| 4 | 스킬 시스템을 CastType별 GameplayAbility 8종으로 전환. 쿨타임=GE, 진행=AbilityTask | 6e002ff4 |
+| 5 | 스킬 VFX(차지/릴리즈/버프 오라)를 GameplayCue로 전환 | cf9da869 |
+
+### 전체 구조
+```
+ARLCharacter
+ ├─ URLAbilitySystemComponent (ASC)      ← 실제 값/효과/어빌리티가 전부 여기
+ │   ├─ URLAttributeSet                   Health, MaxHealth, AttackPower, AbilityPower,
+ │   │                                    CritChance, CritDamageMultiplier, AttackSpeed,
+ │   │                                    Defense, DamageReduction, MoveSpeed
+ │   │                                    + IncomingDamage(메타 어트리뷰트, 피해 계산용)
+ │   ├─ GameplayEffect                     (GAS/RLGameplayEffects)
+ │   └─ GameplayAbility                    (Skill/RLSkillAbilities)
+ │
+ ├─ RLHealthComponent  ─┐
+ ├─ RLStatComponent    ─┼─ Facade: 기존 API/델리게이트 그대로 유지, 내부에서 ASC 호출
+ └─ RLSkillComponent   ─┘          → UI, BP_EnemyBase, 보스 BTT 등 BP는 수정 없이 동작
+```
+
+**GameplayEffect 종류 (`GAS/RLGameplayEffects`)**
+- `URLGE_Damage` / `URLGE_Heal` — SetByCaller(`Data.Damage`/`Data.Heal`)로 양 전달
+- `URLGE_StatBonus_Instant` — 런 영구 스탯 증가 (보상, 상점, 메타강화)
+- `URLGE_StatBonus_Infinite` — 해제 가능한 스탯 (패시브 아이템, 슬롯 기준으로 재적용)
+- `URLGE_StatBonus_Duration` / `URLGE_SkillBuff` — 시간제 버프 (버프 스킬, 오라 큐 포함)
+- `URLGE_SkillCooldown` — 스킬 쿨타임 (`Data.Cooldown`)
+- `URLGE_SoulCrackShield` — 보스 소울 크랙 기믹 보호막
+
+**데미지 흐름**
+1. 공격자 쪽: 스킬 시전 시 `CalculateFinalDamage`에서 AD/AP 스케일링 + 치명타 계산
+2. `RLHealthComponent::ApplyIncomingDamage` → 공격자 ASC가 대상에게 `URLGE_Damage` 적용
+3. `URLDamageExecution`이 대상 Defense/DamageReduction으로 경감 → `IncomingDamage` → Health 감소
+4. `State.IgnoreDefense`(대상) 또는 `Data.TrueDamage`면 경감 생략, `State.Invulnerable`이면 무적
+5. BP `Event AnyDamage`는 경감 후 값으로 계속 알림 (기존 BP 호환)
+
+**스킬 (`Skill/RLGameplayAbility_Skill`, `Skill/RLSkillAbilities`)**
+- 베이스 `URLGameplayAbility_Skill` + CastType별 파생 8종: `Instant`, `Projectile`, `Dash`, `Buff`, `Cast`, `GroundTarget`, `Charge`, `Hold`
+- 스킬 DataAsset(`RLSkillData`)은 AbilitySpec의 SourceObject로 넘기고, 슬롯(Q/W/E/R/LMB)은 InputID로 구분
+- 차지/홀드 등 진행 중 처리는 `URLAbilityTask_Tick`
+- `RLSkillComponent`는 Facade로 남아서 입력 처리, ABP 노티파이(`TriggerActiveSkillHit`, Dash), `OnSkillCooldownChanged`, 세이브 API를 그대로 제공
+
+**GameplayCue (`GAS/RLGameplayCueNotifies`)**
+- `URLGameplayCueNotify_SkillBurst`(Static, 1회성) / `ARLGameplayCueNotify_SkillLoop`(Actor, 지속형)
+- 큐의 SourceObject(스킬 DA)에 있는 Charge/Release VFX를 띄우는 공용 구조 → 스킬마다 큐 BP를 따로 안 만들어도 됨
+- 태그 `GameplayCue.Skill.Release` / `.Charge` / `.Buff`, 에셋은 `Content/GAS/GameplayCues/GC_Skill_*` (`DefaultGame.ini`의 GameplayCueNotifyPaths에 등록)
+
+**네이티브 태그 (`GAS/RLGameplayTags`)**
+- `State.*`: Dead, Invulnerable, IgnoreDefense, Stunned, SuperArmor, Casting, Skill.Aiming/Charging/Holding
+- `Data.*`: Damage, Heal, Cooldown, Duration, TrueDamage, Stat.(스탯 9종)
+- `InputTag.*`: Skill.LMB/Q/W/E/R, Dodge (정의만 해둠, 바인딩은 아직 슬롯 핸들 맵 사용)
+- `GameplayCue.Skill.*`: Release, Charge, Buff
+
+### 작업할 때 규칙 / 주의점
+- 스탯은 변수에 직접 쓰지 말 것 → `AddStatBonus`(영구) / `ApplyRemovableStatBonuses`(해제 가능) / `IncreaseMaxHealth` / `Heal` 사용
+- 컴포넌트의 미러 변수는 BlueprintReadOnly(표시용). BP 클래스 디폴트 값은 컴포넌트 BeginPlay에서 AttributeSet 시작값으로 들어가고, 세이브 복원/메타강화는 그 뒤에 적용됨
+- 세이브 복원 순서: 스탯 → 인벤토리 → 체력 (`StatSaveVersion=1`, 아이템 효과는 저장값에 미포함 → 이중 적용 방지)
+- 캐릭터 BP에서 스킬을 `SkillComponent.EquippedSkills` 맵 디폴트로 지정 → BeginPlay에서 GiveAbility됨
+- C++ 태그 추가는 `RLGameplayTags`에 네이티브 태그로
+- 런타임 `NewObject` 아이템은 UPROPERTY 참조 없으면 맵 이동 중 GC되어 세이브 복원 실패 (치트 아이템은 AddToRoot로 해결, `TestGiveTestItems` 반지/장화는 아직 같은 문제)
+- 미검증: Cast·Hold 타입 스킬(현재 쓰는 스킬 없음), InputTag 기반 입력 바인딩 미도입
 
 ## 완료
 - 엔진 5.7.4 → 5.8 업그레이드 (`.uproject` EngineAssociation 변경, VS 프로젝트 파일 재생성으로 빌드 에러 해결)
