@@ -10,7 +10,6 @@
 #include "RLGameplayTags.h"
 #include "AbilitySystemComponent.h"
 #include "GameFramework/ProjectileMovementComponent.h"
-#include "Particles/ParticleSystemComponent.h"
 #include "TimerManager.h"
 
 // =====================================================================
@@ -40,7 +39,7 @@ void URLGA_Skill_Instant::ActivateSkill()
 
 	if (Skill->ReleaseVFX)
 	{
-		SpawnSkillVFX(Caster, Skill->ReleaseVFX, Caster->GetActorLocation(), Skill->bAttachToWeapon, Skill->WeaponSocketName);
+		ExecuteSkillCue(RLGameplayTags::GameplayCue_Skill_Release, Caster->GetActorLocation());
 	}
 
 	// bHitOnAnimNotify면 히트는 ABP의 TriggerActiveSkillHit 노티파이가 HandleAnimHitNotify로 처리
@@ -106,40 +105,24 @@ void URLGA_Skill_Buff::ActivateSkill()
 	UAbilitySystemComponent* ASC = GetAbilitySystemComponentFromActorInfo();
 	URLStatComponent* StatComp = Caster->GetStatComponent();
 
-	// 재시전: 이전 버프와 이펙트를 먼저 정리해 배율이 중첩되지 않게 함
+	// 재시전: 이전 버프를 먼저 정리해 배율이 중첩되지 않게 함 (GE가 빠지면서 오라 큐도 같이 꺼짐)
 	if (ASC && BuffEffectHandle.IsValid())
 	{
 		ASC->RemoveActiveGameplayEffect(BuffEffectHandle);
 		BuffEffectHandle.Invalidate();
 	}
-	EndBuffVFX();
-
-	if (Skill->ReleaseVFX)
-	{
-		BuffVFXComp = SpawnSkillVFX(Caster, Skill->ReleaseVFX, Caster->GetActorLocation(), true, NAME_None);
-	}
 
 	if (ASC && StatComp)
 	{
 		// 현재 이동속도 기준 배율만큼 Duration GE로 더함 → BuffDuration이 지나면 GAS가 자동 해제
+		// SourceObject = 스킬 데이터: GameplayCue.Skill.Buff가 여기서 ReleaseVFX를 꺼내 오라로 띄움
 		const float SpeedBonus = StatComp->MoveSpeed * (Skill->SpeedMultiplier - 1.0f);
-		BuffEffectHandle = RLGameplayEffectUtils::ApplyStatBonusEffect(ASC, URLGE_StatBonus_Duration::StaticClass(),
-			{ { URLAttributeSet::GetMoveSpeedAttribute(), SpeedBonus } }, Skill->BuffDuration);
+		BuffEffectHandle = RLGameplayEffectUtils::ApplyStatBonusEffect(ASC, URLGE_SkillBuff::StaticClass(),
+			{ { URLAttributeSet::GetMoveSpeedAttribute(), SpeedBonus } }, Skill->BuffDuration, Skill);
 	}
-
-	Caster->GetWorldTimerManager().SetTimer(BuffVFXTimerHandle, this, &URLGA_Skill_Buff::EndBuffVFX, FMath::Max(0.01f, Skill->BuffDuration), false);
 
 	CommitSkillCooldown();
 	FinishSkill();
-}
-
-void URLGA_Skill_Buff::EndBuffVFX()
-{
-	if (BuffVFXComp)
-	{
-		BuffVFXComp->Deactivate();
-		BuffVFXComp = nullptr;
-	}
 }
 
 // =====================================================================
@@ -226,14 +209,11 @@ void URLGA_Skill_Cast::CompleteCast()
 void URLGA_Skill_Cast::EndAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo,
 	const FGameplayAbilityActivationInfo ActivationInfo, bool bReplicateEndAbility, bool bWasCancelled)
 {
-	// 시전 도중 취소(피격/회피/이동 명령): 몽타주·충전 이펙트·데칼 정리 후 UI에 시전 종료 알림
+	// 시전 도중 취소(피격/회피/이동 명령): 몽타주·데칼 정리 후 UI에 시전 종료 알림
+	// (충전 이펙트 큐는 AddSkillCue로 붙였으므로 어빌리티 종료 시 GAS가 자동 제거)
 	if (bWasCancelled && bInCastPhase)
 	{
 		StopSkillMontage();
-		if (CastVFXComp)
-		{
-			CastVFXComp->Deactivate();
-		}
 		if (URLSkillComponent* SkillComp = GetSkillComponent())
 		{
 			if (SkillComp->GetDecalIndicator())
@@ -244,7 +224,6 @@ void URLGA_Skill_Cast::EndAbility(const FGameplayAbilitySpecHandle Handle, const
 		}
 	}
 	bInCastPhase = false;
-	CastVFXComp = nullptr;
 
 	Super::EndAbility(Handle, ActorInfo, ActivationInfo, bReplicateEndAbility, bWasCancelled);
 }
@@ -311,7 +290,7 @@ void URLGA_Skill_GroundTarget::ConfirmTarget()
 		PlaySkillMontage(Skill->SkillMontage);
 		if (Skill->ChargeVFX)
 		{
-			CastVFXComp = SpawnSkillVFX(Caster, Skill->ChargeVFX, TargetLocation, Skill->bAttachToWeapon, Skill->WeaponSocketName);
+			AddSkillCue(RLGameplayTags::GameplayCue_Skill_Charge, TargetLocation);
 		}
 		SkillComp->OnCastStateChanged.Broadcast(Slot, true);
 		return;
@@ -321,7 +300,7 @@ void URLGA_Skill_GroundTarget::ConfirmTarget()
 	PlaySkillMontage(Skill->SkillMontage);
 	if (Skill->ReleaseVFX)
 	{
-		SpawnSkillVFX(Caster, Skill->ReleaseVFX, TargetLocation, Skill->bAttachToWeapon, Skill->WeaponSocketName);
+		ExecuteSkillCue(RLGameplayTags::GameplayCue_Skill_Release, TargetLocation);
 	}
 	Detonate();
 	CommitSkillCooldown();
@@ -331,18 +310,15 @@ void URLGA_Skill_GroundTarget::ConfirmTarget()
 
 void URLGA_Skill_GroundTarget::ReleaseCast()
 {
-	if (CastVFXComp)
-	{
-		CastVFXComp->DestroyComponent();
-		CastVFXComp = nullptr;
-	}
+	// 충전 이펙트를 끄고 바로 발동 이펙트로 교체
+	K2_RemoveGameplayCue(RLGameplayTags::GameplayCue_Skill_Charge);
 	if (!bHasTriggeredPreCastMotion)
 	{
 		JumpSkillMontageToSection(FName("End"));
 	}
 	if (Skill->ReleaseVFX)
 	{
-		SpawnSkillVFX(Caster, Skill->ReleaseVFX, TargetLocation, Skill->bAttachToWeapon, Skill->WeaponSocketName);
+		ExecuteSkillCue(RLGameplayTags::GameplayCue_Skill_Release, TargetLocation);
 	}
 	Detonate();
 }

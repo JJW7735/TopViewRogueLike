@@ -74,6 +74,17 @@ public:
 	URLGE_StatBonus_Duration();
 };
 
+// 버프 스킬 전용 Duration GE: 살아 있는 동안 GameplayCue.Skill.Buff를 유지 (오라 이펙트가 GE 수명과 함께 켜지고 꺼짐)
+// 이펙트 에셋은 EffectContext의 SourceObject(스킬 데이터)에서 큐 노티파이가 꺼내 씀
+UCLASS()
+class ROGUELIKETOPVIEW_API URLGE_SkillBuff : public URLGE_StatBonus_Duration
+{
+	GENERATED_BODY()
+
+public:
+	URLGE_SkillBuff();
+};
+
 // 스킬 쿨타임: 수치 변경 없이 Data.Cooldown 초 동안만 살아 있는 GE. 스킬 GA가 핸들로 남은 시간을 조회합니다.
 UCLASS()
 class ROGUELIKETOPVIEW_API URLGE_SkillCooldown : public UGameplayEffect
@@ -102,8 +113,10 @@ namespace RLGameplayEffectUtils
 	/**
 	 * 스탯 보너스 GE를 Values 수치로 적용합니다. Values에 없는 채널은 0으로 채웁니다.
 	 * @param Duration URLGE_StatBonus_Duration일 때의 지속 시간(초). 다른 종류는 무시됩니다.
+	 * @param SourceObject EffectContext에 실을 출처 (게임플레이 큐가 이펙트 에셋을 찾을 때 사용, 예: 스킬 데이터)
 	 * @return Infinite/Duration GE면 해제용 핸들, Instant GE면 무효 핸들
 	 */
 	ROGUELIKETOPVIEW_API FActiveGameplayEffectHandle ApplyStatBonusEffect(UAbilitySystemComponent* ASC,
-		TSubclassOf<URLGE_StatBonusBase> EffectClass, const TMap<FGameplayAttribute, float>& Values, float Duration = 0.0f);
+		TSubclassOf<URLGE_StatBonusBase> EffectClass, const TMap<FGameplayAttribute, float>& Values, float Duration = 0.0f,
+		const UObject* SourceObject = nullptr);
 }

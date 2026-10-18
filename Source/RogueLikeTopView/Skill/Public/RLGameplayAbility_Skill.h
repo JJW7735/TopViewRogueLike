@@ -8,8 +8,6 @@
 class ARLCharacter;
 class URLSkillComponent;
 class URLAbilityTask_Tick;
-class UFXSystemComponent;
-class UFXSystemAsset;
 
 // ★ 플레이어 스킬 GA 공통 베이스.
 // - 스킬 수치는 URLSkillData(DA_Skill_*)에 그대로 두고, GA는 "어떻게 발동하는가"(CastType별 흐름)만 담당합니다.
@@ -42,9 +40,6 @@ public:
 	// 공격력/주문력 계수 + 치명타가 반영된 데미지 데이터 (예전 URLSkillComponent::CalculateFinalDamage)
 	static FRLDamageData BuildDamageData(ARLCharacter* InCaster, const URLSkillData* InSkill);
 
-	// 스킬 이펙트 스폰 (나이아가라/캐스케이드 모두 지원)
-	static UFXSystemComponent* SpawnSkillVFX(ARLCharacter* InCaster, UFXSystemAsset* VFXAsset, FVector Location, bool bAttach, FName SocketName);
-
 protected:
 	virtual void ActivateAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo,
 		const FGameplayAbilityActivationInfo ActivationInfo, const FGameplayEventData* TriggerEventData) override;
@@ -73,6 +68,12 @@ protected:
 	void StopSkillMontage() const;
 	void JumpSkillMontageToSection(FName SectionName) const;
 	void CreateSkillBoxHitbox(float DamageMultiplier = 1.0f, bool bDrawDebug = true) const;
+
+	// 연출은 GameplayCue로 보냄 (SourceObject = 스킬 데이터, Location = 이펙트 위치). 실제 스폰은 RLGameplayCueNotifies
+	FGameplayCueParameters MakeSkillCueParams(const FVector& Location) const;
+	void ExecuteSkillCue(const FGameplayTag& CueTag, const FVector& Location);
+	// 어빌리티가 끝나면(취소 포함) 자동 제거되는 지속 큐
+	void AddSkillCue(const FGameplayTag& CueTag, const FVector& Location);
 
 	URLSkillComponent* GetSkillComponent() const;
 

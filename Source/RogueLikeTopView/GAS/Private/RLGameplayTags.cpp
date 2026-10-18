@@ -35,4 +35,8 @@ namespace RLGameplayTags
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Data_Stat_AttackSpeed, "Data.Stat.AttackSpeed", "SetByCaller: 공격 속도 증감량");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Data_Stat_Defense, "Data.Stat.Defense", "SetByCaller: 방어력 증감량");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Data_Stat_DamageReduction, "Data.Stat.DamageReduction", "SetByCaller: 피해 감소율 증감량(덮어쓰기 GE에서는 고정값)");
+
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(GameplayCue_Skill_Release, "GameplayCue.Skill.Release", "스킬 발동 이펙트 (1회, 스킬 데이터의 ReleaseVFX)");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(GameplayCue_Skill_Charge, "GameplayCue.Skill.Charge", "캐스팅/차지 중 이펙트 (지속, 스킬 데이터의 ChargeVFX)");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(GameplayCue_Skill_Buff, "GameplayCue.Skill.Buff", "버프 지속 이펙트 (URLGE_SkillBuff가 살아 있는 동안)");
 }

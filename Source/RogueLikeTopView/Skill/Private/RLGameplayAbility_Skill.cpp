@@ -8,12 +8,6 @@
 #include "RLAbilityTask_Tick.h"
 #include "AbilitySystemComponent.h"
 #include "Animation/AnimInstance.h"
-#include "Kismet/GameplayStatics.h"
-#include "Particles/ParticleSystem.h"
-#include "Particles/ParticleSystemComponent.h"
-#include "NiagaraSystem.h"
-#include "NiagaraFunctionLibrary.h"
-#include "NiagaraComponent.h"
 
 URLGameplayAbility_Skill::URLGameplayAbility_Skill()
 {
@@ -270,43 +264,22 @@ FRLDamageData URLGameplayAbility_Skill::BuildDamageData(ARLCharacter* InCaster, 
 	return FinalDamage;
 }
 
-UFXSystemComponent* URLGameplayAbility_Skill::SpawnSkillVFX(ARLCharacter* InCaster, UFXSystemAsset* VFXAsset, FVector Location, bool bAttach, FName SocketName)
+FGameplayCueParameters URLGameplayAbility_Skill::MakeSkillCueParams(const FVector& Location) const
 {
-	if (!VFXAsset || !InCaster)
-	{
-		return nullptr;
-	}
+	FGameplayCueParameters Params;
+	Params.SourceObject = Skill;
+	Params.Instigator = Caster;
+	Params.EffectCauser = Caster;
+	Params.Location = Location;
+	return Params;
+}
 
-	USceneComponent* TargetAttachComp = InCaster->GetMesh();
-	if (bAttach && SocketName != NAME_None)
-	{
-		TArray<UMeshComponent*> AllMeshes;
-		InCaster->GetComponents<UMeshComponent>(AllMeshes);
-		for (UMeshComponent* MeshComp : AllMeshes)
-		{
-			if (MeshComp->DoesSocketExist(SocketName))
-			{
-				TargetAttachComp = MeshComp;
-				break;
-			}
-		}
-	}
+void URLGameplayAbility_Skill::ExecuteSkillCue(const FGameplayTag& CueTag, const FVector& Location)
+{
+	K2_ExecuteGameplayCueWithParams(CueTag, MakeSkillCueParams(Location));
+}
 
-	if (UNiagaraSystem* NiagaraSys = Cast<UNiagaraSystem>(VFXAsset))
-	{
-		if (bAttach && TargetAttachComp)
-		{
-			return UNiagaraFunctionLibrary::SpawnSystemAttached(NiagaraSys, TargetAttachComp, SocketName, FVector::ZeroVector, FRotator::ZeroRotator, EAttachLocation::SnapToTarget, true);
-		}
-		return UNiagaraFunctionLibrary::SpawnSystemAtLocation(InCaster->GetWorld(), NiagaraSys, Location, FRotator::ZeroRotator);
-	}
-	if (UParticleSystem* CascadeSys = Cast<UParticleSystem>(VFXAsset))
-	{
-		if (bAttach && TargetAttachComp)
-		{
-			return UGameplayStatics::SpawnEmitterAttached(CascadeSys, TargetAttachComp, SocketName, FVector::ZeroVector, FRotator::ZeroRotator, EAttachLocation::SnapToTarget, true);
-		}
-		return UGameplayStatics::SpawnEmitterAtLocation(InCaster->GetWorld(), CascadeSys, Location, FRotator::ZeroRotator);
-	}
-	return nullptr;
+void URLGameplayAbility_Skill::AddSkillCue(const FGameplayTag& CueTag, const FVector& Location)
+{
+	K2_AddGameplayCueWithParams(CueTag, MakeSkillCueParams(Location), true);
 }

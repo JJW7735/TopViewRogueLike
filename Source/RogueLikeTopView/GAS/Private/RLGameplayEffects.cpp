@@ -63,6 +63,11 @@ URLGE_StatBonus_Duration::URLGE_StatBonus_Duration()
 	DurationMagnitude = FGameplayEffectModifierMagnitude(DurationByCaller);
 }
 
+URLGE_SkillBuff::URLGE_SkillBuff()
+{
+	GameplayCues.Add(FGameplayEffectCue(RLGameplayTags::GameplayCue_Skill_Buff, 0.0f, 0.0f));
+}
+
 URLGE_SkillCooldown::URLGE_SkillCooldown()
 {
 	FSetByCallerFloat CooldownByCaller;
@@ -98,14 +103,21 @@ namespace RLGameplayEffectUtils
 	}
 
 	FActiveGameplayEffectHandle ApplyStatBonusEffect(UAbilitySystemComponent* ASC,
-		TSubclassOf<URLGE_StatBonusBase> EffectClass, const TMap<FGameplayAttribute, float>& Values, float Duration)
+		TSubclassOf<URLGE_StatBonusBase> EffectClass, const TMap<FGameplayAttribute, float>& Values, float Duration,
+		const UObject* SourceObject)
 	{
 		if (!ASC || !EffectClass || Values.IsEmpty())
 		{
 			return FActiveGameplayEffectHandle();
 		}
 
-		const FGameplayEffectSpecHandle Spec = ASC->MakeOutgoingSpec(EffectClass, 1.0f, ASC->MakeEffectContext());
+		FGameplayEffectContextHandle Context = ASC->MakeEffectContext();
+		if (SourceObject)
+		{
+			Context.AddSourceObject(SourceObject);
+		}
+
+		const FGameplayEffectSpecHandle Spec = ASC->MakeOutgoingSpec(EffectClass, 1.0f, Context);
 		if (!Spec.IsValid())
 		{
 			return FActiveGameplayEffectHandle();

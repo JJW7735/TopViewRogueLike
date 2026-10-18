@@ -5,8 +5,6 @@
 #include "GameplayEffectTypes.h"
 #include "RLSkillAbilities.generated.h"
 
-class UFXSystemComponent;
-
 // =====================================================================
 // ★ CastType별 스킬 GA. 예전 URLSkillComponent의 상태 머신(switch + Tick 분기)을 타입별 클래스로 분리했습니다.
 // 기본 매핑은 URLGameplayAbility_Skill::GetDefaultAbilityClass, 개별 스킬은 URLSkillData::AbilityClassOverride로 교체 가능.
@@ -49,6 +47,7 @@ protected:
 };
 
 // 버프 (Buff): 이동속도 증가 Duration GE (시간이 지나면 GAS가 알아서 해제)
+// 오라 이펙트는 URLGE_SkillBuff의 GameplayCue.Skill.Buff가 GE 수명에 맞춰 켜고 끔
 UCLASS()
 class ROGUELIKETOPVIEW_API URLGA_Skill_Buff : public URLGameplayAbility_Skill
 {
@@ -58,13 +57,7 @@ protected:
 	virtual void ActivateSkill() override;
 
 private:
-	void EndBuffVFX();
-
 	FActiveGameplayEffectHandle BuffEffectHandle;
-	FTimerHandle BuffVFXTimerHandle;
-
-	UPROPERTY()
-	TObjectPtr<UFXSystemComponent> BuffVFXComp = nullptr;
 };
 
 // 캐스팅 (Cast): 게이지가 다 차면 발동, 도중 피격/회피/이동 시 취소. State.Casting 부여
@@ -91,9 +84,6 @@ protected:
 	bool bInCastPhase = false;
 	bool bHasTriggeredPreCastMotion = false;
 	float CastElapsed = 0.0f;
-
-	UPROPERTY()
-	TObjectPtr<UFXSystemComponent> CastVFXComp = nullptr;
 };
 
 // 장판 (GroundTarget): 조준(데칼) → 좌클릭 확정 → (CastDuration > 0이면 캐스팅) → 지정 위치 폭발/장판 스폰
