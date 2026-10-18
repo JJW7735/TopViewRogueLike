@@ -6,6 +6,7 @@
 #include "RLSkillData.generated.h"
 
 class UFXSystemAsset;
+class URLGameplayAbility_Skill;
 
 UENUM(BlueprintType)
 enum class ESkillSlot : uint8
@@ -54,6 +55,13 @@ public:
 	// ==========================================
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Skill|Mechanic")
 	ESkillCastType CastType = ESkillCastType::Instant;
+
+	// ★ 이 스킬을 실행할 GA 클래스. 비워두면 CastType 기본 GA(URLGA_Skill_*)를 사용합니다.
+	// 특수한 스킬은 URLGameplayAbility_Skill을 상속한 BP/C++ GA를 만들어 여기에 지정하세요.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Skill|Mechanic")
+	TSubclassOf<URLGameplayAbility_Skill> AbilityClassOverride;
+
+	TSubclassOf<URLGameplayAbility_Skill> GetAbilityClass() const;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Skill|Mechanic", meta = (EditCondition = "CastType == ESkillCastType::Instant"))
 	bool bHitOnAnimNotify = false;

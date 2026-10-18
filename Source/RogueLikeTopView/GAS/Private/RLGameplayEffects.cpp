@@ -54,6 +54,29 @@ URLGE_StatBonus_Infinite::URLGE_StatBonus_Infinite()
 	DurationPolicy = EGameplayEffectDurationType::Infinite;
 }
 
+URLGE_StatBonus_Duration::URLGE_StatBonus_Duration()
+{
+	FSetByCallerFloat DurationByCaller;
+	DurationByCaller.DataTag = RLGameplayTags::Data_Duration;
+
+	DurationPolicy = EGameplayEffectDurationType::HasDuration;
+	DurationMagnitude = FGameplayEffectModifierMagnitude(DurationByCaller);
+}
+
+URLGE_SkillBuff::URLGE_SkillBuff()
+{
+	GameplayCues.Add(FGameplayEffectCue(RLGameplayTags::GameplayCue_Skill_Buff, 0.0f, 0.0f));
+}
+
+URLGE_SkillCooldown::URLGE_SkillCooldown()
+{
+	FSetByCallerFloat CooldownByCaller;
+	CooldownByCaller.DataTag = RLGameplayTags::Data_Cooldown;
+
+	DurationPolicy = EGameplayEffectDurationType::HasDuration;
+	DurationMagnitude = FGameplayEffectModifierMagnitude(CooldownByCaller);
+}
+
 URLGE_SoulCrackShield::URLGE_SoulCrackShield()
 {
 	DurationPolicy = EGameplayEffectDurationType::Infinite;
@@ -80,14 +103,21 @@ namespace RLGameplayEffectUtils
 	}
 
 	FActiveGameplayEffectHandle ApplyStatBonusEffect(UAbilitySystemComponent* ASC,
-		TSubclassOf<URLGE_StatBonusBase> EffectClass, const TMap<FGameplayAttribute, float>& Values)
+		TSubclassOf<URLGE_StatBonusBase> EffectClass, const TMap<FGameplayAttribute, float>& Values, float Duration,
+		const UObject* SourceObject)
 	{
 		if (!ASC || !EffectClass || Values.IsEmpty())
 		{
 			return FActiveGameplayEffectHandle();
 		}
 
-		const FGameplayEffectSpecHandle Spec = ASC->MakeOutgoingSpec(EffectClass, 1.0f, ASC->MakeEffectContext());
+		FGameplayEffectContextHandle Context = ASC->MakeEffectContext();
+		if (SourceObject)
+		{
+			Context.AddSourceObject(SourceObject);
+		}
+
+		const FGameplayEffectSpecHandle Spec = ASC->MakeOutgoingSpec(EffectClass, 1.0f, Context);
 		if (!Spec.IsValid())
 		{
 			return FActiveGameplayEffectHandle();
@@ -99,6 +129,7 @@ namespace RLGameplayEffectUtils
 			const float* Value = Values.Find(Channel.Key);
 			Spec.Data->SetSetByCallerMagnitude(Channel.Value, Value ? *Value : 0.0f);
 		}
+		Spec.Data->SetSetByCallerMagnitude(RLGameplayTags::Data_Duration, Duration);
 
 		return ASC->ApplyGameplayEffectSpecToSelf(*Spec.Data.Get());
 	}
