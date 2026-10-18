@@ -64,6 +64,26 @@ public:
 	URLGE_StatBonus_Infinite();
 };
 
+// 시간이 지나면 자동으로 사라지는 보너스 (버프 스킬). 지속 시간은 Data.Duration SetByCaller
+UCLASS()
+class ROGUELIKETOPVIEW_API URLGE_StatBonus_Duration : public URLGE_StatBonusBase
+{
+	GENERATED_BODY()
+
+public:
+	URLGE_StatBonus_Duration();
+};
+
+// 스킬 쿨타임: 수치 변경 없이 Data.Cooldown 초 동안만 살아 있는 GE. 스킬 GA가 핸들로 남은 시간을 조회합니다.
+UCLASS()
+class ROGUELIKETOPVIEW_API URLGE_SkillCooldown : public UGameplayEffect
+{
+	GENERATED_BODY()
+
+public:
+	URLGE_SkillCooldown();
+};
+
 // 보스 영혼 보호막: DamageReduction에 Data.Stat.DamageReduction 만큼 더함 (균열 성공마다 낮은 값으로 다시 걸림)
 UCLASS()
 class ROGUELIKETOPVIEW_API URLGE_SoulCrackShield : public UGameplayEffect
@@ -81,8 +101,9 @@ namespace RLGameplayEffectUtils
 
 	/**
 	 * 스탯 보너스 GE를 Values 수치로 적용합니다. Values에 없는 채널은 0으로 채웁니다.
-	 * @return Infinite GE면 해제용 핸들, Instant GE면 무효 핸들
+	 * @param Duration URLGE_StatBonus_Duration일 때의 지속 시간(초). 다른 종류는 무시됩니다.
+	 * @return Infinite/Duration GE면 해제용 핸들, Instant GE면 무효 핸들
 	 */
 	ROGUELIKETOPVIEW_API FActiveGameplayEffectHandle ApplyStatBonusEffect(UAbilitySystemComponent* ASC,
-		TSubclassOf<URLGE_StatBonusBase> EffectClass, const TMap<FGameplayAttribute, float>& Values);
+		TSubclassOf<URLGE_StatBonusBase> EffectClass, const TMap<FGameplayAttribute, float>& Values, float Duration = 0.0f);
 }

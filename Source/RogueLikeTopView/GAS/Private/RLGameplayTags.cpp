@@ -9,6 +9,10 @@ namespace RLGameplayTags
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(State_Casting, "State.Casting", "시전 중");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(State_IgnoreDefense, "State.IgnoreDefense", "받는 피해에 방어력/피해감소 미적용 (보스 대경직 등)");
 
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(State_Skill_Aiming, "State.Skill.Aiming", "장판 스킬 조준 중");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(State_Skill_Charging, "State.Skill.Charging", "차지 스킬 힘 모으는 중");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(State_Skill_Holding, "State.Skill.Holding", "홀드 스킬 유지 중");
+
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(InputTag_Skill_LMB, "InputTag.Skill.LMB", "기본 공격 입력");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(InputTag_Skill_Q, "InputTag.Skill.Q", "Q 스킬 입력");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(InputTag_Skill_W, "InputTag.Skill.W", "W 스킬 입력");
@@ -19,6 +23,8 @@ namespace RLGameplayTags
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Data_Damage, "Data.Damage", "SetByCaller: 피해량");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Data_Heal, "Data.Heal", "SetByCaller: 회복량");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Data_TrueDamage, "Data.TrueDamage", "SetByCaller: 1이면 방어력/피해감소 무시 (고정 피해)");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Data_Cooldown, "Data.Cooldown", "SetByCaller: 스킬 쿨타임(초)");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Data_Duration, "Data.Duration", "SetByCaller: 지속 시간 GE의 지속 시간(초)");
 
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Data_Stat_MaxHealth, "Data.Stat.MaxHealth", "SetByCaller: 최대 체력 증감량");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Data_Stat_AttackPower, "Data.Stat.AttackPower", "SetByCaller: 공격력 증감량");
