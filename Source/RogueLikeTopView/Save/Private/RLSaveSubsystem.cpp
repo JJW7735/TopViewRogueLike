@@ -1,4 +1,4 @@
-#include "RLSaveSubsystem.h"
+﻿#include "RLSaveSubsystem.h"
 #include "RLCharacter.h"
 #include "RLHealthComponent.h"
 #include "RLStatComponent.h"
@@ -278,7 +278,9 @@ bool URLSaveSubsystem::AutoSaveOnStageTransition(ARLCharacter* PlayerCharacter, 
 	}
 
 	// 스테이지 번호 1 증가
-	const int32 NextStageNumber = CurrentRunData.bIsRunActive ? (CurrentRunData.StageNumber + 1) : 1;
+	// 첫 맵에서는 아직 런 세이브가 없어 bIsRunActive가 false지만, 그 맵이 1스테이지이므로 다음은 2스테이지
+	const int32 CurrentStageNumber = CurrentRunData.bIsRunActive ? CurrentRunData.StageNumber : 1;
+	const int32 NextStageNumber = CurrentStageNumber + 1;
 	FillRunData(PlayerCharacter, NewLevelName, NextStageNumber, PlayerCharacter->GetActorLocation());
 
 	// ★ 새 스테이지로 진입했으므로 아레나 클리어 플래그는 무조건 false로 초기화
