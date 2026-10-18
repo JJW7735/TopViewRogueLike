@@ -113,6 +113,13 @@ void ARLPortal::ActivatePortal(ARLCharacter* PlayerChar)
         return;
     }
 
+    // 상점/일시정지 메뉴 등으로 게임이 멈춰 있는 동안에는 F키가 눌려도 포탈이 작동하지 않도록 방어
+    // (IA_Interact가 Trigger When Paused로 바뀌면서, 메뉴가 열려 있어도 F 입력이 여기까지 도달할 수 있게 됨)
+    if (UGameplayStatics::IsGamePaused(GetWorld()))
+    {
+        return;
+    }
+
     PortalCollision->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 
     if (!TravelMap.IsNull())
