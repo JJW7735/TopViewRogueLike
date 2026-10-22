@@ -615,6 +615,12 @@ void ARLEnemyCharacter::UpdateAxeLeap(float DeltaTime)
 
 	const float Position = AnimInstance->Montage_GetPosition(AxeLeapMontage);
 
+	// 착지(Notify_Hit) IndicatorLeadTime초 전부터 착지 범위 예고 데칼 표시
+	if (AxeLeapStep != EAxeLeapStep::Tracking && AxeLeapPattern.bUseIndicator && Position >= AxeLeapHitTime - AxeLeapPattern.IndicatorLeadTime)
+	{
+		ShowLocationAttackIndicator(AxeLeapTargetGround, AxeLeapPattern.IndicatorDecalSize.Y * AxeLeapPattern.LeapRadiusScale, AxeLeapPattern.IndicatorDecalMaterial);
+	}
+
 	if (AxeLeapStep == EAxeLeapStep::Tracking)
 	{
 		if (Position >= AxeThrowTime)
@@ -694,10 +700,16 @@ void ARLEnemyCharacter::AxeLeapThrow()
 		FActorSpawnParameters Params;
 		Params.Owner = this;
 		Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
-		ThrownAxe = GetWorld()->SpawnActor<ARLThrownAxe>(AxeClass, GetMesh()->GetSocketLocation(BoneName), FRotator::ZeroRotator, Params);
+		const FVector SpawnLocation = GetMesh()->GetSocketLocation(BoneName);
+		ThrownAxe = GetWorld()->SpawnActor<ARLThrownAxe>(AxeClass, SpawnLocation, FRotator::ZeroRotator, Params);
 		if (ThrownAxe && ThrownAxe->InitFromWeapon(GetMesh(), BoneName))
 		{
-			ThrownAxe->Launch(AxeLeapTargetGround, AxeLeapPattern.AxeFlightTime, AxeLeapPattern.AxeArcHeight);
+			// AxeFlightTime = 사거리(AttackRange) 끝까지 날아갈 때의 시간. 가까우면 그만큼 빨리 박힘 (일정한 속도)
+			const float DistanceRatio = FVector::Dist2D(SpawnLocation, AxeLeapTargetGround) / FMath::Max(AxeLeapPattern.AttackRange, 1.0f);
+			const float FlightTime = AxeLeapPattern.AxeFlightTime * FMath::Clamp(DistanceRatio, 0.0f, 1.0f);
+
+			ThrownAxe->OnLanded.AddUObject(this, &ARLEnemyCharacter::HandleThrownAxeLanded);
+			ThrownAxe->Launch(AxeLeapTargetGround, FlightTime, AxeLeapPattern.AxeArcHeight);
 		}
 
 		GetMesh()->HideBoneByName(BoneName, PBO_None);
@@ -745,10 +757,29 @@ void ARLEnemyCharacter::AxeLeapImpact()
 	SetActorLocation(LandLocation, false, nullptr, ETeleportType::TeleportPhysics);
 	bAxeLeapInAir = false;
 
-	CreateLocationHitbox(AxeLeapTargetGround, AxeLeapPattern.IndicatorDecalSize.Y, AxeLeapPattern.DamageData, true);
+	CreateLocationHitbox(AxeLeapTargetGround, AxeLeapPattern.IndicatorDecalSize.Y * AxeLeapPattern.LeapRadiusScale, AxeLeapPattern.DamageData, true);
 	OnAxeLeapLanded(AxeLeapTargetGround);
 
 	EndAxeLeap();
+}
+
+void ARLEnemyCharacter::HandleThrownAxeLanded(ARLThrownAxe* Axe)
+{
+	if (Axe != ThrownAxe || AxeLeapStep == EAxeLeapStep::None)
+	{
+		return;
+	}
+
+	CreateLocationHitbox(AxeLeapTargetGround, AxeLeapPattern.IndicatorDecalSize.Y, AxeLeapPattern.AxeDamageData, true);
+
+	// 도끼 범위 데칼은 여기서 끄고, 착지 범위 데칼은 UpdateAxeLeap이 착지 IndicatorLeadTime초 전에 띄움
+	// (이미 착지 예고 구간에 들어왔으면 끄지 않음)
+	UAnimInstance* AnimInstance = GetMesh() ? GetMesh()->GetAnimInstance() : nullptr;
+	const float Position = AnimInstance ? AnimInstance->Montage_GetPosition(AxeLeapMontage) : 0.0f;
+	if (AxeLeapPattern.bUseIndicator && Position < AxeLeapHitTime - AxeLeapPattern.IndicatorLeadTime)
+	{
+		HideAttackIndicator();
+	}
 }
 
 void ARLEnemyCharacter::EndAxeLeap()

@@ -217,7 +217,17 @@ struct FRLMonsterPatternData
 	// ★ 도끼 투척 → 도약 낙하 (AttackShape == AxeLeap) 설정
 	// ==========================================
 	// 몽타주에 Notify_AxeThrow / Notify_LeapUp / Notify_LeapFall / Notify_Hit 4개가 순서대로 있어야 합니다.
-	// 착지 판정은 DamageData + IndicatorDecalSize.Y(반지름), 예고 데칼은 bUseIndicator + IndicatorDecalMaterial을 씁니다.
+	// 도끼 판정 반지름 = IndicatorDecalSize.Y, 착지 판정 반지름 = 그 × LeapRadiusScale.
+	// 착지 데미지는 DamageData, 도끼 데미지는 AxeDamageData. 예고 데칼은 bUseIndicator + IndicatorDecalMaterial을 쓰고,
+	// 도끼 범위 데칼은 투척 전~도끼가 박힐 때까지, 착지 범위 데칼은 착지 IndicatorLeadTime초 전부터 표시됩니다.
+
+	// 도끼가 땅에 박힐 때 주는 데미지 (반지름 IndicatorDecalSize.Y)
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Pattern|AxeLeap", meta = (EditCondition = "AttackShape == ERLAttackShape::AxeLeap"))
+	FRLDamageData AxeDamageData;
+
+	// 착지 판정 반지름 배율 (도끼 판정 반지름 기준). 도끼가 박히면 예고 데칼도 이 크기로 커집니다
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Pattern|AxeLeap", meta = (EditCondition = "AttackShape == ERLAttackShape::AxeLeap", ClampMin = "0.1"))
+	float LeapRadiusScale = 2.0f;
 
 	// 던질 도끼 액터 클래스 (비우면 ARLThrownAxe 기본 클래스 = 보스 메시에서 도끼 부분만 복사해서 씀)
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Pattern|AxeLeap", meta = (EditCondition = "AttackShape == ERLAttackShape::AxeLeap"))
@@ -227,7 +237,7 @@ struct FRLMonsterPatternData
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Pattern|AxeLeap", meta = (EditCondition = "AttackShape == ERLAttackShape::AxeLeap"))
 	FName AxeWeaponBoneName = FName("weapon_r");
 
-	// 도끼가 날아가는 시간(초)
+	// 사거리(AttackRange) 끝까지 던질 때 도끼가 날아가는 시간(초). 가까울수록 거리에 비례해 짧아짐 (일정한 속도)
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Pattern|AxeLeap", meta = (EditCondition = "AttackShape == ERLAttackShape::AxeLeap", ClampMin = "0.05"))
 	float AxeFlightTime = 0.45f;
 

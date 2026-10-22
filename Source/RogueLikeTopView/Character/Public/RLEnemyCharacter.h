@@ -386,6 +386,7 @@ private:
 	void AxeLeapStartRise();
 	void AxeLeapStartFall();
 	void AxeLeapImpact();
+	void HandleThrownAxeLanded(ARLThrownAxe* Axe);
 	FVector FindGroundPoint(const FVector& Location) const;
 
 	UPROPERTY()
