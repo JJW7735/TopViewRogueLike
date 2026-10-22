@@ -1,4 +1,4 @@
-#include "RLRewardSubsystem.h"
+﻿#include "RLRewardSubsystem.h"
 #include "RLCharacter.h"
 #include "RLStatComponent.h"
 #include "RLHealthComponent.h"
@@ -342,6 +342,17 @@ void URLRewardSubsystem::BuildDefaultRewardPool()
 	}
 	{
 		FRLRewardData R;
+		R.RewardID = FName("SwordmasterSecret");
+		R.RewardName = NSLOCTEXT("RLReward", "SwordmasterSecret", "검성의 비기");
+		R.Description = NSLOCTEXT("RLReward", "SwordmasterSecret_Desc", "공격력 +30, 공격 속도 +15%가 증가합니다.");
+		R.Rarity = ERLRewardRarity::Epic;
+		R.StatBonuses.Add({ ERLTargetStat::AttackPower, 30.0f });
+		R.StatBonuses.Add({ ERLTargetStat::AttackSpeed, 0.15f });
+		R.Icon = TSoftObjectPtr<UTexture2D>(FSoftObjectPath(TEXT("/Game/KiroshoSkIconsPk0/Textures/T_FuryAttack.T_FuryAttack")));
+		RewardPool.Add(R);
+	}
+	{
+		FRLRewardData R;
 		R.RewardID = FName("PinnacleOfSorcery");
 		R.RewardName = NSLOCTEXT("RLReward", "PinnacleOfSorcery", "마도학의 극의");
 		R.Description = NSLOCTEXT("RLReward", "PinnacleOfSorcery_Desc", "주문력 +30, 공격 속도 +15%가 증가합니다.");
@@ -349,6 +360,17 @@ void URLRewardSubsystem::BuildDefaultRewardPool()
 		R.StatBonuses.Add({ ERLTargetStat::AbilityPower, 30.0f });
 		R.StatBonuses.Add({ ERLTargetStat::AttackSpeed, 0.15f });
 		R.Icon = TSoftObjectPtr<UTexture2D>(FSoftObjectPath(TEXT("/Game/KiroshoSkIconsPk0/Textures/T_StormAttack.T_StormAttack")));
+		RewardPool.Add(R);
+	}
+	{
+		FRLRewardData R;
+		R.RewardID = FName("ArcaneGrimoire");
+		R.RewardName = NSLOCTEXT("RLReward", "ArcaneGrimoire", "비전 학자의 비전서");
+		R.Description = NSLOCTEXT("RLReward", "ArcaneGrimoire_Desc", "주문력 +28, 치명타 확률 +10%가 증가합니다.");
+		R.Rarity = ERLRewardRarity::Epic;
+		R.StatBonuses.Add({ ERLTargetStat::AbilityPower, 28.0f });
+		R.StatBonuses.Add({ ERLTargetStat::CritChance, 10.0f });
+		R.Icon = TSoftObjectPtr<UTexture2D>(FSoftObjectPath(TEXT("/Game/KiroshoSkIconsPk0/Textures/T_CursedFury.T_CursedFury")));
 		RewardPool.Add(R);
 	}
 	{
@@ -384,6 +406,18 @@ void URLRewardSubsystem::BuildDefaultRewardPool()
 		R.Description = NSLOCTEXT("RLReward", "GodslayerBlade_Desc", "공격력 +50, 치명타 확률 +15%, 치명타 피해 +50%가 대폭 증가합니다!");
 		R.Rarity = ERLRewardRarity::Legendary;
 		R.StatBonuses.Add({ ERLTargetStat::AttackPower, 50.0f });
+		R.StatBonuses.Add({ ERLTargetStat::CritChance, 15.0f });
+		R.StatBonuses.Add({ ERLTargetStat::CritDamageMultiplier, 0.50f });
+		R.Icon = TSoftObjectPtr<UTexture2D>(FSoftObjectPath(TEXT("/Game/KiroshoSkIconsPk0/Textures/T_UltimatePower.T_UltimatePower")));
+		RewardPool.Add(R);
+	}
+	{
+		FRLRewardData R;
+		R.RewardID = FName("AkashicRecords");
+		R.RewardName = NSLOCTEXT("RLReward", "AkashicRecords", "아카식 레코드");
+		R.Description = NSLOCTEXT("RLReward", "AkashicRecords_Desc", "주문력 +50, 치명타 확률 +15%, 치명타 피해 +50%가 대폭 증가합니다!");
+		R.Rarity = ERLRewardRarity::Legendary;
+		R.StatBonuses.Add({ ERLTargetStat::AbilityPower, 50.0f });
 		R.StatBonuses.Add({ ERLTargetStat::CritChance, 15.0f });
 		R.StatBonuses.Add({ ERLTargetStat::CritDamageMultiplier, 0.50f });
 		R.Icon = TSoftObjectPtr<UTexture2D>(FSoftObjectPath(TEXT("/Game/KiroshoSkIconsPk0/Textures/T_UltimatePower.T_UltimatePower")));

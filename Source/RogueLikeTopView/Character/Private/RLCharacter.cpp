@@ -501,76 +501,51 @@ void ARLCharacter::TestGiveTestItems()
         return;
     }
 
+    URLShopSubsystem* ShopSub = URLShopSubsystem::Get(this);
+
+    // 상점 서브시스템 풀의 에셋을 우선 재사용하여 맵 이동 시 GC로 인한 세이브 유실 방지
     // 1. 체력 회복 물약 (소비 아이템, 5개)
-    URLItemDataAsset* PotionItem = NewObject<URLItemDataAsset>(this, TEXT("Test_HealthPotion"));
-    PotionItem->ItemID = FName("Item_HealthPotion");
-    PotionItem->ItemName = FText::FromString(TEXT("체력 회복 물약"));
-    PotionItem->Description = FText::FromString(TEXT("사용 시 체력을 40 즉시 회복합니다. (최대 10개 중첩)"));
-    PotionItem->ItemType = ERLItemType::Consumable;
-    PotionItem->Rarity = ERLRewardRarity::Common;
-    PotionItem->MaxStackSize = 10;
-    PotionItem->InstantHealAmount = 40.0f;
-    PotionItem->bConsumeOnUse = true;
-    PotionItem->GoldValue = 15;
-    InventoryComp->AddItem(PotionItem, 5);
+    URLItemDataAsset* PotionItem = ShopSub ? ShopSub->FindItemByID(FName("Item_HealthPotion")) : nullptr;
+    if (PotionItem)
+    {
+        InventoryComp->AddItem(PotionItem, 5);
+    }
 
     // 2. 전사의 완력 반지 (패시브 유물, 공격력 +15, 치명타 +10%)
-    URLItemDataAsset* RingItem = NewObject<URLItemDataAsset>(this, TEXT("Test_WarriorRing"));
-    RingItem->ItemID = FName("Item_WarriorRing");
-    RingItem->ItemName = FText::FromString(TEXT("전사의 완력 반지"));
-    RingItem->Description = FText::FromString(TEXT("소지 시 공격력 +15, 치명타 확률 +10%를 부여합니다."));
-    RingItem->ItemType = ERLItemType::Passive;
-    RingItem->Rarity = ERLRewardRarity::Rare;
-    RingItem->MaxStackSize = 1;
-    RingItem->GoldValue = 80;
+    URLItemDataAsset* RingItem = ShopSub ? ShopSub->FindItemByID(FName("Item_WarriorRing")) : nullptr;
+    if (RingItem)
+    {
+        InventoryComp->AddItem(RingItem, 1);
+    }
 
-    FRLStatBonus AtkBonus;
-    AtkBonus.TargetStat = ERLTargetStat::AttackPower;
-    AtkBonus.Value = 15.0f;
-    RingItem->PassiveStatBonuses.Add(AtkBonus);
+    // 3. 비전 마력 반지 (패시브 유물, 주문력 +18, 치명타 +10%)
+    URLItemDataAsset* MageRingItem = ShopSub ? ShopSub->FindItemByID(FName("Item_MageRing")) : nullptr;
+    if (MageRingItem)
+    {
+        InventoryComp->AddItem(MageRingItem, 1);
+    }
 
-    FRLStatBonus CritBonus;
-    CritBonus.TargetStat = ERLTargetStat::CritChance;
-    CritBonus.Value = 10.0f;
-    RingItem->PassiveStatBonuses.Add(CritBonus);
+    // 4. 바람의 신속 장화 (패시브 유물, 이동속도 +100)
+    URLItemDataAsset* BootsItem = ShopSub ? ShopSub->FindItemByID(FName("Item_WindBoots")) : nullptr;
+    if (BootsItem)
+    {
+        InventoryComp->AddItem(BootsItem, 1);
+    }
 
-    InventoryComp->AddItem(RingItem, 1);
+    // 5. 대마법사의 비전 보주 (패시브 유물, 주문력 +30, 치명타 피해 +25%)
+    URLItemDataAsset* ArcaneOrbItem = ShopSub ? ShopSub->FindItemByID(FName("Item_ArcaneOrb")) : nullptr;
+    if (ArcaneOrbItem)
+    {
+        InventoryComp->AddItem(ArcaneOrbItem, 1);
+    }
 
-    // 3. 바람의 신속 장화 (패시브 유물, 이동속도 +120)
-    URLItemDataAsset* BootsItem = NewObject<URLItemDataAsset>(this, TEXT("Test_WindBoots"));
-    BootsItem->ItemID = FName("Item_WindBoots");
-    BootsItem->ItemName = FText::FromString(TEXT("바람의 신속 장화"));
-    BootsItem->Description = FText::FromString(TEXT("소지 시 이동 속도 +120을 부여합니다."));
-    BootsItem->ItemType = ERLItemType::Passive;
-    BootsItem->Rarity = ERLRewardRarity::Epic;
-    BootsItem->MaxStackSize = 1;
-    BootsItem->GoldValue = 120;
-
-    FRLStatBonus SpeedBonus;
-    SpeedBonus.TargetStat = ERLTargetStat::MoveSpeed;
-    SpeedBonus.Value = 120.0f;
-    BootsItem->PassiveStatBonuses.Add(SpeedBonus);
-
-    InventoryComp->AddItem(BootsItem, 1);
-
-    // 4. 빛나는 루비 원석 (재료/가치품, 3개)
-    URLItemDataAsset* RubyItem = NewObject<URLItemDataAsset>(this, TEXT("Test_Ruby"));
-    RubyItem->ItemID = FName("Item_Ruby");
-    RubyItem->ItemName = FText::FromString(TEXT("빛나는 루비 원석"));
-    RubyItem->Description = FText::FromString(TEXT("상점에 비싸게 판매할 수 있는 희귀 보석입니다."));
-    RubyItem->ItemType = ERLItemType::Material;
-    RubyItem->Rarity = ERLRewardRarity::Legendary;
-    RubyItem->MaxStackSize = 99;
-    RubyItem->GoldValue = 200;
-    InventoryComp->AddItem(RubyItem, 3);
-
-    // 5. 골드 지급 (300 Gold)
+    // 6. 골드 지급 (300 Gold)
     InventoryComp->AddGold(300);
 
     if (GEngine)
     {
         GEngine->AddOnScreenDebugMessage(-1, 4.0f, FColor::Green,
-            TEXT("🎁 [치트] 테스트용 아이템 4종(물약 5개, 전사 반지 1개, 신속 장화 1개, 루비 3개)과 300 골드가 인벤토리에 지급되었습니다!"));
+            TEXT("🎁 [치트] 테스트용 아이템 5종(물약 5개, 전사 반지, 비전 마력 반지, 신속 장화, 비전 보주)과 300 골드가 인벤토리에 지급되었습니다!"));
     }
 }
 

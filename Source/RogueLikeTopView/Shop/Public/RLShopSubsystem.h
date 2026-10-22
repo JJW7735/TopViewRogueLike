@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include "CoreMinimal.h"
 #include "Subsystems/GameInstanceSubsystem.h"
@@ -91,6 +91,12 @@ public:
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Shop")
 	void RegisterItemToPool(URLItemDataAsset* ItemAsset);
+
+	/**
+	 * 상점 아이템 풀에서 ItemID가 일치하는 아이템 에셋을 찾아 반환합니다.
+	 */
+	UFUNCTION(BlueprintPure, Category = "Shop")
+	URLItemDataAsset* FindItemByID(FName ItemID) const;
 
 	// ==========================================
 	// 델리게이트 (UI 연동용)

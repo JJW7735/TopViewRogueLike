@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include "CoreMinimal.h"
 #include "GameFramework/SaveGame.h"
@@ -77,6 +77,10 @@ struct FRLInventorySlotSaveData
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Save|Inventory")
 	int32 SlotIndex = 0;
+
+	// 아이템 고유 ID (런타임 생성 아이템의 세션 간 세이브 복원용)
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Save|Inventory")
+	FName ItemID = NAME_None;
 
 	// 아이템 데이터에셋 소프트 경로 (경로 기반 역직렬화로 애셋 유실 방지)
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Save|Inventory")

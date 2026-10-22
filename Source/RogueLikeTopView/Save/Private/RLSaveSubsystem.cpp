@@ -929,6 +929,7 @@ void URLSaveSubsystem::GatherPlayerData(ARLCharacter* PlayerCharacter, FRLRunSav
 				FRLInventorySlotSaveData SlotSave;
 				SlotSave.SlotIndex = i;
 				SlotSave.Quantity = Slots[i].Quantity;
+				SlotSave.ItemID = Slots[i].ItemData->ItemID;
 				SlotSave.ItemAssetPath = FSoftObjectPath(Slots[i].ItemData);
 				OutData.Inventory.Slots.Add(SlotSave);
 			}
@@ -1005,16 +1006,31 @@ void URLSaveSubsystem::ApplyPlayerData(ARLCharacter* PlayerCharacter, const FRLR
 		TArray<FRLInventorySlot> RestoredSlots;
 		RestoredSlots.SetNum(FMath::Max(1, InvComp->GetMaxSlots()));
 
+		URLShopSubsystem* ShopSub = URLShopSubsystem::Get(PlayerCharacter);
+
 		for (const FRLInventorySlotSaveData& SlotSave : InData.Inventory.Slots)
 		{
-			if (RestoredSlots.IsValidIndex(SlotSave.SlotIndex) && SlotSave.ItemAssetPath.IsValid())
+			if (!RestoredSlots.IsValidIndex(SlotSave.SlotIndex))
 			{
-				URLItemDataAsset* LoadedItem = Cast<URLItemDataAsset>(SlotSave.ItemAssetPath.TryLoad());
-				if (LoadedItem)
-				{
-					RestoredSlots[SlotSave.SlotIndex].ItemData = LoadedItem;
-					RestoredSlots[SlotSave.SlotIndex].Quantity = SlotSave.Quantity;
-				}
+				continue;
+			}
+
+			URLItemDataAsset* LoadedItem = nullptr;
+			if (SlotSave.ItemAssetPath.IsValid())
+			{
+				LoadedItem = Cast<URLItemDataAsset>(SlotSave.ItemAssetPath.TryLoad());
+			}
+
+			// 런타임 생성 상점 아이템 등 세션 재시작 시 경로 역직렬화가 실패한 경우 ItemID로 풀에서 복원
+			if (!LoadedItem && ShopSub && !SlotSave.ItemID.IsNone())
+			{
+				LoadedItem = ShopSub->FindItemByID(SlotSave.ItemID);
+			}
+
+			if (LoadedItem)
+			{
+				RestoredSlots[SlotSave.SlotIndex].ItemData = LoadedItem;
+				RestoredSlots[SlotSave.SlotIndex].Quantity = SlotSave.Quantity;
 			}
 		}
 

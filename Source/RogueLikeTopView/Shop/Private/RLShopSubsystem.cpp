@@ -1,4 +1,4 @@
-#include "RLShopSubsystem.h"
+﻿#include "RLShopSubsystem.h"
 #include "RLCharacter.h"
 #include "RLInventoryComponent.h"
 #include "RLStatComponent.h"
@@ -448,6 +448,23 @@ void URLShopSubsystem::RegisterItemToPool(URLItemDataAsset* ItemAsset)
 	}
 }
 
+URLItemDataAsset* URLShopSubsystem::FindItemByID(FName ItemID) const
+{
+	if (ItemID.IsNone())
+	{
+		return nullptr;
+	}
+
+	for (URLItemDataAsset* ItemAsset : ItemPool)
+	{
+		if (ItemAsset && ItemAsset->ItemID == ItemID)
+		{
+			return ItemAsset;
+		}
+	}
+	return nullptr;
+}
+
 void URLShopSubsystem::BuildDefaultPools()
 {
 	ItemPool.Reset();
@@ -559,6 +576,132 @@ void URLShopSubsystem::BuildDefaultPools()
 		Ruby->Icon = TSoftObjectPtr<UTexture2D>(FSoftObjectPath(TEXT("/Game/KiroshoSkIconsPk0/Textures/T_UltimatePower.T_UltimatePower")));
 		ItemPool.Add(Ruby);
 	}
+	// ------------------------------------------
+	// [물리(AD) 빌드 패시브 유물 추가 라인업 (AP와 5:5 대칭)]
+	// ------------------------------------------
+	{
+		// 용병의 전투 단검 (일반)
+		URLItemDataAsset* MercenaryDagger = NewObject<URLItemDataAsset>(this, TEXT("Shop_MercenaryDagger"));
+		MercenaryDagger->ItemID = FName("Item_MercenaryDagger");
+		MercenaryDagger->ItemName = NSLOCTEXT("RLShop", "Item_MercenaryDagger", "용병의 전투 단검");
+		MercenaryDagger->Description = NSLOCTEXT("RLShop", "Item_MercenaryDagger_Desc", "소지 시 공격력 +12를 부여합니다.");
+		MercenaryDagger->ItemType = ERLItemType::Passive;
+		MercenaryDagger->Rarity = ERLRewardRarity::Common;
+		MercenaryDagger->MaxStackSize = 1;
+		MercenaryDagger->GoldValue = 50;
+		MercenaryDagger->PassiveStatBonuses.Add({ ERLTargetStat::AttackPower, 12.0f });
+		MercenaryDagger->Icon = TSoftObjectPtr<UTexture2D>(FSoftObjectPath(TEXT("/Game/KiroshoSkIconsPk0/Textures/T_DeepCut.T_DeepCut")));
+		ItemPool.Add(MercenaryDagger);
+	}
+	{
+		// 추격자의 사냥 각반 (희귀)
+		URLItemDataAsset* HunterGreaves = NewObject<URLItemDataAsset>(this, TEXT("Shop_HunterGreaves"));
+		HunterGreaves->ItemID = FName("Item_HunterGreaves");
+		HunterGreaves->ItemName = NSLOCTEXT("RLShop", "Item_HunterGreaves", "추격자의 사냥 각반");
+		HunterGreaves->Description = NSLOCTEXT("RLShop", "Item_HunterGreaves_Desc", "소지 시 공격력 +15, 이동 속도 +40을 부여합니다.");
+		HunterGreaves->ItemType = ERLItemType::Passive;
+		HunterGreaves->Rarity = ERLRewardRarity::Rare;
+		HunterGreaves->MaxStackSize = 1;
+		HunterGreaves->GoldValue = 90;
+		HunterGreaves->PassiveStatBonuses.Add({ ERLTargetStat::AttackPower, 15.0f });
+		HunterGreaves->PassiveStatBonuses.Add({ ERLTargetStat::MoveSpeed, 40.0f });
+		HunterGreaves->Icon = TSoftObjectPtr<UTexture2D>(FSoftObjectPath(TEXT("/Game/KiroshoSkIconsPk0/Textures/T_RapidSpear_Attack.T_RapidSpear_Attack")));
+		ItemPool.Add(HunterGreaves);
+	}
+	{
+		// 파멸의 군주 대검 (전설)
+		URLItemDataAsset* DoombringerBlade = NewObject<URLItemDataAsset>(this, TEXT("Shop_DoombringerBlade"));
+		DoombringerBlade->ItemID = FName("Item_DoombringerBlade");
+		DoombringerBlade->ItemName = NSLOCTEXT("RLShop", "Item_DoombringerBlade", "파멸의 군주 대검");
+		DoombringerBlade->Description = NSLOCTEXT("RLShop", "Item_DoombringerBlade_Desc", "소지 시 공격력 +55, 치명타 확률 +12%, 치명타 피해 +30%를 부여합니다!");
+		DoombringerBlade->ItemType = ERLItemType::Passive;
+		DoombringerBlade->Rarity = ERLRewardRarity::Legendary;
+		DoombringerBlade->MaxStackSize = 1;
+		DoombringerBlade->GoldValue = 280;
+		DoombringerBlade->PassiveStatBonuses.Add({ ERLTargetStat::AttackPower, 55.0f });
+		DoombringerBlade->PassiveStatBonuses.Add({ ERLTargetStat::CritChance, 12.0f });
+		DoombringerBlade->PassiveStatBonuses.Add({ ERLTargetStat::CritDamageMultiplier, 0.30f });
+		DoombringerBlade->Icon = TSoftObjectPtr<UTexture2D>(FSoftObjectPath(TEXT("/Game/KiroshoSkIconsPk0/Textures/T_FuryAttack.T_FuryAttack")));
+		ItemPool.Add(DoombringerBlade);
+	}
+	// ------------------------------------------
+	// [주문력(AP) 빌드 패시브 유물 라인업]
+	// ------------------------------------------
+	{
+		// 견습 마도사의 고서 (일반)
+		URLItemDataAsset* ApprenticeTome = NewObject<URLItemDataAsset>(this, TEXT("Shop_ApprenticeTome"));
+		ApprenticeTome->ItemID = FName("Item_ApprenticeTome");
+		ApprenticeTome->ItemName = NSLOCTEXT("RLShop", "Item_ApprenticeTome", "견습 마도사의 고서");
+		ApprenticeTome->Description = NSLOCTEXT("RLShop", "Item_ApprenticeTome_Desc", "소지 시 주문력 +12를 부여합니다.");
+		ApprenticeTome->ItemType = ERLItemType::Passive;
+		ApprenticeTome->Rarity = ERLRewardRarity::Common;
+		ApprenticeTome->MaxStackSize = 1;
+		ApprenticeTome->GoldValue = 50;
+		ApprenticeTome->PassiveStatBonuses.Add({ ERLTargetStat::AbilityPower, 12.0f });
+		ApprenticeTome->Icon = TSoftObjectPtr<UTexture2D>(FSoftObjectPath(TEXT("/Game/KiroshoSkIconsPk0/Textures/T_StormAttack.T_StormAttack")));
+		ItemPool.Add(ApprenticeTome);
+	}
+	{
+		// 비전 마력 반지 (희귀)
+		URLItemDataAsset* MageRing = NewObject<URLItemDataAsset>(this, TEXT("Shop_MageRing"));
+		MageRing->ItemID = FName("Item_MageRing");
+		MageRing->ItemName = NSLOCTEXT("RLShop", "Item_MageRing", "비전 마력 반지");
+		MageRing->Description = NSLOCTEXT("RLShop", "Item_MageRing_Desc", "소지 시 주문력 +18, 치명타 확률 +10%를 부여합니다.");
+		MageRing->ItemType = ERLItemType::Passive;
+		MageRing->Rarity = ERLRewardRarity::Rare;
+		MageRing->MaxStackSize = 1;
+		MageRing->GoldValue = 95;
+		MageRing->PassiveStatBonuses.Add({ ERLTargetStat::AbilityPower, 18.0f });
+		MageRing->PassiveStatBonuses.Add({ ERLTargetStat::CritChance, 10.0f });
+		MageRing->Icon = TSoftObjectPtr<UTexture2D>(FSoftObjectPath(TEXT("/Game/KiroshoSkIconsPk0/Textures/T_StormAttack.T_StormAttack")));
+		ItemPool.Add(MageRing);
+	}
+	{
+		// 마력 증폭 수정구 (희귀)
+		URLItemDataAsset* ManaCrystal = NewObject<URLItemDataAsset>(this, TEXT("Shop_ManaCrystal"));
+		ManaCrystal->ItemID = FName("Item_ManaCrystal");
+		ManaCrystal->ItemName = NSLOCTEXT("RLShop", "Item_ManaCrystal", "마력 증폭 수정구");
+		ManaCrystal->Description = NSLOCTEXT("RLShop", "Item_ManaCrystal_Desc", "소지 시 주문력 +15, 이동 속도 +40을 부여합니다.");
+		ManaCrystal->ItemType = ERLItemType::Passive;
+		ManaCrystal->Rarity = ERLRewardRarity::Rare;
+		ManaCrystal->MaxStackSize = 1;
+		ManaCrystal->GoldValue = 90;
+		ManaCrystal->PassiveStatBonuses.Add({ ERLTargetStat::AbilityPower, 15.0f });
+		ManaCrystal->PassiveStatBonuses.Add({ ERLTargetStat::MoveSpeed, 40.0f });
+		ManaCrystal->Icon = TSoftObjectPtr<UTexture2D>(FSoftObjectPath(TEXT("/Game/KiroshoSkIconsPk0/Textures/T_EnergyRecharge.T_EnergyRecharge")));
+		ItemPool.Add(ManaCrystal);
+	}
+	{
+		// 대마법사의 비전 보주 (영웅)
+		URLItemDataAsset* ArcaneOrb = NewObject<URLItemDataAsset>(this, TEXT("Shop_ArcaneOrb"));
+		ArcaneOrb->ItemID = FName("Item_ArcaneOrb");
+		ArcaneOrb->ItemName = NSLOCTEXT("RLShop", "Item_ArcaneOrb", "대마법사의 비전 보주");
+		ArcaneOrb->Description = NSLOCTEXT("RLShop", "Item_ArcaneOrb_Desc", "소지 시 주문력 +30, 치명타 피해 +25%를 부여합니다.");
+		ArcaneOrb->ItemType = ERLItemType::Passive;
+		ArcaneOrb->Rarity = ERLRewardRarity::Epic;
+		ArcaneOrb->MaxStackSize = 1;
+		ArcaneOrb->GoldValue = 175;
+		ArcaneOrb->PassiveStatBonuses.Add({ ERLTargetStat::AbilityPower, 30.0f });
+		ArcaneOrb->PassiveStatBonuses.Add({ ERLTargetStat::CritDamageMultiplier, 0.25f });
+		ArcaneOrb->Icon = TSoftObjectPtr<UTexture2D>(FSoftObjectPath(TEXT("/Game/KiroshoSkIconsPk0/Textures/T_CursedFury.T_CursedFury")));
+		ItemPool.Add(ArcaneOrb);
+	}
+	{
+		// 공허의 마력 왕관 (전설)
+		URLItemDataAsset* ArchmageCrown = NewObject<URLItemDataAsset>(this, TEXT("Shop_ArchmageCrown"));
+		ArchmageCrown->ItemID = FName("Item_ArchmageCrown");
+		ArchmageCrown->ItemName = NSLOCTEXT("RLShop", "Item_ArchmageCrown", "공허의 마력 왕관");
+		ArchmageCrown->Description = NSLOCTEXT("RLShop", "Item_ArchmageCrown_Desc", "소지 시 주문력 +55, 치명타 확률 +12%, 치명타 피해 +30%를 부여합니다!");
+		ArchmageCrown->ItemType = ERLItemType::Passive;
+		ArchmageCrown->Rarity = ERLRewardRarity::Legendary;
+		ArchmageCrown->MaxStackSize = 1;
+		ArchmageCrown->GoldValue = 280;
+		ArchmageCrown->PassiveStatBonuses.Add({ ERLTargetStat::AbilityPower, 55.0f });
+		ArchmageCrown->PassiveStatBonuses.Add({ ERLTargetStat::CritChance, 12.0f });
+		ArchmageCrown->PassiveStatBonuses.Add({ ERLTargetStat::CritDamageMultiplier, 0.30f });
+		ArchmageCrown->Icon = TSoftObjectPtr<UTexture2D>(FSoftObjectPath(TEXT("/Game/KiroshoSkIconsPk0/Textures/T_UltimatePower.T_UltimatePower")));
+		ItemPool.Add(ArchmageCrown);
+	}
 
 	// ==========================================
 	// 2. 기본 스탯/축복 상품 풀 구축
@@ -623,6 +766,68 @@ void URLShopSubsystem::BuildDefaultPools()
 		S.Rarity = ERLRewardRarity::Legendary;
 		S.StatBonuses.Add({ ERLTargetStat::AttackPower, 40.0f });
 		S.StatBonuses.Add({ ERLTargetStat::AttackSpeed, 0.20f });
+		S.StatBonuses.Add({ ERLTargetStat::MoveSpeed, 50.0f });
+		S.Icon = TSoftObjectPtr<UTexture2D>(FSoftObjectPath(TEXT("/Game/KiroshoSkIconsPk0/Textures/T_UltimatePower.T_UltimatePower")));
+		StatPool.Add(S);
+	}
+	// ------------------------------------------
+	// [물리(AD) 빌드 상점 축복 추가 라인업 (AP와 4:4 대칭)]
+	// ------------------------------------------
+	{
+		FRLRewardData S;
+		S.RewardID = FName("Shop_Blessing_FighterSpirit");
+		S.RewardName = NSLOCTEXT("RLShop", "Blessing_FighterSpirit", "투사의 투지");
+		S.Description = NSLOCTEXT("RLShop", "Blessing_FighterSpirit_Desc", "공격력 +18, 최대 체력 +30이 증가합니다.");
+		S.Rarity = ERLRewardRarity::Rare;
+		S.StatBonuses.Add({ ERLTargetStat::AttackPower, 18.0f });
+		S.StatBonuses.Add({ ERLTargetStat::MaxHealth, 30.0f });
+		S.Icon = TSoftObjectPtr<UTexture2D>(FSoftObjectPath(TEXT("/Game/KiroshoSkIconsPk0/Textures/T_FuryAttack.T_FuryAttack")));
+		StatPool.Add(S);
+	}
+	{
+		FRLRewardData S;
+		S.RewardID = FName("Shop_Blessing_WarlordMight");
+		S.RewardName = NSLOCTEXT("RLShop", "Blessing_WarlordMight", "전장의 지배자");
+		S.Description = NSLOCTEXT("RLShop", "Blessing_WarlordMight_Desc", "공격력 +30, 치명타 확률 +10%가 증가합니다.");
+		S.Rarity = ERLRewardRarity::Epic;
+		S.StatBonuses.Add({ ERLTargetStat::AttackPower, 30.0f });
+		S.StatBonuses.Add({ ERLTargetStat::CritChance, 10.0f });
+		S.Icon = TSoftObjectPtr<UTexture2D>(FSoftObjectPath(TEXT("/Game/KiroshoSkIconsPk0/Textures/T_BloodyGrip.T_BloodyGrip")));
+		StatPool.Add(S);
+	}
+	// ------------------------------------------
+	// [주문력(AP) 빌드 상점 축복 라인업]
+	// ------------------------------------------
+	{
+		FRLRewardData S;
+		S.RewardID = FName("Shop_Blessing_SageWisdom");
+		S.RewardName = NSLOCTEXT("RLShop", "Blessing_SageWisdom", "현자의 깨달음");
+		S.Description = NSLOCTEXT("RLShop", "Blessing_SageWisdom_Desc", "주문력 +18, 최대 체력 +30이 증가합니다.");
+		S.Rarity = ERLRewardRarity::Rare;
+		S.StatBonuses.Add({ ERLTargetStat::AbilityPower, 18.0f });
+		S.StatBonuses.Add({ ERLTargetStat::MaxHealth, 30.0f });
+		S.Icon = TSoftObjectPtr<UTexture2D>(FSoftObjectPath(TEXT("/Game/KiroshoSkIconsPk0/Textures/T_StormAttack.T_StormAttack")));
+		StatPool.Add(S);
+	}
+	{
+		FRLRewardData S;
+		S.RewardID = FName("Shop_Blessing_ArcaneSurge");
+		S.RewardName = NSLOCTEXT("RLShop", "Blessing_ArcaneSurge", "비전 폭주");
+		S.Description = NSLOCTEXT("RLShop", "Blessing_ArcaneSurge_Desc", "주문력 +30, 치명타 확률 +10%가 증가합니다.");
+		S.Rarity = ERLRewardRarity::Epic;
+		S.StatBonuses.Add({ ERLTargetStat::AbilityPower, 30.0f });
+		S.StatBonuses.Add({ ERLTargetStat::CritChance, 10.0f });
+		S.Icon = TSoftObjectPtr<UTexture2D>(FSoftObjectPath(TEXT("/Game/KiroshoSkIconsPk0/Textures/T_CursedFury.T_CursedFury")));
+		StatPool.Add(S);
+	}
+	{
+		FRLRewardData S;
+		S.RewardID = FName("Shop_Blessing_ArchmageGrace");
+		S.RewardName = NSLOCTEXT("RLShop", "Blessing_ArchmageGrace", "마법신의 가호");
+		S.Description = NSLOCTEXT("RLShop", "Blessing_ArchmageGrace_Desc", "주문력 +45, 치명타 피해 +35%, 이동 속도 +50이 대폭 증가합니다!");
+		S.Rarity = ERLRewardRarity::Legendary;
+		S.StatBonuses.Add({ ERLTargetStat::AbilityPower, 45.0f });
+		S.StatBonuses.Add({ ERLTargetStat::CritDamageMultiplier, 0.35f });
 		S.StatBonuses.Add({ ERLTargetStat::MoveSpeed, 50.0f });
 		S.Icon = TSoftObjectPtr<UTexture2D>(FSoftObjectPath(TEXT("/Game/KiroshoSkIconsPk0/Textures/T_UltimatePower.T_UltimatePower")));
 		StatPool.Add(S);

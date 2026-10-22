@@ -1,7 +1,25 @@
-# HSJ
-> 최종 갱신: 2026-10-15
+﻿# HSJ
+> 최종 갱신: 2026-10-22
 
 ## 완료
+- **주문력(AP) & 물리(AD) 빌드 아이템/축복/보상 카드 1:1 대칭 확장 및 세이브 복원 안전화** (`Source/RogueLikeTopView/Shop/`, `Reward/`, `Save/`, `Character/`):
+  - **상점 패시브 유물 풀(`URLShopSubsystem::BuildDefaultPools`) — AD 3종 + AP 5종 추가 (총 AD 5 : AP 5 균형 완성)**:
+    - **[일반]** `용병의 전투 단검` (`Item_MercenaryDagger`, 공격력 +12) / `견습 마도사의 고서` (`Item_ApprenticeTome`, 주문력 +12)
+    - **[희귀]** `전사의 완력 반지` (공격력 +15, 치명타 +10%) / `비전 마력 반지` (`Item_MageRing`, 주문력 +18, 치명타 +10%)
+    - **[희귀]** `추격자의 사냥 각반` (`Item_HunterGreaves`, 공격력 +15, 이속 +40) / `마력 증폭 수정구` (`Item_ManaCrystal`, 주문력 +15, 이속 +40)
+    - **[영웅]** `광전사의 투혼 인장` (공격력 +20, 공속 +25%) / `대마법사의 비전 보주` (`Item_ArcaneOrb`, 주문력 +30, 치명타 피해 +25%)
+    - **[전설]** `파멸의 군주 대검` (`Item_DoombringerBlade`, 공격력 +55, 치명타 +12%, 치명피해 +30%) / `공허의 마력 왕관` (`Item_ArchmageCrown`, 주문력 +55, 치명타 +12%, 치명피해 +30%)
+  - **상점 스탯 축복 풀(`StatPool`) — AD 2종 + AP 3종 추가 (총 AD 4 : AP 4 균형 완성)**:
+    - **[희귀]** `투사의 투지` (`Shop_Blessing_FighterSpirit`, 공격력 +18, 최대 체력 +30) / `현자의 깨달음` (`Shop_Blessing_SageWisdom`, 주문력 +18, 최대 체력 +30)
+    - **[영웅]** `전장의 지배자` (`Shop_Blessing_WarlordMight`, 공격력 +30, 치명타 +10%) / `비전 폭주` (`Shop_Blessing_ArcaneSurge`, 주문력 +30, 치명타 +10%)
+    - **[전설]** `전신의 가호` (기존) / `마법신의 가호` (`Shop_Blessing_ArchmageGrace`, 주문력 +45, 치명타 피해 +35%, 이동 속도 +50)
+  - **3지선다 보상 카드 풀(`URLRewardSubsystem::BuildDefaultRewardPool`) — 고등급 AD 1종 + AP 2종 추가 (전 등급 AD:AP 1:1 균형 완성)**:
+    - **[영웅]** `검성의 비기` (`SwordmasterSecret`, 공격력 +30, 공격 속도 +15%) / `비전 학자의 비전서` (`ArcaneGrimoire`, 주문력 +28, 치명타 확률 +10%)
+    - **[전설]** `아카식 레코드` (`AkashicRecords`, 주문력 +50, 치명타 확률 +15%, 치명타 피해 +50%)
+  - **아이템 세이브 복원 및 치트 아이템 GC 안전화 (`RLShopSubsystem`, `RLSaveGame`, `RLSaveSubsystem`, `RLCharacter`)**:
+    - `URLShopSubsystem::FindItemByID(ItemID)` 조회 헬퍼 추가
+    - `FRLInventorySlotSaveData`에 `ItemID` 필드 추가 및 세션 재시작/맵 이동 시 `TryLoad()` 실패 시에도 `FindItemByID`로 상점 풀에서 안전 복원
+    - `ARLCharacter::TestGiveTestItems`가 `ShopSubsystem` 풀의 아이템을 사용하도록 개선하여 맵 이동 시 GC 증발 버그 해결 및 `비전 마력 반지`/`대마법사의 비전 보주` 지급 포함
 - **영구 메타 강화(Permanent Upgrades) 백엔드 및 실시간 캐릭터 주입 완성** (`Source/RogueLikeTopView/Save/`, `Character/`):
   - **영구 메타 특성 구조체 (`RLSaveGame.h`)**:
     - `FRLMetaUpgradeInfo`: 특성 키, 이름, 설명, 현재 레벨(0~5), 최대 레벨, 다음 레벨 필요 소울 비용, 현재/다음 보너스 수치, 구매 가능 여부
