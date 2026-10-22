@@ -5,6 +5,7 @@
 
 class UAnimMontage;
 class UMaterialInterface;
+class ARLThrownAxe;
 
 // ★ 마우스 커서 → 바닥 지점 판정 전용 트레이스 채널 (DefaultEngine.ini의 Name="Ground", GameTraceChannel3).
 // 기본 반응 Block(기존 Visibility처럼 모든 메시가 막음), Pawn/CharacterMesh 프로필은 Ignore.
@@ -34,9 +35,13 @@ enum class ERLAttackShape : uint8
 	            // "정면 기준 뒤쪽 안전지대 폭(도)"으로 써서 그 쐐기 밖 전체를 한 번에 타격합니다 (예: BigSwing).
 	            // SectorSafeZoneAngle을 0으로 두면 안전지대가 사실상 없어져서 보스 주변 360도 전체 원형 판정으로도
 	            // 그대로 재사용할 수 있습니다 (예: SoulDrain — 사방의 영혼을 빨아들이는 연출)
-	Dash        // ★ 돌진. Notify_Hit 대신 Notify_DashStart에서 ARLCharacter::StartDashAttack으로 정면 방향 돌진,
+	Dash,       // ★ 돌진. Notify_Hit 대신 Notify_DashStart에서 ARLCharacter::StartDashAttack으로 정면 방향 돌진,
 	            // 이동 중 몸통 충돌로 판정합니다. 예고 데칼은 Box와 같은 직사각형 레인(IndicatorDecalSize 재사용,
 	            // 돌진 거리 = IndicatorDecalSize.X * 2 = 레인 끝)을 Notify_DashStart 기준으로 띄웁니다 (예: DashAttack)
+	AxeLeap     // ★ 도끼 투척 → 도약 낙하. BTT_Attack은 몽타주만 재생하고 나머지는 전부 ARLEnemyCharacter::BeginAxeLeap이
+	            // 몽타주 재생 위치를 보고 처리합니다: 플레이어 추적 원형 데칼(IndicatorDecalSize.Y = 반지름) →
+	            // Notify_AxeThrow에서 데칼 고정 + 도끼 투척 → Notify_LeapUp에서 상승 후 사라짐 → Notify_LeapFall에서
+	            // 데칼 위로 순간이동 후 낙하 → Notify_Hit에서 착지 판정 + 도끼 회수 (예: 보스2 AxeLeap)
 };
 
 // 공격 판정 및 데미지 정보를 담는 공용 구조체
@@ -207,6 +212,40 @@ struct FRLMonsterPatternData
 	// 보스 중심 소환 반경 (이 범위 안의 무작위 지점에 흩뿌려 소환)
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Pattern|Summon", meta = (EditCondition = "bSummonsMinions", ClampMin = "0.0"))
 	float SummonRadius = 300.0f;
+
+	// ==========================================
+	// ★ 도끼 투척 → 도약 낙하 (AttackShape == AxeLeap) 설정
+	// ==========================================
+	// 몽타주에 Notify_AxeThrow / Notify_LeapUp / Notify_LeapFall / Notify_Hit 4개가 순서대로 있어야 합니다.
+	// 착지 판정은 DamageData + IndicatorDecalSize.Y(반지름), 예고 데칼은 bUseIndicator + IndicatorDecalMaterial을 씁니다.
+
+	// 던질 도끼 액터 클래스 (비우면 ARLThrownAxe 기본 클래스 = 보스 메시에서 도끼 부분만 복사해서 씀)
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Pattern|AxeLeap", meta = (EditCondition = "AttackShape == ERLAttackShape::AxeLeap"))
+	TSubclassOf<ARLThrownAxe> ThrownAxeClass;
+
+	// 던지는 손 도끼의 본 이름. 투척 순간 이 본을 숨기고, 착지하면 다시 보이게 합니다
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Pattern|AxeLeap", meta = (EditCondition = "AttackShape == ERLAttackShape::AxeLeap"))
+	FName AxeWeaponBoneName = FName("weapon_r");
+
+	// 도끼가 날아가는 시간(초)
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Pattern|AxeLeap", meta = (EditCondition = "AttackShape == ERLAttackShape::AxeLeap", ClampMin = "0.05"))
+	float AxeFlightTime = 0.45f;
+
+	// 도끼 포물선 최고 높이(cm)
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Pattern|AxeLeap", meta = (EditCondition = "AttackShape == ERLAttackShape::AxeLeap", ClampMin = "0.0"))
+	float AxeArcHeight = 250.0f;
+
+	// 도약 높이(cm). 이 높이까지 올라갔다가 사라지고, 같은 높이에서 데칼 위로 떨어집니다
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Pattern|AxeLeap", meta = (EditCondition = "AttackShape == ERLAttackShape::AxeLeap", ClampMin = "0.0"))
+	float LeapHeight = 1500.0f;
+
+	// Notify_LeapUp ~ Notify_LeapFall 구간 중 상승에 쓰는 비율. 나머지 구간은 사라진 채로 체공합니다
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Pattern|AxeLeap", meta = (EditCondition = "AttackShape == ERLAttackShape::AxeLeap", ClampMin = "0.1", ClampMax = "1.0"))
+	float LeapRiseRatio = 0.7f;
+
+	// 투척 전 데칼이 플레이어를 따라다니는 동안 보스가 플레이어 쪽으로 도는 속도(도/초)
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Pattern|AxeLeap", meta = (EditCondition = "AttackShape == ERLAttackShape::AxeLeap", ClampMin = "0.0"))
+	float AxeLeapTurnSpeed = 540.0f;
 
 	// ==========================================
 	// ★ 영혼의 균열(Soul Crack) 강화판 설정

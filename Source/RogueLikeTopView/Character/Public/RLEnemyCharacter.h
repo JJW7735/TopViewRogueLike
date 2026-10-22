@@ -22,6 +22,7 @@
 class ARLRewardChest;
 class ARLItemDrop;
 class ARLDecalIndicator;
+class ARLThrownAxe;
 class UMaterialInterface;
 class URLItemDataAsset;
 
@@ -276,6 +277,17 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Enemy|Combat")
 	void StopAttackChase();
 
+	// ★ 도끼 투척 → 도약 낙하 패턴 시작. BeginAttackPattern이 AttackShape == AxeLeap일 때 자동으로 호출합니다.
+	// 몽타주의 Notify_AxeThrow / Notify_LeapUp / Notify_LeapFall / Notify_Hit 시각을 미리 읽어두고, Tick에서
+	// 몽타주 재생 위치에 맞춰 단계를 진행합니다(재생 속도/히트스톱과 어긋나지 않음). 노티파이 종류(Montage/스켈레톤)는 상관없습니다.
+	UFUNCTION(BlueprintCallable, Category = "Enemy|Combat")
+	bool BeginAxeLeap(const FRLMonsterPatternData& Pattern);
+
+	// AxeLeap 정리 (착지 시 자동 호출, 몽타주가 끊기거나 사망하면 Tick/HandleDeath에서 자동 호출).
+	// 공중에서 끊기면 땅으로 되돌리고, 숨긴 도끼 본/메시/콜리전/이동 모드를 전부 원래대로 복구합니다.
+	UFUNCTION(BlueprintCallable, Category = "Enemy|Combat")
+	void EndAxeLeap();
+
 	virtual void ReceiveCustomDamage(const FRLDamageData& DamageData, const FHitResult& HitInfo) override;
 	virtual void Tick(float DeltaTime) override;
 
@@ -326,6 +338,18 @@ protected:
 	UFUNCTION(BlueprintImplementableEvent, Category = "Enemy|SoulCrack")
 	void OnSoulCrackWindowChanged(bool bOpen);
 
+	// ★ AxeLeap: 도끼를 던진 순간 (TargetLocation = 도끼가 박힐 바닥 지점). 투척 사운드 등
+	UFUNCTION(BlueprintImplementableEvent, Category = "Enemy|AxeLeap")
+	void OnAxeLeapThrown(FVector TargetLocation);
+
+	// ★ AxeLeap: 상승을 마치고 사라지는 순간. 하늘로 사라지는 VFX 등
+	UFUNCTION(BlueprintImplementableEvent, Category = "Enemy|AxeLeap")
+	void OnAxeLeapVanished();
+
+	// ★ AxeLeap: 착지 판정 순간. 착지 충격파 VFX/카메라 셰이크 등
+	UFUNCTION(BlueprintImplementableEvent, Category = "Enemy|AxeLeap")
+	void OnAxeLeapLanded(FVector LandLocation);
+
 private:
 	// 경직 동안 BT를 멈췄다가 Duration 뒤 재시작
 	void PauseAIForSoulCrack(float Duration);
@@ -346,6 +370,43 @@ private:
 	TObjectPtr<UAnimMontage> ChaseMontage = nullptr;
 	float ChaseSpeed = 0.0f;
 	float ChaseStopDistance = 0.0f;
+
+	// ★ AxeLeap 상태
+	enum class EAxeLeapStep : uint8
+	{
+		None,
+		Tracking, // 데칼이 플레이어를 따라다님
+		Thrown,   // 도끼 투척 후 도약 대기 (데칼 고정)
+		Rising,   // 상승 → 사라짐
+		Falling   // 데칼 위에서 낙하
+	};
+
+	void UpdateAxeLeap(float DeltaTime);
+	void AxeLeapThrow();
+	void AxeLeapStartRise();
+	void AxeLeapStartFall();
+	void AxeLeapImpact();
+	FVector FindGroundPoint(const FVector& Location) const;
+
+	UPROPERTY()
+	TObjectPtr<UAnimMontage> AxeLeapMontage = nullptr;
+
+	UPROPERTY()
+	FRLMonsterPatternData AxeLeapPattern;
+
+	UPROPERTY()
+	TObjectPtr<ARLThrownAxe> ThrownAxe = nullptr;
+
+	EAxeLeapStep AxeLeapStep = EAxeLeapStep::None;
+	float AxeThrowTime = 0.0f;   // 몽타주 시간 기준 노티파이 시각들
+	float AxeLeapUpTime = 0.0f;
+	float AxeLeapFallTime = 0.0f;
+	float AxeLeapHitTime = 0.0f;
+	FVector AxeLeapTargetGround = FVector::ZeroVector; // 데칼/도끼/착지 바닥 지점
+	FVector AxeLeapRiseStart = FVector::ZeroVector;
+	bool bAxeLeapInAir = false;
+	bool bAxeWeaponHidden = false;
+	TEnumAsByte<ECollisionResponse> SavedPawnCollisionResponse = ECR_Block;
 
 	// ★ 카운터 방향 안내 데칼 / 몸 발광 상태
 	void ShowSoulCrackZones();
