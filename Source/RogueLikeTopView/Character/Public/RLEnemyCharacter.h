@@ -277,8 +277,10 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Enemy|Combat")
 	void StopAttackChase();
 
-	// ★ 도끼 투척 → 도약 낙하 패턴 시작. BeginAttackPattern이 AttackShape == AxeLeap일 때 자동으로 호출합니다.
-	// 몽타주의 Notify_AxeThrow / Notify_LeapUp / Notify_LeapFall / Notify_Hit 시각을 미리 읽어두고, Tick에서
+	// ★ 도끼 투척 패턴 시작. BeginAttackPattern이 AttackShape == AxeLeap(도약 낙하) / AxeReturn(회수)일 때 자동으로 호출합니다.
+	// AxeLeap: Notify_AxeThrow → Notify_LeapUp → Notify_LeapFall → Notify_Hit
+	// AxeReturn: Notify_AxeThrow → Notify_AxeRecall → Notify_AxeCatch
+	// 몽타주의 노티파이 시각을 미리 읽어두고, Tick에서
 	// 몽타주 재생 위치에 맞춰 단계를 진행합니다(재생 속도/히트스톱과 어긋나지 않음). 노티파이 종류(Montage/스켈레톤)는 상관없습니다.
 	UFUNCTION(BlueprintCallable, Category = "Enemy|Combat")
 	bool BeginAxeLeap(const FRLMonsterPatternData& Pattern);
@@ -287,6 +289,19 @@ public:
 	// 공중에서 끊기면 땅으로 되돌리고, 숨긴 도끼 본/메시/콜리전/이동 모드를 전부 원래대로 복구합니다.
 	UFUNCTION(BlueprintCallable, Category = "Enemy|Combat")
 	void EndAxeLeap();
+
+	// ★ 몽타주 좌우 반전 재생 (FRLMonsterPatternData::bMirrorAnimation). BeginAttackPattern이 자동 호출하고,
+	// 몽타주가 끝나거나 끊기면 Tick에서 자동으로 원래대로 돌아옵니다.
+	// 실제 반전은 AnimBP의 Mirror 노드(Mirror Data Table 사용)가 하고, 여기서는 AnimBP의 bool 변수
+	// (MirrorPoseVariableName)만 켜고 끕니다. Mirror 노드의 Blend Time 덕분에 반전 전환이 부드럽게 섞입니다.
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Enemy|Combat")
+	FName MirrorPoseVariableName = FName("bMirrorPose");
+
+	UFUNCTION(BlueprintCallable, Category = "Enemy|Combat")
+	void StartMirrorAnimation(UAnimMontage* Montage);
+
+	UFUNCTION(BlueprintCallable, Category = "Enemy|Combat")
+	void StopMirrorAnimation();
 
 	virtual void ReceiveCustomDamage(const FRLDamageData& DamageData, const FHitResult& HitInfo) override;
 	virtual void Tick(float DeltaTime) override;
@@ -350,6 +365,14 @@ protected:
 	UFUNCTION(BlueprintImplementableEvent, Category = "Enemy|AxeLeap")
 	void OnAxeLeapLanded(FVector LandLocation);
 
+	// ★ AxeReturn: 박힌 도끼가 뽑혀 돌아오기 시작하는 순간. 쇠사슬/영혼 끌어당기는 VFX, 사운드 등
+	UFUNCTION(BlueprintImplementableEvent, Category = "Enemy|AxeLeap")
+	void OnAxeRecalled(FVector AxeLocation);
+
+	// ★ AxeReturn: 도끼를 손으로 받는 순간
+	UFUNCTION(BlueprintImplementableEvent, Category = "Enemy|AxeLeap")
+	void OnAxeCaught();
+
 private:
 	// 경직 동안 BT를 멈췄다가 Duration 뒤 재시작
 	void PauseAIForSoulCrack(float Duration);
@@ -378,7 +401,8 @@ private:
 		Tracking, // 데칼이 플레이어를 따라다님
 		Thrown,   // 도끼 투척 후 도약 대기 (데칼 고정)
 		Rising,   // 상승 → 사라짐
-		Falling   // 데칼 위에서 낙하
+		Falling,  // 데칼 위에서 낙하
+		Returning // (AxeReturn) 도끼가 손으로 돌아오는 중
 	};
 
 	void UpdateAxeLeap(float DeltaTime);
@@ -387,7 +411,12 @@ private:
 	void AxeLeapStartFall();
 	void AxeLeapImpact();
 	void HandleThrownAxeLanded(ARLThrownAxe* Axe);
+	void AxeReturnStartRecall();
+	void UpdateAxeReturn(float Position);
+	void AxeReturnCatch();
+	void ShowAxeReturnLane();
 	FVector FindGroundPoint(const FVector& Location) const;
+	bool IsAxeReturnPattern() const { return AxeLeapPattern.AttackShape == ERLAttackShape::AxeReturn; }
 
 	UPROPERTY()
 	TObjectPtr<UAnimMontage> AxeLeapMontage = nullptr;
@@ -408,6 +437,21 @@ private:
 	bool bAxeLeapInAir = false;
 	bool bAxeWeaponHidden = false;
 	TEnumAsByte<ECollisionResponse> SavedPawnCollisionResponse = ECR_Block;
+
+	// AxeReturn 전용
+	float AxeRecallTime = 0.0f;
+	float AxeCatchTime = 0.0f;
+	bool bAxeLanded = false;                             // 도끼가 박혔는지 (귀환 경로 데칼 표시 조건)
+	FVector AxeReturnPrevLocation = FVector::ZeroVector; // 지난 프레임 도끼 위치 (경로 스윕 시작점)
+	TSet<TWeakObjectPtr<AActor>> AxeReturnHitActors;     // 이번 회수에서 이미 맞은 대상
+
+	// ★ 좌우 반전 상태
+	void UpdateMirrorAnimation();
+	bool SetMirrorPoseVariable(bool bMirror);
+
+	UPROPERTY()
+	TObjectPtr<UAnimMontage> MirrorMontage = nullptr;
+	bool bMeshMirrored = false;
 
 	// ★ 카운터 방향 안내 데칼 / 몸 발광 상태
 	void ShowSoulCrackZones();

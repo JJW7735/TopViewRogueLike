@@ -58,7 +58,8 @@ bool ARLThrownAxe::InitFromWeapon(USkeletalMeshComponent* SourceMesh, FName Weap
 		AxeMesh->SetMaterial(MaterialIndex, SourceMesh->GetMaterial(MaterialIndex));
 	}
 	AxeMesh->SetRelativeRotation(FRotator::ZeroRotator);
-	AxeMesh->SetWorldScale3D(SourceMesh->GetComponentScale());
+	// 보스가 좌우 반전(음수 스케일) 중이어도 도끼는 원래 모양으로 (AxeRotationOffset 기준 자세 유지)
+	AxeMesh->SetWorldScale3D(SourceMesh->GetComponentScale().GetAbs());
 	return true;
 }
 
@@ -131,6 +132,29 @@ void ARLThrownAxe::Launch(const FVector& TargetLocation, float FlightTime, float
 
 	SetActorRotation(FRotator(0.0f, FlightYaw, 0.0f));
 	bFlying = true;
+}
+
+void ARLThrownAxe::BeginReturn()
+{
+	bFlying = false;
+	ReturnStartLocation = GetActorLocation() + FVector(0.0f, 0.0f, EmbedDepth);
+
+	// 돌아오는 거리를 기준으로 바퀴 수를 정함 (최소 1바퀴는 돌면서 뽑혀 나옴)
+	ReturnTurns = FMath::Max(1.0f, FMath::RoundToFloat(SpinTurnsPerSecond * FlightDuration));
+}
+
+void ARLThrownAxe::UpdateReturn(float Alpha, const FVector& HandLocation)
+{
+	Alpha = FMath::Clamp(Alpha, 0.0f, 1.0f);
+
+	// 처음엔 천천히 뽑혀 나오다가 손 쪽으로 빨라짐
+	const float MoveAlpha = FMath::InterpEaseIn(0.0f, 1.0f, Alpha, 2.0f);
+	const FVector NewLocation = FMath::Lerp(ReturnStartLocation, HandLocation, MoveAlpha);
+
+	// 날아갈 때와 같은 Yaw 축 기준으로 반대 방향(뒤로) 공중제비. 박힌 각도(LandedPitch)에서 시작해 기준 자세(0)로 끝남
+	const float Pitch = LandedPitch * (1.0f - Alpha) + 360.0f * ReturnTurns * Alpha;
+	const FQuat NewRotation = FQuat(FRotator(0.0f, FlightYaw, 0.0f)) * FQuat(FRotator(Pitch, 0.0f, 0.0f));
+	SetActorLocationAndRotation(NewLocation, NewRotation);
 }
 
 void ARLThrownAxe::Tick(float DeltaTime)

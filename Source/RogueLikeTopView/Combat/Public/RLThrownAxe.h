@@ -38,6 +38,12 @@ public:
 	// 현재 위치에서 TargetLocation(바닥 지점)까지 포물선으로 날아가 박힙니다
 	void Launch(const FVector& TargetLocation, float FlightTime, float ArcHeight);
 
+	// ★ 회수: 박힌 자리에서 빠져나와 손으로 돌아가기 시작 (이후 위치는 UpdateReturn으로 매 프레임 지정)
+	void BeginReturn();
+
+	// 회수 진행도(0~1)와 현재 손 위치를 받아 도끼를 옮깁니다. 돌아오는 동안 날아갈 때와 반대 방향으로 공중제비
+	void UpdateReturn(float Alpha, const FVector& HandLocation);
+
 	// 땅에 박히는 순간 (던진 보스가 도끼 판정을 붙임)
 	FOnThrownAxeLanded OnLanded;
 
@@ -106,4 +112,7 @@ private:
 	float FlightElapsed = 0.0f;
 	float TotalPitch = 0.0f;
 	bool bFlying = false;
+
+	FVector ReturnStartLocation = FVector::ZeroVector;
+	float ReturnTurns = 0.0f;
 };
