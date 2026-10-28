@@ -38,11 +38,18 @@ public:
 	// 현재 위치에서 TargetLocation(바닥 지점)까지 포물선으로 날아가 박힙니다
 	void Launch(const FVector& TargetLocation, float FlightTime, float ArcHeight);
 
+	// ★ 회수 예고: 박힌 채로 흔들리기 시작 (BeginReturn이 불리면 멈춤)
+	void StartWobble();
+
 	// ★ 회수: 박힌 자리에서 빠져나와 손으로 돌아가기 시작 (이후 위치는 UpdateReturn으로 매 프레임 지정)
 	void BeginReturn();
 
-	// 회수 진행도(0~1)와 현재 손 위치를 받아 도끼를 옮깁니다. 돌아오는 동안 날아갈 때와 반대 방향으로 공중제비
-	void UpdateReturn(float Alpha, const FVector& HandLocation);
+	// 회수 진행도(0~1)와 현재 손 위치를 받아 도끼를 옮깁니다. 돌아오는 동안 날아갈 때와 반대 방향으로 공중제비.
+	// bCurve면 PassThrough 지점을 지나는 2차 베지어 곡선(진행도 0.5에서 PassThrough 통과), 아니면 직선
+	void UpdateReturn(float Alpha, const FVector& HandLocation, bool bCurve = false, const FVector& PassThrough = FVector::ZeroVector);
+
+	// 2차 베지어: Start → End를 잇되 매개변수 0.5에서 PassThrough를 지나는 곡선 위의 점 (예고 데칼도 같은 식을 씀)
+	static FVector EvaluateCurve(const FVector& Start, const FVector& PassThrough, const FVector& End, float T);
 
 	// 땅에 박히는 순간 (던진 보스가 도끼 판정을 붙임)
 	FOnThrownAxeLanded OnLanded;
@@ -76,6 +83,18 @@ protected:
 	// 손잡이가 뒤쪽 위로 70도 들린 모양 (-90 = 손잡이가 수평)
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Axe")
 	float LandedPitch = -160.0f;
+
+	// 회수 예고 중 흔들림 최대 각도(도)
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Axe", meta = (ClampMin = "0.0"))
+	float WobbleAngle = 12.0f;
+
+	// 회수 예고 중 초당 흔들림 횟수
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Axe", meta = (ClampMin = "0.0"))
+	float WobbleFrequency = 7.0f;
+
+	// 흔들림이 최대 각도까지 커지는 데 걸리는 시간(초). 점점 세게 흔들리다 뽑혀 나옴
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Axe", meta = (ClampMin = "0.0"))
+	float WobbleRampTime = 0.4f;
 
 	// 목표 지점보다 이만큼 아래로 박힘(cm)
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Axe", meta = (ClampMin = "0.0"))
@@ -115,4 +134,7 @@ private:
 
 	FVector ReturnStartLocation = FVector::ZeroVector;
 	float ReturnTurns = 0.0f;
+
+	bool bWobbling = false;
+	float WobbleElapsed = 0.0f;
 };

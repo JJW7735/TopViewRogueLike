@@ -134,22 +134,39 @@ void ARLThrownAxe::Launch(const FVector& TargetLocation, float FlightTime, float
 	bFlying = true;
 }
 
+void ARLThrownAxe::StartWobble()
+{
+	bWobbling = true;
+	WobbleElapsed = 0.0f;
+}
+
 void ARLThrownAxe::BeginReturn()
 {
 	bFlying = false;
+	bWobbling = false;
 	ReturnStartLocation = GetActorLocation() + FVector(0.0f, 0.0f, EmbedDepth);
 
 	// 돌아오는 거리를 기준으로 바퀴 수를 정함 (최소 1바퀴는 돌면서 뽑혀 나옴)
 	ReturnTurns = FMath::Max(1.0f, FMath::RoundToFloat(SpinTurnsPerSecond * FlightDuration));
 }
 
-void ARLThrownAxe::UpdateReturn(float Alpha, const FVector& HandLocation)
+FVector ARLThrownAxe::EvaluateCurve(const FVector& Start, const FVector& PassThrough, const FVector& End, float T)
+{
+	// 제어점 C = 2P - (S + E)/2 로 두면 T = 0.5에서 정확히 P를 지남
+	const FVector Control = 2.0f * PassThrough - 0.5f * (Start + End);
+	const float U = 1.0f - T;
+	return U * U * Start + 2.0f * U * T * Control + T * T * End;
+}
+
+void ARLThrownAxe::UpdateReturn(float Alpha, const FVector& HandLocation, bool bCurve, const FVector& PassThrough)
 {
 	Alpha = FMath::Clamp(Alpha, 0.0f, 1.0f);
 
 	// 처음엔 천천히 뽑혀 나오다가 손 쪽으로 빨라짐
 	const float MoveAlpha = FMath::InterpEaseIn(0.0f, 1.0f, Alpha, 2.0f);
-	const FVector NewLocation = FMath::Lerp(ReturnStartLocation, HandLocation, MoveAlpha);
+	const FVector NewLocation = bCurve
+		? EvaluateCurve(ReturnStartLocation, PassThrough, HandLocation, MoveAlpha)
+		: FMath::Lerp(ReturnStartLocation, HandLocation, MoveAlpha);
 
 	// 날아갈 때와 같은 Yaw 축 기준으로 반대 방향(뒤로) 공중제비. 박힌 각도(LandedPitch)에서 시작해 기준 자세(0)로 끝남
 	const float Pitch = LandedPitch * (1.0f - Alpha) + 360.0f * ReturnTurns * Alpha;
@@ -160,6 +177,17 @@ void ARLThrownAxe::UpdateReturn(float Alpha, const FVector& HandLocation)
 void ARLThrownAxe::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
+
+	if (bWobbling)
+	{
+		// 박힌 각도를 중심으로 앞뒤(Pitch) + 좌우(Roll)로 흔들림. 점점 세게 흔들리다가 뽑혀 나옴
+		WobbleElapsed += DeltaTime;
+		const float Amplitude = WobbleAngle * (WobbleRampTime > 0.0f ? FMath::Min(WobbleElapsed / WobbleRampTime, 1.0f) : 1.0f);
+		const float Phase = 2.0f * PI * WobbleFrequency * WobbleElapsed;
+		const FRotator Wobble(LandedPitch + Amplitude * FMath::Sin(Phase), 0.0f, Amplitude * 0.5f * FMath::Sin(Phase * 1.3f));
+		SetActorRotation(FQuat(FRotator(0.0f, FlightYaw, 0.0f)) * FQuat(Wobble));
+		return;
+	}
 
 	if (!bFlying)
 	{

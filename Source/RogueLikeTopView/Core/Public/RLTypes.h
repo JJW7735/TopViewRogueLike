@@ -42,9 +42,13 @@ enum class ERLAttackShape : uint8
 	            // 몽타주 재생 위치를 보고 처리합니다: 플레이어 추적 원형 데칼(IndicatorDecalSize.Y = 반지름) →
 	            // Notify_AxeThrow에서 데칼 고정 + 도끼 투척 → Notify_LeapUp에서 상승 후 사라짐 → Notify_LeapFall에서
 	            // 데칼 위로 순간이동 후 낙하 → Notify_Hit에서 착지 판정 + 도끼 회수 (예: 보스2 AxeLeap)
-	AxeReturn   // ★ 도끼 투척 → 회수(부메랑). AxeLeap과 투척까지는 같고, Notify_AxeRecall에서 박힌 도끼가 보스 손으로
-	            // 날아오기 시작해 Notify_AxeCatch에 손에 도착합니다. 돌아오는 경로에 닿으면 AxeReturnDamageData 피해
+	AxeReturn,  // ★ 도끼 투척 → 회수. AxeLeap과 투척까지는 같고, Notify_AxeRecall에서 박힌 도끼가 흔들리며 회수 예고
+	            // 데칼(도끼 주변 원형 + 도끼~보스 직사각형)이 뜹니다. Notify_AxeCatch 직전(던질 때와 같은 속도로 역산)에
+	            // 도끼가 뽑히며 원형 범위 + 돌아오는 경로에 AxeReturnDamageData 피해, Notify_AxeCatch 순간 손에 도착
 	            // (예: 보스2 AxeReturn)
+	AxeDoubleReturn // ★ 쌍도끼 투척 → 동시 회수. AxeReturn과 같지만 Notify_AxeThrow가 두 번(오른손 → 왼손) 있고,
+	            // 두 도끼가 플레이어 위치(AxeDoubleSideOffset만큼 좌우로 벌릴 수 있음)에 박혔다가 각자 던진 손으로 동시에 돌아옵니다.
+	            // 왼손 투척은 몽타주의 Notify_MirrorStart ~ Notify_MirrorEnd 구간을 좌우 반전해서 표현 (예: 보스2 AxeDouble)
 };
 
 // 공격 판정 및 데미지 정보를 담는 공용 구조체
@@ -231,7 +235,7 @@ struct FRLMonsterPatternData
 	// 도끼 범위 데칼은 투척 전~도끼가 박힐 때까지, 착지 범위 데칼은 착지 IndicatorLeadTime초 전부터 표시됩니다.
 
 	// 도끼가 땅에 박힐 때 주는 데미지 (반지름 IndicatorDecalSize.Y)
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Pattern|AxeLeap", meta = (EditCondition = "AttackShape == ERLAttackShape::AxeLeap || AttackShape == ERLAttackShape::AxeReturn"))
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Pattern|AxeLeap", meta = (EditCondition = "AttackShape == ERLAttackShape::AxeLeap || AttackShape == ERLAttackShape::AxeReturn || AttackShape == ERLAttackShape::AxeDoubleReturn"))
 	FRLDamageData AxeDamageData;
 
 	// 착지 판정 반지름 배율 (도끼 판정 반지름 기준). 도끼가 박히면 예고 데칼도 이 크기로 커집니다
@@ -239,19 +243,19 @@ struct FRLMonsterPatternData
 	float LeapRadiusScale = 2.0f;
 
 	// 던질 도끼 액터 클래스 (비우면 ARLThrownAxe 기본 클래스 = 보스 메시에서 도끼 부분만 복사해서 씀)
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Pattern|AxeLeap", meta = (EditCondition = "AttackShape == ERLAttackShape::AxeLeap || AttackShape == ERLAttackShape::AxeReturn"))
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Pattern|AxeLeap", meta = (EditCondition = "AttackShape == ERLAttackShape::AxeLeap || AttackShape == ERLAttackShape::AxeReturn || AttackShape == ERLAttackShape::AxeDoubleReturn"))
 	TSubclassOf<ARLThrownAxe> ThrownAxeClass;
 
 	// 던지는 손 도끼의 본 이름. 투척 순간 이 본을 숨기고, 착지하면 다시 보이게 합니다
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Pattern|AxeLeap", meta = (EditCondition = "AttackShape == ERLAttackShape::AxeLeap || AttackShape == ERLAttackShape::AxeReturn"))
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Pattern|AxeLeap", meta = (EditCondition = "AttackShape == ERLAttackShape::AxeLeap || AttackShape == ERLAttackShape::AxeReturn || AttackShape == ERLAttackShape::AxeDoubleReturn"))
 	FName AxeWeaponBoneName = FName("weapon_r");
 
 	// 사거리(AttackRange) 끝까지 던질 때 도끼가 날아가는 시간(초). 가까울수록 거리에 비례해 짧아짐 (일정한 속도)
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Pattern|AxeLeap", meta = (EditCondition = "AttackShape == ERLAttackShape::AxeLeap || AttackShape == ERLAttackShape::AxeReturn", ClampMin = "0.05"))
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Pattern|AxeLeap", meta = (EditCondition = "AttackShape == ERLAttackShape::AxeLeap || AttackShape == ERLAttackShape::AxeReturn || AttackShape == ERLAttackShape::AxeDoubleReturn", ClampMin = "0.05"))
 	float AxeFlightTime = 0.45f;
 
 	// 도끼 포물선 최고 높이(cm)
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Pattern|AxeLeap", meta = (EditCondition = "AttackShape == ERLAttackShape::AxeLeap || AttackShape == ERLAttackShape::AxeReturn", ClampMin = "0.0"))
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Pattern|AxeLeap", meta = (EditCondition = "AttackShape == ERLAttackShape::AxeLeap || AttackShape == ERLAttackShape::AxeReturn || AttackShape == ERLAttackShape::AxeDoubleReturn", ClampMin = "0.0"))
 	float AxeArcHeight = 250.0f;
 
 	// 도약 높이(cm). 이 높이까지 올라갔다가 사라지고, 같은 높이에서 데칼 위로 떨어집니다
@@ -263,7 +267,7 @@ struct FRLMonsterPatternData
 	float LeapRiseRatio = 0.7f;
 
 	// 투척 전 데칼이 플레이어를 따라다니는 동안 보스가 플레이어 쪽으로 도는 속도(도/초)
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Pattern|AxeLeap", meta = (EditCondition = "AttackShape == ERLAttackShape::AxeLeap || AttackShape == ERLAttackShape::AxeReturn", ClampMin = "0.0"))
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Pattern|AxeLeap", meta = (EditCondition = "AttackShape == ERLAttackShape::AxeLeap || AttackShape == ERLAttackShape::AxeReturn || AttackShape == ERLAttackShape::AxeDoubleReturn", ClampMin = "0.0"))
 	float AxeLeapTurnSpeed = 540.0f;
 
 	// ==========================================
@@ -272,17 +276,45 @@ struct FRLMonsterPatternData
 	// 몽타주에 Notify_AxeThrow / Notify_AxeRecall / Notify_AxeCatch 3개가 순서대로 있어야 합니다.
 	// 투척/도끼 판정은 위의 AxeLeap 공용 항목(AxeDamageData, ThrownAxeClass, AxeFlightTime 등)을 그대로 씁니다.
 
-	// 도끼가 돌아오는 경로에 닿았을 때 주는 피해 (한 번 회수하는 동안 대상당 1회)
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Pattern|AxeReturn", meta = (EditCondition = "AttackShape == ERLAttackShape::AxeReturn"))
+	// 도끼가 뽑힐 때 원형 범위(IndicatorDecalSize.Y) + 돌아오는 경로에 닿았을 때 주는 피해 (한 번 회수하는 동안 대상당 1회)
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Pattern|AxeReturn", meta = (EditCondition = "AttackShape == ERLAttackShape::AxeReturn || AttackShape == ERLAttackShape::AxeDoubleReturn"))
 	FRLDamageData AxeReturnDamageData;
 
 	// 돌아오는 도끼의 판정 반지름(cm). 귀환 경로 예고 데칼의 폭(= 반지름 × 2)도 이 값을 씁니다
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Pattern|AxeReturn", meta = (EditCondition = "AttackShape == ERLAttackShape::AxeReturn", ClampMin = "10.0"))
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Pattern|AxeReturn", meta = (EditCondition = "AttackShape == ERLAttackShape::AxeReturn || AttackShape == ERLAttackShape::AxeDoubleReturn", ClampMin = "10.0"))
 	float AxeReturnHitRadius = 150.0f;
 
-	// 도끼가 박힌 뒤 회수될 때까지 보스 ~ 도끼 사이에 띄울 직사각형 예고 데칼 (비우면 표시 안 함)
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Pattern|AxeReturn", meta = (EditCondition = "AttackShape == ERLAttackShape::AxeReturn"))
+	// Notify_AxeRecall부터 회수될 때까지 도끼 ~ 보스 사이에 띄울 직사각형 예고 데칼 (비우면 표시 안 함)
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Pattern|AxeReturn", meta = (EditCondition = "AttackShape == ERLAttackShape::AxeReturn || AttackShape == ERLAttackShape::AxeDoubleReturn"))
 	TObjectPtr<UMaterialInterface> AxeReturnLaneMaterial = nullptr;
+
+	// ★ 회수 경로를 플레이어 쪽으로 휘게 할지. Notify_AxeRecall 순간 플레이어가 도끼와 보스 사이에 있으면
+	// "도끼 → 그 순간 플레이어 위치 → 보스"를 지나는 곡선으로 돌아오고(예고 데칼도 곡선), 사이에 없으면 직선
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Pattern|AxeReturn", meta = (EditCondition = "AttackShape == ERLAttackShape::AxeReturn || AttackShape == ERLAttackShape::AxeDoubleReturn"))
+	bool bAxeReturnCurveThroughPlayer = false;
+
+	// 곡선으로 휘는 최대 거리(cm). 플레이어가 도끼~보스 직선에서 이보다 옆으로 멀리 있으면 "사이에 없음" = 직선
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Pattern|AxeReturn", meta = (EditCondition = "bAxeReturnCurveThroughPlayer", ClampMin = "0.0"))
+	float AxeReturnCurveMaxOffset = 700.0f;
+
+	// ==========================================
+	// ★ 쌍도끼 투척 → 동시 회수 (AttackShape == AxeDoubleReturn) 설정
+	// ==========================================
+	// 몽타주: Notify_AxeThrow(오른손) → Notify_MirrorStart → Notify_AxeThrow(왼손) → Notify_MirrorEnd → Notify_AxeRecall → Notify_AxeCatch.
+	// 첫 번째 도끼는 위의 AxeWeaponBoneName/ThrownAxeClass, 두 번째 도끼는 아래 Second* 항목을 씁니다.
+
+	// 플레이어 위치에서 좌우로 벌려 박을 거리(cm). 오른손 도끼는 보스 시점 왼쪽, 왼손 도끼는 오른쪽에 박힘.
+	// 0이면 두 도끼 모두 각자 던지는 순간의 플레이어 위치를 노림 (bAxeReturnCurveThroughPlayer와 함께 쓰면 좋음)
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Pattern|AxeDouble", meta = (EditCondition = "AttackShape == ERLAttackShape::AxeDoubleReturn", ClampMin = "0.0"))
+	float AxeDoubleSideOffset = 400.0f;
+
+	// 두 번째(왼손) 도끼 본 이름
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Pattern|AxeDouble", meta = (EditCondition = "AttackShape == ERLAttackShape::AxeDoubleReturn"))
+	FName SecondAxeWeaponBoneName = FName("weapon_l");
+
+	// 두 번째(왼손) 도끼 액터 클래스 (본 축이 오른손과 반대라 보통 왼손 전용 BP를 넣음. 비우면 ThrownAxeClass 사용)
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Pattern|AxeDouble", meta = (EditCondition = "AttackShape == ERLAttackShape::AxeDoubleReturn"))
+	TSubclassOf<ARLThrownAxe> SecondThrownAxeClass;
 
 	// ==========================================
 	// ★ 영혼의 균열(Soul Crack) 강화판 설정

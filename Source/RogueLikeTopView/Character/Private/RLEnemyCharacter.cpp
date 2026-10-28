@@ -493,14 +493,18 @@ void ARLEnemyCharacter::BeginAttackPattern(const FRLMonsterPatternData& Pattern,
 	StartAttackChase(Pattern);
 	BeginSoulCrackPattern(Pattern, HitNotifyName);
 
-	StopMirrorAnimation();
+	// 몽타주 전체 반전, 또는 Notify_MirrorStart ~ Notify_MirrorEnd 구간만 반전 (둘 다 아니면 반전 없음)
 	if (Pattern.bMirrorAnimation)
 	{
 		StartMirrorAnimation(Pattern.AttackMontage);
 	}
+	else
+	{
+		StartMirrorWindows(Pattern.AttackMontage);
+	}
 
 	EndAxeLeap();
-	if (Pattern.AttackShape == ERLAttackShape::AxeLeap || Pattern.AttackShape == ERLAttackShape::AxeReturn)
+	if (Pattern.AttackShape == ERLAttackShape::AxeLeap || Pattern.AttackShape == ERLAttackShape::AxeReturn || Pattern.AttackShape == ERLAttackShape::AxeDoubleReturn)
 	{
 		BeginAxeLeap(Pattern);
 	}
@@ -568,7 +572,7 @@ void ARLEnemyCharacter::UpdateAttackChase(float DeltaTime)
 }
 
 // ==========================================
-// ★ 도끼 투척 → 도약 낙하 (AxeLeap)
+// ★ 도끼 투척 패턴 (AxeLeap / AxeReturn / AxeDoubleReturn)
 // ==========================================
 
 bool ARLEnemyCharacter::BeginAxeLeap(const FRLMonsterPatternData& Pattern)
@@ -580,46 +584,79 @@ bool ARLEnemyCharacter::BeginAxeLeap(const FRLMonsterPatternData& Pattern)
 		return false;
 	}
 
-	// 각 노티파이의 첫 번째 발동 시각 (없으면 -1)
-	auto FindNotifyTime = [this, &Pattern](const TCHAR* NotifyName) -> float
+	// 각 노티파이의 발동 시각들 (같은 이름이 여러 번 있으면 시간순)
+	auto FindNotifyTimes = [this, &Pattern](const TCHAR* NotifyName) -> TArray<float>
 	{
-		const TArray<FVector2D> Windows = ComputeTelegraphWindows(Pattern.AttackMontage, FName(NotifyName), 0.0f);
-		return Windows.Num() > 0 ? Windows[0].Y : -1.0f;
+		TArray<float> Times;
+		for (const FVector2D& Window : ComputeTelegraphWindows(Pattern.AttackMontage, FName(NotifyName), 0.0f))
+		{
+			Times.Add(Window.Y);
+		}
+		return Times;
+	};
+	auto FindNotifyTime = [&FindNotifyTimes](const TCHAR* NotifyName) -> float
+	{
+		const TArray<float> Times = FindNotifyTimes(NotifyName);
+		return Times.Num() > 0 ? Times[0] : -1.0f;
 	};
 
-	AxeThrowTime = FindNotifyTime(TEXT("Notify_AxeThrow"));
+	const bool bDouble = Pattern.AttackShape == ERLAttackShape::AxeDoubleReturn;
+	const TArray<float> ThrowTimes = FindNotifyTimes(TEXT("Notify_AxeThrow"));
+	const int32 NumAxes = bDouble ? 2 : 1;
+	const float LastThrowTime = ThrowTimes.Num() >= NumAxes ? ThrowTimes[NumAxes - 1] : -1.0f;
 
-	if (Pattern.AttackShape == ERLAttackShape::AxeReturn)
-	{
-		AxeRecallTime = FindNotifyTime(TEXT("Notify_AxeRecall"));
-		AxeCatchTime = FindNotifyTime(TEXT("Notify_AxeCatch"));
-
-		if (AxeThrowTime < 0.0f || AxeRecallTime <= AxeThrowTime || AxeCatchTime <= AxeRecallTime)
-		{
-			UE_LOG(LogTemp, Warning, TEXT("[AxeReturn] %s: 몽타주 '%s'에 Notify_AxeThrow(%.2f) → Notify_AxeRecall(%.2f) → Notify_AxeCatch(%.2f)가 순서대로 있어야 합니다."),
-				*GetName(), *Pattern.AttackMontage->GetName(), AxeThrowTime, AxeRecallTime, AxeCatchTime);
-			return false;
-		}
-	}
-	else
+	if (Pattern.AttackShape == ERLAttackShape::AxeLeap)
 	{
 		AxeLeapUpTime = FindNotifyTime(TEXT("Notify_LeapUp"));
 		AxeLeapFallTime = FindNotifyTime(TEXT("Notify_LeapFall"));
 		AxeLeapHitTime = FindNotifyTime(TEXT("Notify_Hit"));
 
-		if (AxeThrowTime < 0.0f || AxeLeapUpTime < AxeThrowTime || AxeLeapFallTime <= AxeLeapUpTime || AxeLeapHitTime <= AxeLeapFallTime)
+		if (LastThrowTime < 0.0f || AxeLeapUpTime < LastThrowTime || AxeLeapFallTime <= AxeLeapUpTime || AxeLeapHitTime <= AxeLeapFallTime)
 		{
 			UE_LOG(LogTemp, Warning, TEXT("[AxeLeap] %s: 몽타주 '%s'에 Notify_AxeThrow(%.2f) → Notify_LeapUp(%.2f) → Notify_LeapFall(%.2f) → Notify_Hit(%.2f)가 순서대로 있어야 합니다."),
-				*GetName(), *Pattern.AttackMontage->GetName(), AxeThrowTime, AxeLeapUpTime, AxeLeapFallTime, AxeLeapHitTime);
+				*GetName(), *Pattern.AttackMontage->GetName(), LastThrowTime, AxeLeapUpTime, AxeLeapFallTime, AxeLeapHitTime);
 			return false;
 		}
+	}
+	else
+	{
+		AxeRecallTime = FindNotifyTime(TEXT("Notify_AxeRecall"));
+		AxeCatchTime = FindNotifyTime(TEXT("Notify_AxeCatch"));
+
+		if (LastThrowTime < 0.0f || AxeRecallTime <= LastThrowTime || AxeCatchTime <= AxeRecallTime)
+		{
+			UE_LOG(LogTemp, Warning, TEXT("[AxeReturn] %s: 몽타주 '%s'에 Notify_AxeThrow %d개(%d개 있음) → Notify_AxeRecall(%.2f) → Notify_AxeCatch(%.2f)가 순서대로 있어야 합니다."),
+				*GetName(), *Pattern.AttackMontage->GetName(), NumAxes, ThrowTimes.Num(), AxeRecallTime, AxeCatchTime);
+			return false;
+		}
+	}
+
+	UClass* DefaultAxeClass = Pattern.ThrownAxeClass ? Pattern.ThrownAxeClass.Get() : ARLThrownAxe::StaticClass();
+	AxeSlots.SetNum(NumAxes);
+	ThrownAxes.Init(nullptr, NumAxes);
+
+	AxeSlots[0].BoneName = Pattern.AxeWeaponBoneName;
+	AxeSlots[0].AxeClass = DefaultAxeClass;
+	AxeSlots[0].ThrowTime = ThrowTimes[0];
+	if (bDouble)
+	{
+		// 오른손 도끼는 보스 시점 왼쪽, 왼손 도끼는 오른쪽에 박아서 회수 경로가 엇갈리게
+		AxeSlots[0].SideSign = -1.0f;
+		AxeSlots[1].BoneName = Pattern.SecondAxeWeaponBoneName;
+		AxeSlots[1].AxeClass = Pattern.SecondThrownAxeClass ? Pattern.SecondThrownAxeClass.Get() : DefaultAxeClass;
+		AxeSlots[1].ThrowTime = ThrowTimes[1];
+		AxeSlots[1].SideSign = 1.0f;
+	}
+
+	const FVector StartGround = FindGroundPoint(GetActorLocation());
+	for (FAxeSlot& Slot : AxeSlots)
+	{
+		Slot.TargetGround = StartGround;
 	}
 
 	AxeLeapMontage = Pattern.AttackMontage;
 	AxeLeapPattern = Pattern;
 	AxeLeapStep = EAxeLeapStep::Tracking;
-	AxeLeapTargetGround = FindGroundPoint(GetActorLocation());
-	bAxeLanded = false;
 	return true;
 }
 
@@ -640,56 +677,32 @@ void ARLEnemyCharacter::UpdateAxeLeap(float DeltaTime)
 
 	const float Position = AnimInstance->Montage_GetPosition(AxeLeapMontage);
 
-	// 착지(Notify_Hit) IndicatorLeadTime초 전부터 착지 범위 예고 데칼 표시
-	if (!IsAxeReturnPattern() && AxeLeapStep != EAxeLeapStep::Tracking && AxeLeapPattern.bUseIndicator && Position >= AxeLeapHitTime - AxeLeapPattern.IndicatorLeadTime)
-	{
-		ShowLocationAttackIndicator(AxeLeapTargetGround, AxeLeapPattern.IndicatorDecalSize.Y * AxeLeapPattern.LeapRadiusScale, AxeLeapPattern.IndicatorDecalMaterial);
-	}
-
 	if (AxeLeapStep == EAxeLeapStep::Tracking)
 	{
-		if (Position >= AxeThrowTime)
-		{
-			AxeLeapThrow();
-		}
-		else
-		{
-			// 데칼이 플레이어 발밑을 따라다니고, 보스는 플레이어 쪽으로 회전
-			if (const APawn* Player = UGameplayStatics::GetPlayerPawn(this, 0))
-			{
-				AxeLeapTargetGround = FindGroundPoint(Player->GetActorLocation());
-
-				const float TargetYaw = (AxeLeapTargetGround - GetActorLocation()).GetSafeNormal2D().Rotation().Yaw;
-				const FRotator NewRotation = FMath::RInterpConstantTo(GetActorRotation(), FRotator(0.0f, TargetYaw, 0.0f), DeltaTime, AxeLeapPattern.AxeLeapTurnSpeed);
-				SetActorRotation(NewRotation);
-			}
-
-			if (AxeLeapPattern.bUseIndicator)
-			{
-				ShowLocationAttackIndicator(AxeLeapTargetGround, AxeLeapPattern.IndicatorDecalSize.Y, AxeLeapPattern.IndicatorDecalMaterial);
-			}
-		}
+		UpdateAxeTracking(Position, DeltaTime);
 	}
 
 	if (IsAxeReturnPattern())
 	{
-		if (AxeLeapStep == EAxeLeapStep::Thrown)
+		if (AxeLeapStep == EAxeLeapStep::Thrown && Position >= AxeRecallTime)
 		{
-			if (Position >= AxeRecallTime)
-			{
-				AxeReturnStartRecall();
-			}
-			else if (bAxeLanded)
-			{
-				ShowAxeReturnLane();
-			}
+			AxeReturnStartRecall();
 		}
 
-		if (AxeLeapStep == EAxeLeapStep::Returning)
+		if (AxeLeapStep == EAxeLeapStep::Recalling)
 		{
 			UpdateAxeReturn(Position);
 		}
 		return;
+	}
+
+	// ---- AxeLeap 전용 (도끼 1자루 = 슬롯 0) ----
+	const FVector LeapTarget = AxeSlots[0].TargetGround;
+
+	// 착지(Notify_Hit) IndicatorLeadTime초 전부터 착지 범위 예고 데칼 표시
+	if (AxeLeapStep != EAxeLeapStep::Tracking && AxeLeapPattern.bUseIndicator && Position >= AxeLeapHitTime - AxeLeapPattern.IndicatorLeadTime)
+	{
+		ShowAxeCircle(0, LeapTarget, AxeLeapPattern.IndicatorDecalSize.Y * AxeLeapPattern.LeapRadiusScale);
 	}
 
 	if (AxeLeapStep == EAxeLeapStep::Thrown && Position >= AxeLeapUpTime)
@@ -717,7 +730,7 @@ void ARLEnemyCharacter::UpdateAxeLeap(float DeltaTime)
 
 	if (AxeLeapStep == EAxeLeapStep::Falling)
 	{
-		const FVector LandLocation = AxeLeapTargetGround + FVector(0.0f, 0.0f, GetCapsuleComponent()->GetScaledCapsuleHalfHeight());
+		const FVector LandLocation = LeapTarget + FVector(0.0f, 0.0f, GetCapsuleComponent()->GetScaledCapsuleHalfHeight());
 		const float Alpha = FMath::Clamp((Position - AxeLeapFallTime) / (AxeLeapHitTime - AxeLeapFallTime), 0.0f, 1.0f);
 		SetActorLocation(LandLocation + FVector(0.0f, 0.0f, AxeLeapPattern.LeapHeight * (1.0f - FMath::InterpEaseIn(0.0f, 1.0f, Alpha, 2.0f))));
 
@@ -728,45 +741,87 @@ void ARLEnemyCharacter::UpdateAxeLeap(float DeltaTime)
 	}
 }
 
-void ARLEnemyCharacter::AxeLeapThrow()
+void ARLEnemyCharacter::UpdateAxeTracking(float Position, float DeltaTime)
 {
-	AxeLeapStep = EAxeLeapStep::Thrown;
-
-	// 데칼은 이 자리에 고정된 채로 착지까지 유지
-	if (AxeLeapPattern.bUseIndicator)
+	// 아직 안 던진 도끼의 데칼이 플레이어 발밑(쌍도끼는 좌우로 벌린 자리)을 따라다니고, 보스는 플레이어 쪽으로 회전
+	if (const APawn* Player = UGameplayStatics::GetPlayerPawn(this, 0))
 	{
-		ShowLocationAttackIndicator(AxeLeapTargetGround, AxeLeapPattern.IndicatorDecalSize.Y, AxeLeapPattern.IndicatorDecalMaterial);
-	}
+		const FVector PlayerGround = FindGroundPoint(Player->GetActorLocation());
+		const FVector ToPlayer = (PlayerGround - GetActorLocation()).GetSafeNormal2D();
+		const FVector Right = FVector::CrossProduct(FVector::UpVector, ToPlayer);
 
-	const FName BoneName = AxeLeapPattern.AxeWeaponBoneName;
-	if (GetMesh()->GetBoneIndex(BoneName) != INDEX_NONE)
-	{
-		UClass* AxeClass = AxeLeapPattern.ThrownAxeClass ? AxeLeapPattern.ThrownAxeClass.Get() : ARLThrownAxe::StaticClass();
-
-		FActorSpawnParameters Params;
-		Params.Owner = this;
-		Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
-		const FVector SpawnLocation = GetMesh()->GetSocketLocation(BoneName);
-		ThrownAxe = GetWorld()->SpawnActor<ARLThrownAxe>(AxeClass, SpawnLocation, FRotator::ZeroRotator, Params);
-		if (ThrownAxe && ThrownAxe->InitFromWeapon(GetMesh(), BoneName))
+		for (FAxeSlot& Slot : AxeSlots)
 		{
-			// AxeFlightTime = 사거리(AttackRange) 끝까지 날아갈 때의 시간. 가까우면 그만큼 빨리 박힘 (일정한 속도)
-			const float DistanceRatio = FVector::Dist2D(SpawnLocation, AxeLeapTargetGround) / FMath::Max(AxeLeapPattern.AttackRange, 1.0f);
-			const float FlightTime = AxeLeapPattern.AxeFlightTime * FMath::Clamp(DistanceRatio, 0.0f, 1.0f);
-
-			ThrownAxe->OnLanded.AddUObject(this, &ARLEnemyCharacter::HandleThrownAxeLanded);
-			ThrownAxe->Launch(AxeLeapTargetGround, FlightTime, AxeLeapPattern.AxeArcHeight);
+			if (!Slot.bThrown)
+			{
+				const FVector Offset = Right * Slot.SideSign * AxeLeapPattern.AxeDoubleSideOffset;
+				Slot.TargetGround = Slot.SideSign != 0.0f ? FindGroundPoint(PlayerGround + Offset) : PlayerGround;
+			}
 		}
 
-		GetMesh()->HideBoneByName(BoneName, PBO_None);
-		bAxeWeaponHidden = true;
-	}
-	else
-	{
-		UE_LOG(LogTemp, Warning, TEXT("[AxeLeap] %s: 도끼 본 '%s'을(를) 찾을 수 없어 도끼 없이 진행합니다."), *GetName(), *BoneName.ToString());
+		const FRotator NewRotation = FMath::RInterpConstantTo(GetActorRotation(), FRotator(0.0f, ToPlayer.Rotation().Yaw, 0.0f), DeltaTime, AxeLeapPattern.AxeLeapTurnSpeed);
+		SetActorRotation(NewRotation);
 	}
 
-	OnAxeLeapThrown(AxeLeapTargetGround);
+	bool bAllThrown = true;
+	for (int32 SlotIndex = 0; SlotIndex < AxeSlots.Num(); ++SlotIndex)
+	{
+		FAxeSlot& Slot = AxeSlots[SlotIndex];
+		if (!Slot.bThrown && Position >= Slot.ThrowTime)
+		{
+			ThrowAxeSlot(SlotIndex);
+		}
+		else if (!Slot.bThrown && AxeLeapPattern.bUseIndicator)
+		{
+			ShowAxeCircle(SlotIndex, Slot.TargetGround, AxeLeapPattern.IndicatorDecalSize.Y);
+		}
+		bAllThrown &= Slot.bThrown;
+	}
+
+	if (bAllThrown)
+	{
+		AxeLeapStep = EAxeLeapStep::Thrown;
+	}
+}
+
+void ARLEnemyCharacter::ThrowAxeSlot(int32 SlotIndex)
+{
+	FAxeSlot& Slot = AxeSlots[SlotIndex];
+	Slot.bThrown = true;
+
+	// 데칼은 이 자리에 고정된 채로 도끼가 박힐 때까지 유지
+	if (AxeLeapPattern.bUseIndicator)
+	{
+		ShowAxeCircle(SlotIndex, Slot.TargetGround, AxeLeapPattern.IndicatorDecalSize.Y);
+	}
+
+	if (GetMesh()->GetBoneIndex(Slot.BoneName) == INDEX_NONE)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[AxeLeap] %s: 도끼 본 '%s'을(를) 찾을 수 없어 도끼 없이 진행합니다."), *GetName(), *Slot.BoneName.ToString());
+		OnAxeLeapThrown(Slot.TargetGround);
+		return;
+	}
+
+	FActorSpawnParameters Params;
+	Params.Owner = this;
+	Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+	const FVector SpawnLocation = GetMesh()->GetSocketLocation(Slot.BoneName);
+	ARLThrownAxe* Axe = GetWorld()->SpawnActor<ARLThrownAxe>(Slot.AxeClass, SpawnLocation, FRotator::ZeroRotator, Params);
+	if (Axe && Axe->InitFromWeapon(GetMesh(), Slot.BoneName))
+	{
+		// AxeFlightTime = 사거리(AttackRange) 끝까지 날아갈 때의 시간. 가까우면 그만큼 빨리 박힘 (일정한 속도)
+		const float DistanceRatio = FVector::Dist2D(SpawnLocation, Slot.TargetGround) / FMath::Max(AxeLeapPattern.AttackRange, 1.0f);
+		const float FlightTime = AxeLeapPattern.AxeFlightTime * FMath::Clamp(DistanceRatio, 0.0f, 1.0f);
+
+		Axe->OnLanded.AddUObject(this, &ARLEnemyCharacter::HandleThrownAxeLanded);
+		Axe->Launch(Slot.TargetGround, FlightTime, AxeLeapPattern.AxeArcHeight);
+	}
+	ThrownAxes[SlotIndex] = Axe;
+
+	GetMesh()->HideBoneByName(Slot.BoneName, PBO_None);
+	Slot.bBoneHidden = true;
+
+	OnAxeLeapThrown(Slot.TargetGround);
 }
 
 void ARLEnemyCharacter::AxeLeapStartRise()
@@ -784,56 +839,57 @@ void ARLEnemyCharacter::AxeLeapStartRise()
 void ARLEnemyCharacter::AxeLeapStartFall()
 {
 	AxeLeapStep = EAxeLeapStep::Falling;
+	const FVector LeapTarget = AxeSlots[0].TargetGround;
 
 	// 도약한 방향 그대로 데칼 위 상공으로 순간이동
-	const FVector LeapDirection = (AxeLeapTargetGround - AxeLeapRiseStart).GetSafeNormal2D();
+	const FVector LeapDirection = (LeapTarget - AxeLeapRiseStart).GetSafeNormal2D();
 	if (!LeapDirection.IsNearlyZero())
 	{
 		SetActorRotation(FRotator(0.0f, LeapDirection.Rotation().Yaw, 0.0f));
 	}
 
-	const FVector LandLocation = AxeLeapTargetGround + FVector(0.0f, 0.0f, GetCapsuleComponent()->GetScaledCapsuleHalfHeight());
+	const FVector LandLocation = LeapTarget + FVector(0.0f, 0.0f, GetCapsuleComponent()->GetScaledCapsuleHalfHeight());
 	SetActorLocation(LandLocation + FVector(0.0f, 0.0f, AxeLeapPattern.LeapHeight), false, nullptr, ETeleportType::TeleportPhysics);
 	GetMesh()->SetVisibility(true);
 }
 
 void ARLEnemyCharacter::AxeLeapImpact()
 {
-	const FVector LandLocation = AxeLeapTargetGround + FVector(0.0f, 0.0f, GetCapsuleComponent()->GetScaledCapsuleHalfHeight());
+	const FVector LeapTarget = AxeSlots[0].TargetGround;
+	const FVector LandLocation = LeapTarget + FVector(0.0f, 0.0f, GetCapsuleComponent()->GetScaledCapsuleHalfHeight());
 	SetActorLocation(LandLocation, false, nullptr, ETeleportType::TeleportPhysics);
 	bAxeLeapInAir = false;
 
-	CreateLocationHitbox(AxeLeapTargetGround, AxeLeapPattern.IndicatorDecalSize.Y * AxeLeapPattern.LeapRadiusScale, AxeLeapPattern.DamageData, true);
-	OnAxeLeapLanded(AxeLeapTargetGround);
+	CreateLocationHitbox(LeapTarget, AxeLeapPattern.IndicatorDecalSize.Y * AxeLeapPattern.LeapRadiusScale, AxeLeapPattern.DamageData, true);
+	OnAxeLeapLanded(LeapTarget);
 
 	EndAxeLeap();
 }
 
 void ARLEnemyCharacter::HandleThrownAxeLanded(ARLThrownAxe* Axe)
 {
-	if (Axe != ThrownAxe || AxeLeapStep == EAxeLeapStep::None)
+	const int32 SlotIndex = ThrownAxes.IndexOfByKey(Axe);
+	if (SlotIndex == INDEX_NONE || AxeLeapStep == EAxeLeapStep::None)
 	{
 		return;
 	}
 
-	CreateLocationHitbox(AxeLeapTargetGround, AxeLeapPattern.IndicatorDecalSize.Y, AxeLeapPattern.AxeDamageData, true);
-	bAxeLanded = true;
+	CreateLocationHitbox(AxeSlots[SlotIndex].TargetGround, AxeLeapPattern.IndicatorDecalSize.Y, AxeLeapPattern.AxeDamageData, true);
 
-	// AxeReturn: 도끼 범위 데칼을 끄고 보스 ~ 도끼 사이 귀환 경로 데칼로 바꿈
+	// 회수 패턴: 도끼 범위 데칼을 끄고, 회수 예고 데칼은 Notify_AxeRecall에서 띄움
 	if (IsAxeReturnPattern())
 	{
-		HideAttackIndicator();
-		ShowAxeReturnLane();
+		HideAxeIndicator(SlotIndex);
 		return;
 	}
 
-	// 도끼 범위 데칼은 여기서 끄고, 착지 범위 데칼은 UpdateAxeLeap이 착지 IndicatorLeadTime초 전에 띄움
+	// AxeLeap: 도끼 범위 데칼은 여기서 끄고, 착지 범위 데칼은 UpdateAxeLeap이 착지 IndicatorLeadTime초 전에 띄움
 	// (이미 착지 예고 구간에 들어왔으면 끄지 않음)
 	UAnimInstance* AnimInstance = GetMesh() ? GetMesh()->GetAnimInstance() : nullptr;
 	const float Position = AnimInstance ? AnimInstance->Montage_GetPosition(AxeLeapMontage) : 0.0f;
-	if (AxeLeapPattern.bUseIndicator && Position < AxeLeapHitTime - AxeLeapPattern.IndicatorLeadTime)
+	if (Position < AxeLeapHitTime - AxeLeapPattern.IndicatorLeadTime)
 	{
-		HideAttackIndicator();
+		HideAxeIndicator(SlotIndex);
 	}
 }
 
@@ -847,7 +903,7 @@ void ARLEnemyCharacter::EndAxeLeap()
 	// 공중에서 끊겼으면 땅으로 되돌림 (낙하 중이면 착지 지점, 상승 중이면 출발 지점)
 	if (bAxeLeapInAir)
 	{
-		const FVector Ground = AxeLeapStep == EAxeLeapStep::Falling ? AxeLeapTargetGround : FindGroundPoint(AxeLeapRiseStart);
+		const FVector Ground = AxeLeapStep == EAxeLeapStep::Falling ? AxeSlots[0].TargetGround : FindGroundPoint(AxeLeapRiseStart);
 		SetActorLocation(Ground + FVector(0.0f, 0.0f, GetCapsuleComponent()->GetScaledCapsuleHalfHeight()), false, nullptr, ETeleportType::TeleportPhysics);
 		bAxeLeapInAir = false;
 	}
@@ -863,120 +919,252 @@ void ARLEnemyCharacter::EndAxeLeap()
 
 	GetMesh()->SetVisibility(true);
 
-	if (bAxeWeaponHidden)
+	for (const FAxeSlot& Slot : AxeSlots)
 	{
-		GetMesh()->UnHideBoneByName(AxeLeapPattern.AxeWeaponBoneName);
-		bAxeWeaponHidden = false;
+		if (Slot.bBoneHidden)
+		{
+			GetMesh()->UnHideBoneByName(Slot.BoneName);
+		}
 	}
 
-	if (ThrownAxe)
+	for (ARLThrownAxe* Axe : ThrownAxes)
 	{
-		ThrownAxe->Destroy();
-		ThrownAxe = nullptr;
+		if (Axe)
+		{
+			Axe->Destroy();
+		}
 	}
 
-	if (AxeLeapPattern.bUseIndicator || AxeLeapPattern.AxeReturnLaneMaterial)
-	{
-		HideAttackIndicator();
-	}
+	HideAxeIndicators();
 
+	AxeSlots.Reset();
+	ThrownAxes.Reset();
 	AxeLeapStep = EAxeLeapStep::None;
 	AxeLeapMontage = nullptr;
-	bAxeLanded = false;
-	AxeReturnHitActors.Reset();
 }
 
 // ==========================================
-// ★ 도끼 투척 → 회수 (AxeReturn)
+// ★ 도끼 회수 (AxeReturn / AxeDoubleReturn)
 // ==========================================
+
+// 곡선 회수 경로 예고 데칼을 몇 조각의 직사각형으로 나눠 그릴지
+static constexpr int32 AxeLaneSegments = 6;
 
 void ARLEnemyCharacter::AxeReturnStartRecall()
 {
-	AxeLeapStep = EAxeLeapStep::Returning;
-	AxeReturnHitActors.Reset();
+	AxeLeapStep = EAxeLeapStep::Recalling;
 
-	if (ThrownAxe)
+	for (int32 SlotIndex = 0; SlotIndex < AxeSlots.Num(); ++SlotIndex)
 	{
-		ThrownAxe->BeginReturn();
-		AxeReturnPrevLocation = ThrownAxe->GetActorLocation();
+		FAxeSlot& Slot = AxeSlots[SlotIndex];
+		ARLThrownAxe* Axe = ThrownAxes[SlotIndex];
+		Slot.HitActors.Reset();
+
+		const FVector AxeLocation = Axe ? Axe->GetActorLocation() : Slot.TargetGround;
+		const FVector HandLocation = GetMesh()->GetSocketLocation(Slot.BoneName);
+
+		// 플레이어가 도끼와 보스 사이(도끼→보스 선분의 양 끝 15% 안쪽 + 옆으로 AxeReturnCurveMaxOffset 이내)에 있으면
+		// 지금 플레이어 위치를 거쳐 휘어서 돌아옴. 예고가 뜬 순간의 위치를 지나므로 보고 빠져나가면 피할 수 있음
+		Slot.bCurved = false;
+		const APawn* Player = AxeLeapPattern.bAxeReturnCurveThroughPlayer ? UGameplayStatics::GetPlayerPawn(this, 0) : nullptr;
+		if (Player)
+		{
+			const FVector AxeToBoss = (GetActorLocation() - Slot.TargetGround) * FVector(1.0f, 1.0f, 0.0f);
+			const FVector AxeToPlayer = (Player->GetActorLocation() - Slot.TargetGround) * FVector(1.0f, 1.0f, 0.0f);
+			const float LengthSquared = AxeToBoss.SizeSquared();
+			if (LengthSquared > 1.0f)
+			{
+				const float T = FVector::DotProduct(AxeToPlayer, AxeToBoss) / LengthSquared;
+				const float Lateral = (AxeToPlayer - AxeToBoss * T).Size();
+				if (T > 0.15f && T < 0.85f && Lateral <= AxeLeapPattern.AxeReturnCurveMaxOffset)
+				{
+					Slot.bCurved = true;
+					Slot.CurvePassThrough = Player->GetActorLocation();
+				}
+			}
+		}
+
+		// 던질 때와 같은 속도로 돌아오도록 이동 시간을 구하고(곡선이면 꺾인 경로 길이), 받는 순간(Notify_AxeCatch)에 정확히
+		// 손에 닿도록 출발 시각을 역산. 그 전까지는 박힌 채로 흔들리면서 예고 데칼만 보여줌
+		const float PathLength = Slot.bCurved
+			? FVector::Dist2D(AxeLocation, Slot.CurvePassThrough) + FVector::Dist2D(Slot.CurvePassThrough, HandLocation)
+			: FVector::Dist2D(AxeLocation, HandLocation);
+		const float MoveTime = AxeLeapPattern.AxeFlightTime * FMath::Clamp(PathLength / FMath::Max(AxeLeapPattern.AttackRange, 1.0f), 0.0f, 1.0f);
+		Slot.MoveTime = FMath::Clamp(AxeCatchTime - MoveTime, AxeRecallTime, AxeCatchTime);
+
+		if (Axe)
+		{
+			Axe->StartWobble();
+		}
+
+		// 회수 예고: 도끼 주변 원형(뽑힐 때 피해 범위) + 도끼 → 보스 경로(돌아오는 경로 피해 범위)
+		if (AxeLeapPattern.bUseIndicator)
+		{
+			ShowAxeCircle(SlotIndex, Slot.TargetGround, AxeLeapPattern.IndicatorDecalSize.Y);
+		}
+
+		const int32 LaneBase = AxeSlots.Num() + SlotIndex * AxeLaneSegments;
+		const FVector BossGround(GetActorLocation().X, GetActorLocation().Y, Slot.TargetGround.Z);
+		if (Slot.bCurved)
+		{
+			// 곡선은 직사각형 여러 조각으로 그림. 꺾이는 바깥쪽에 틈이 생기지 않게 조각을 앞뒤로 조금씩 늘림
+			const FVector PassGround(Slot.CurvePassThrough.X, Slot.CurvePassThrough.Y, Slot.TargetGround.Z);
+			for (int32 Segment = 0; Segment < AxeLaneSegments; ++Segment)
+			{
+				FVector From = ARLThrownAxe::EvaluateCurve(Slot.TargetGround, PassGround, BossGround, static_cast<float>(Segment) / AxeLaneSegments);
+				FVector To = ARLThrownAxe::EvaluateCurve(Slot.TargetGround, PassGround, BossGround, static_cast<float>(Segment + 1) / AxeLaneSegments);
+				const FVector Overlap = (To - From).GetSafeNormal2D() * AxeLeapPattern.AxeReturnHitRadius * 0.5f;
+				ShowAxeLane(LaneBase + Segment, From - Overlap, To + Overlap, AxeLeapPattern.AxeReturnHitRadius);
+			}
+		}
+		else
+		{
+			ShowAxeLane(LaneBase, Slot.TargetGround, BossGround, AxeLeapPattern.AxeReturnHitRadius);
+		}
 	}
 
-	OnAxeRecalled(AxeLeapTargetGround);
+	OnAxeRecalled(AxeSlots[0].TargetGround);
 }
 
 void ARLEnemyCharacter::UpdateAxeReturn(float Position)
 {
-	if (ThrownAxe)
+	for (int32 SlotIndex = 0; SlotIndex < AxeSlots.Num(); ++SlotIndex)
 	{
-		const float Alpha = (Position - AxeRecallTime) / (AxeCatchTime - AxeRecallTime);
-		ThrownAxe->UpdateReturn(Alpha, GetMesh()->GetSocketLocation(AxeLeapPattern.AxeWeaponBoneName));
-
-		// 지난 프레임 위치 → 현재 위치를 구체로 스윕해서 경로에 닿은 대상에게 피해 (회수 한 번에 대상당 1회)
-		const FVector CurrentLocation = ThrownAxe->GetActorLocation();
-		TArray<FHitResult> Hits;
-		FCollisionQueryParams Params(SCENE_QUERY_STAT(AxeReturnSweep), false, this);
-		Params.AddIgnoredActor(ThrownAxe);
-		GetWorld()->SweepMultiByObjectType(Hits, AxeReturnPrevLocation, CurrentLocation, FQuat::Identity,
-			FCollisionObjectQueryParams(ECC_Pawn), FCollisionShape::MakeSphere(AxeLeapPattern.AxeReturnHitRadius), Params);
-
-		for (const FHitResult& Hit : Hits)
+		FAxeSlot& Slot = AxeSlots[SlotIndex];
+		ARLThrownAxe* Axe = ThrownAxes[SlotIndex];
+		if (!Axe || Position < Slot.MoveTime)
 		{
-			ARLCharacter* Target = Cast<ARLCharacter>(Hit.GetActor());
-			if (!Target || AxeReturnHitActors.Contains(Target))
-			{
-				continue;
-			}
-			AxeReturnHitActors.Add(Target);
-
-			FRLDamageData FinalDamage = AxeLeapPattern.AxeReturnDamageData;
-			FinalDamage.DamageCauser = this;
-			Target->ReceiveCustomDamage(FinalDamage, Hit);
+			continue;
 		}
 
-		AxeReturnPrevLocation = CurrentLocation;
-		ShowAxeReturnLane();
+		if (!Slot.bReturning)
+		{
+			// 흔들림을 멈추고 뽑혀 나오는 순간 도끼 주변 원형 범위 피해 (이후 경로 피해와 합쳐 이 도끼당 대상 1회)
+			Slot.bReturning = true;
+			Axe->BeginReturn();
+			Slot.PrevLocation = Axe->GetActorLocation();
+			ApplyAxeReturnDamage(Slot, Slot.TargetGround, Slot.TargetGround + FVector(0.0f, 0.0f, 1.0f), AxeLeapPattern.IndicatorDecalSize.Y);
+		}
+
+		const float Alpha = (Position - Slot.MoveTime) / FMath::Max(AxeCatchTime - Slot.MoveTime, KINDA_SMALL_NUMBER);
+		Axe->UpdateReturn(Alpha, GetMesh()->GetSocketLocation(Slot.BoneName), Slot.bCurved, Slot.CurvePassThrough);
+
+		// 지난 프레임 위치 → 현재 위치를 구체로 스윕해서 경로에 닿은 대상에게 피해
+		const FVector CurrentLocation = Axe->GetActorLocation();
+		ApplyAxeReturnDamage(Slot, Slot.PrevLocation, CurrentLocation, AxeLeapPattern.AxeReturnHitRadius);
+		Slot.PrevLocation = CurrentLocation;
 	}
 
 	if (Position >= AxeCatchTime)
 	{
-		AxeReturnCatch();
+		OnAxeCaught();
+		EndAxeLeap();
 	}
 }
 
-void ARLEnemyCharacter::AxeReturnCatch()
+void ARLEnemyCharacter::ApplyAxeReturnDamage(FAxeSlot& Slot, const FVector& Start, const FVector& End, float Radius)
 {
-	OnAxeCaught();
-	EndAxeLeap();
-}
+	TArray<FHitResult> Hits;
+	FCollisionQueryParams Params(SCENE_QUERY_STAT(AxeReturnSweep), false, this);
+	GetWorld()->SweepMultiByObjectType(Hits, Start, End, FQuat::Identity,
+		FCollisionObjectQueryParams(ECC_Pawn), FCollisionShape::MakeSphere(Radius), Params);
 
-void ARLEnemyCharacter::ShowAxeReturnLane()
-{
-	if (!AxeLeapPattern.AxeReturnLaneMaterial)
+	for (const FHitResult& Hit : Hits)
 	{
-		return;
-	}
+		ARLCharacter* Target = Cast<ARLCharacter>(Hit.GetActor());
+		if (!Target || Slot.HitActors.Contains(Target))
+		{
+			continue;
+		}
+		Slot.HitActors.Add(Target);
 
-	// 보스 → 도끼(돌아오는 중이면 현재 도끼 위치) 직사각형. 돌아올수록 짧아짐
-	const FVector AxeLocation = (AxeLeapStep == EAxeLeapStep::Returning && ThrownAxe) ? ThrownAxe->GetActorLocation() : AxeLeapTargetGround;
-	const FVector Start = GetActorLocation();
-	const FVector Delta = (AxeLocation - Start) * FVector(1.0f, 1.0f, 0.0f);
-	const float HalfLength = Delta.Size() * 0.5f;
-	if (HalfLength < 1.0f)
-	{
-		HideAttackIndicator();
-		return;
-	}
-
-	ShowBoxAttackIndicator(FVector(HalfLength, AxeLeapPattern.AxeReturnHitRadius, 0.0f), 0.0f, AxeLeapPattern.AxeReturnLaneMaterial);
-	if (AttackIndicator)
-	{
-		// 데칼 투사 높이를 바닥 기준으로 (캡슐 중심 기준이면 큰 보스는 바닥까지 안 닿을 수 있음)
-		AttackIndicator->UpdateBoxTransform(FVector(Start.X, Start.Y, AxeLeapTargetGround.Z), HalfLength, Delta.Rotation().Yaw);
+		FRLDamageData FinalDamage = AxeLeapPattern.AxeReturnDamageData;
+		FinalDamage.DamageCauser = this;
+		Target->ReceiveCustomDamage(FinalDamage, Hit);
 	}
 }
 
 // ==========================================
-// ★ 몽타주 좌우 반전 (bMirrorAnimation)
+// ★ 도끼 패턴 예고 데칼 풀
+// ==========================================
+
+ARLDecalIndicator* ARLEnemyCharacter::GetAxeIndicator(int32 Index)
+{
+	if (!AxeIndicators.IsValidIndex(Index))
+	{
+		AxeIndicators.SetNum(Index + 1);
+	}
+
+	if (!AxeIndicators[Index])
+	{
+		FActorSpawnParameters Params;
+		Params.Owner = this;
+		Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+		AxeIndicators[Index] = GetWorld()->SpawnActor<ARLDecalIndicator>(ARLDecalIndicator::StaticClass(), FVector::ZeroVector, FRotator::ZeroRotator, Params);
+	}
+	return AxeIndicators[Index];
+}
+
+void ARLEnemyCharacter::ShowAxeCircle(int32 Index, const FVector& Location, float Radius)
+{
+	if (ARLDecalIndicator* Indicator = GetAxeIndicator(Index))
+	{
+		Indicator->SetupIndicator(EIndicatorType::Circle, Radius, 0.0f, AxeLeapPattern.IndicatorDecalMaterial);
+		Indicator->UpdateIndicatorTransform(Location, Location, 0.0f);
+		Indicator->SetIndicatorVisibility(true);
+	}
+}
+
+void ARLEnemyCharacter::ShowAxeLane(int32 Index, const FVector& From, const FVector& To, float HalfWidth)
+{
+	const FVector Delta = (To - From) * FVector(1.0f, 1.0f, 0.0f);
+	const float HalfLength = Delta.Size() * 0.5f;
+	if (!AxeLeapPattern.AxeReturnLaneMaterial || HalfLength < 1.0f)
+	{
+		return;
+	}
+
+	if (ARLDecalIndicator* Indicator = GetAxeIndicator(Index))
+	{
+		Indicator->SetupBoxIndicator(FVector(HalfLength, HalfWidth, 0.0f), AxeLeapPattern.AxeReturnLaneMaterial);
+		// 데칼 투사 높이를 바닥 기준으로 (캡슐 중심 기준이면 큰 보스는 바닥까지 안 닿을 수 있음)
+		Indicator->UpdateBoxTransform(From, HalfLength, Delta.Rotation().Yaw);
+		Indicator->SetIndicatorVisibility(true);
+	}
+}
+
+void ARLEnemyCharacter::HideAxeIndicator(int32 Index)
+{
+	if (AxeIndicators.IsValidIndex(Index) && AxeIndicators[Index])
+	{
+		AxeIndicators[Index]->SetIndicatorVisibility(false);
+	}
+}
+
+void ARLEnemyCharacter::HideAxeIndicators()
+{
+	for (int32 Index = 0; Index < AxeIndicators.Num(); ++Index)
+	{
+		HideAxeIndicator(Index);
+	}
+}
+
+void ARLEnemyCharacter::EndPlay(const EEndPlayReason::Type EndPlayReason)
+{
+	for (ARLDecalIndicator* Indicator : AxeIndicators)
+	{
+		if (Indicator)
+		{
+			Indicator->Destroy();
+		}
+	}
+	AxeIndicators.Reset();
+
+	Super::EndPlay(EndPlayReason);
+}
+
+// ==========================================
+// ★ 몽타주 좌우 반전 (bMirrorAnimation / Notify_MirrorStart ~ Notify_MirrorEnd)
 // ==========================================
 
 void ARLEnemyCharacter::StartMirrorAnimation(UAnimMontage* Montage)
@@ -988,18 +1176,48 @@ void ARLEnemyCharacter::StartMirrorAnimation(UAnimMontage* Montage)
 	}
 
 	MirrorMontage = Montage;
+	bMirrorWholeMontage = true;
 	bMeshMirrored = true;
+}
+
+bool ARLEnemyCharacter::StartMirrorWindows(UAnimMontage* Montage)
+{
+	StopMirrorAnimation();
+	if (!Montage)
+	{
+		return false;
+	}
+
+	const TArray<FVector2D> Starts = ComputeTelegraphWindows(Montage, FName("Notify_MirrorStart"), 0.0f);
+	const TArray<FVector2D> Ends = ComputeTelegraphWindows(Montage, FName("Notify_MirrorEnd"), 0.0f);
+	for (int32 Index = 0; Index < Starts.Num(); ++Index)
+	{
+		// 짝이 되는 End가 없으면 몽타주 끝까지 반전
+		const float StartTime = Starts[Index].Y;
+		const float EndTime = Ends.IsValidIndex(Index) ? Ends[Index].Y : Montage->GetPlayLength();
+		MirrorWindows.Add(FVector2D(StartTime, EndTime));
+	}
+
+	if (MirrorWindows.Num() == 0)
+	{
+		return false;
+	}
+
+	MirrorMontage = Montage;
+	bMirrorWholeMontage = false;
+	return true;
 }
 
 void ARLEnemyCharacter::StopMirrorAnimation()
 {
-	if (!bMeshMirrored)
+	if (bMeshMirrored)
 	{
-		return;
+		SetMirrorPoseVariable(false);
 	}
 
-	SetMirrorPoseVariable(false);
 	MirrorMontage = nullptr;
+	bMirrorWholeMontage = false;
+	MirrorWindows.Reset();
 	bMeshMirrored = false;
 }
 
@@ -1020,7 +1238,7 @@ bool ARLEnemyCharacter::SetMirrorPoseVariable(bool bMirror)
 
 void ARLEnemyCharacter::UpdateMirrorAnimation()
 {
-	if (!bMeshMirrored)
+	if (!MirrorMontage)
 	{
 		return;
 	}
@@ -1029,6 +1247,25 @@ void ARLEnemyCharacter::UpdateMirrorAnimation()
 	if (!AnimInstance || !AnimInstance->Montage_IsPlaying(MirrorMontage))
 	{
 		StopMirrorAnimation();
+		return;
+	}
+
+	if (bMirrorWholeMontage)
+	{
+		return;
+	}
+
+	// 반전 구간 안에 들어오거나 나갈 때만 AnimBP 변수를 바꿈 (Mirror 노드의 Blend Time으로 부드럽게 전환)
+	const float Position = AnimInstance->Montage_GetPosition(MirrorMontage);
+	bool bShouldMirror = false;
+	for (const FVector2D& Window : MirrorWindows)
+	{
+		bShouldMirror |= Position >= Window.X && Position < Window.Y;
+	}
+
+	if (bShouldMirror != bMeshMirrored && SetMirrorPoseVariable(bShouldMirror))
+	{
+		bMeshMirrored = bShouldMirror;
 	}
 }
 
