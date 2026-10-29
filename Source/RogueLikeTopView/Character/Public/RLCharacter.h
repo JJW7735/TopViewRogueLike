@@ -137,6 +137,11 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Combat|Indicator")
 	void HideAttackIndicator();
 
+	// ★ 예고 데칼 기준점 = 캡슐 바닥(발 위치). 데칼은 기준점 위아래로 일정 두께만 투사하므로, 캡슐 중심을 쓰면
+	// 덩치 큰 캐릭터(예: 3배 크기 보스2)는 데칼이 바닥까지 닿지 않아 안 보입니다.
+	UFUNCTION(BlueprintPure, Category = "Combat|Indicator")
+	FVector GetIndicatorOrigin() const;
+
 	// ★ CreateSectorHitbox와 같은 규격(Radius/SafeZoneAngleDegrees)의 부채꼴 예고 데칼을 표시합니다.
 	// ShowBoxAttackIndicator의 부채꼴 버전 — 자기 자신 중심이라 ForwardOffset이 없습니다.
 	UFUNCTION(BlueprintCallable, Category = "Combat|Indicator")
