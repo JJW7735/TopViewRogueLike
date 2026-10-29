@@ -703,6 +703,13 @@ void ARLCharacter::CreateBoxHitbox(FVector BoxExtent, float ForwardOffset, const
     BoxExtent.Y *= HitWidthScale;
     ForwardOffset *= HitScale;
 
+    // ★ 높이는 최소한 내 캡슐 전체(발 ~ 머리)를 덮도록. 데이터의 Z가 0이면 캡슐 중심 높이의 얇은 판이 되어서,
+    // 덩치 큰 캐릭터(예: 3배 크기 보스2)는 판이 플레이어 머리 위로 지나가 안 맞음
+    if (const UCapsuleComponent* Capsule = GetCapsuleComponent())
+    {
+        BoxExtent.Z = FMath::Max(BoxExtent.Z, Capsule->GetScaledCapsuleHalfHeight());
+    }
+
     FVector Center = GetActorLocation() + (GetActorForwardVector() * ForwardOffset);
     FRotator Rotation = GetActorRotation();
 
@@ -768,7 +775,7 @@ void ARLCharacter::ShowBoxAttackIndicator(FVector BoxExtent, float ForwardOffset
     }
 
     AttackIndicator->SetupBoxIndicator(BoxExtent, DecalMaterial);
-    AttackIndicator->UpdateBoxTransform(GetActorLocation(), ForwardOffset, GetActorRotation().Yaw);
+    AttackIndicator->UpdateBoxTransform(GetIndicatorOrigin(), ForwardOffset, GetActorRotation().Yaw);
     AttackIndicator->SetIndicatorVisibility(true);
 }
 
@@ -791,8 +798,14 @@ void ARLCharacter::ShowSectorAttackIndicator(float Radius, float SafeZoneAngleDe
     }
 
     AttackIndicator->SetupSectorIndicator(Radius, SafeZoneAngleDegrees, DecalMaterial, InnerSafeRadius);
-    AttackIndicator->UpdateSectorTransform(GetActorLocation(), GetActorRotation().Yaw);
+    AttackIndicator->UpdateSectorTransform(GetIndicatorOrigin(), GetActorRotation().Yaw);
     AttackIndicator->SetIndicatorVisibility(true);
+}
+
+FVector ARLCharacter::GetIndicatorOrigin() const
+{
+    const UCapsuleComponent* Capsule = GetCapsuleComponent();
+    return GetActorLocation() - FVector(0.f, 0.f, Capsule ? Capsule->GetScaledCapsuleHalfHeight() : 0.f);
 }
 
 void ARLCharacter::HideAttackIndicator()
@@ -1436,11 +1449,16 @@ void ARLCharacter::CreateSectorHitbox(float Radius, float SafeZoneAngleDegrees, 
 
     // 원 전체(Radius)를 우선 스윕으로 다 모으고, 아래에서 각도로 안전지대만 걸러냅니다.
     // (BoxTrace/ConeTrace 같은 부채꼴 전용 트레이스가 엔진에 없어서, 원형 스윕 + 각도 필터링 방식을 씁니다)
+    // ★ 구체는 가장자리로 갈수록 위아래가 얇아져서, 캡슐 중심이 높은 큰 캐릭터는 바깥쪽 플레이어 다리 높이까지 안 닿음.
+    // 그래서 반지름을 내 캡슐 반높이만큼 넉넉히 잡아 후보를 모으고, 아래에서 수평 거리로 다시 걸러 "원기둥" 판정으로 만듦
+    const UCapsuleComponent* MyCapsule = GetCapsuleComponent();
+    const float SearchRadius = Radius + (MyCapsule ? MyCapsule->GetScaledCapsuleHalfHeight() : 0.f);
+
     bool bHit = UKismetSystemLibrary::SphereTraceMultiForObjects(
         GetWorld(),
         Origin,
         Origin + FVector(0.f, 0.f, 1.f),
-        Radius,
+        SearchRadius,
         ObjectTypes,
         false,
         ActorsToIgnore,
@@ -1463,6 +1481,14 @@ void ARLCharacter::CreateSectorHitbox(float Radius, float SafeZoneAngleDegrees, 
         {
             AActor* HitActor = Hit.GetActor();
             if (!HitActor || DamagedActors.Contains(HitActor))
+            {
+                continue;
+            }
+
+            // 원기둥 판정: 수평 거리가 (반지름 + 대상 캡슐 반지름)보다 멀면 제외 (SearchRadius로 넉넉히 모은 후보 정리)
+            const ACharacter* HitCharacter = Cast<ACharacter>(HitActor);
+            const float TargetRadius = HitCharacter && HitCharacter->GetCapsuleComponent() ? HitCharacter->GetCapsuleComponent()->GetScaledCapsuleRadius() : 0.f;
+            if (FVector::Dist2D(HitActor->GetActorLocation(), Origin) - TargetRadius > Radius)
             {
                 continue;
             }

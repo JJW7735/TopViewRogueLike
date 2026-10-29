@@ -441,7 +441,7 @@ void ARLEnemyCharacter::HideSoulCrackZones()
 
 void ARLEnemyCharacter::UpdateSoulCrackZones()
 {
-	const FVector Location = GetActorLocation();
+	const FVector Location = GetIndicatorOrigin();
 	const float Yaw = GetActorRotation().Yaw;
 	if (SoulCrackZoneFront && SoulCrackFrontAngle > 0.0f)
 	{
@@ -567,7 +567,7 @@ void ARLEnemyCharacter::UpdateAttackChase(float DeltaTime)
 	// 보스가 움직였으니 떠 있는 Box 예고 데칼도 같이 옮겨서 실제 판정 위치와 어긋나지 않게 함
 	if (bTelegraphVisible && AttackIndicator && TelegraphShape == ETelegraphShape::Box)
 	{
-		AttackIndicator->UpdateBoxTransform(GetActorLocation(), TelegraphForwardOffset * TelegraphShownScale, GetActorRotation().Yaw);
+		AttackIndicator->UpdateBoxTransform(GetIndicatorOrigin(), TelegraphForwardOffset * TelegraphShownScale, GetActorRotation().Yaw);
 	}
 }
 
