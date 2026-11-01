@@ -260,24 +260,19 @@ void ARLCharacter::ReceiveCustomDamage(const FRLDamageData& DamageData, const FH
     // 보스/엘리트처럼 경직 면역(CanBeStaggered == false)인 대상은 넉백으로 밀려나지 않습니다.
     const bool bCanBeStaggered = CanBeStaggered();
 
-    if (bCanBeStaggered && DamageData.bPushOutOfRange && DamageData.PushOutRadius > 0.0f)
+    if (bCanBeStaggered && DamageData.bPushAwayFromCenter && DamageData.PushAwayDistance > 0.0f)
     {
-        // ★ 범위 밖으로 밀어내기: 원 중심 → 나 방향으로, 테두리 + 여유 거리(+내 캡슐 반지름)까지 대시 이동.
-        // 이미 그보다 바깥이면 밀지 않음. 대시 이동이 네비메시 경계에서 멈춰 주므로 낭떠러지로 떨어지지 않음
-        FVector AwayDir = (GetActorLocation() - DamageData.PushOutOrigin).GetSafeNormal2D();
+        // ★ 일정 거리 밀어내기: 판정 중심 → 나 방향으로 PushAwayDistance만큼 대시 이동.
+        // 대시 이동이 네비메시 경계에서 멈춰 주므로 낭떠러지로 떨어지지 않음
+        // 판정 함수를 거치지 않은 피해(중심 미설정)면 공격자 위치를 중심으로
+        const FVector PushOrigin = (DamageData.PushOrigin.IsZero() && DamageData.DamageCauser) ? DamageData.DamageCauser->GetActorLocation() : DamageData.PushOrigin;
+        FVector AwayDir = (GetActorLocation() - PushOrigin).GetSafeNormal2D();
         if (AwayDir.IsNearlyZero())
         {
             AwayDir = DamageData.DamageCauser ? DamageData.DamageCauser->GetActorForwardVector().GetSafeNormal2D() : -GetActorForwardVector().GetSafeNormal2D();
         }
 
-        const float MyRadius = GetCapsuleComponent() ? GetCapsuleComponent()->GetScaledCapsuleRadius() : 0.0f;
-        const float PushDistance = DamageData.PushOutRadius + DamageData.PushOutMargin + MyRadius;
-        if (FVector::Dist2D(GetActorLocation(), DamageData.PushOutOrigin) < PushDistance)
-        {
-            FVector PushTarget = DamageData.PushOutOrigin + AwayDir * PushDistance;
-            PushTarget.Z = GetActorLocation().Z;
-            StartDashMovement(PushTarget, DamageData.PushOutDuration);
-        }
+        StartDashMovement(GetActorLocation() + AwayDir * DamageData.PushAwayDistance, DamageData.PushAwayDuration);
     }
     else if (bCanBeStaggered && DamageData.KnockbackForce > 0.0f)
     {
@@ -776,6 +771,8 @@ void ARLCharacter::CreateBoxHitbox(FVector BoxExtent, float ForwardOffset, const
                 {
                     FRLDamageData FinalData = DamageData;
                     FinalData.DamageCauser = this;
+                    // 일정 거리 밀어내기(bPushAwayFromCenter)용 중심 = 공격자
+                    FinalData.PushOrigin = GetActorLocation();
                     TargetCharacter->ReceiveCustomDamage(FinalData, Hit);
                 }
             }
@@ -1502,9 +1499,8 @@ void ARLCharacter::CreateLocationHitbox(FVector TargetLocation, float Radius, co
                 {
                     FRLDamageData FinalDamage = DamageData;
                     FinalDamage.DamageCauser = this;
-                    // 범위 밖으로 밀어내기(bPushOutOfRange)용 원 중심/반지름
-                    FinalDamage.PushOutOrigin = TargetLocation;
-                    FinalDamage.PushOutRadius = Radius;
+                    // 일정 거리 밀어내기(bPushAwayFromCenter)용 중심
+                    FinalDamage.PushOrigin = TargetLocation;
                     TargetChar->ReceiveCustomDamage(FinalDamage, Hit);
                 }
             }
@@ -1608,9 +1604,8 @@ void ARLCharacter::CreateSectorHitbox(float Radius, float SafeZoneAngleDegrees, 
             {
                 FRLDamageData FinalDamage = DamageData;
                 FinalDamage.DamageCauser = this;
-                // 범위 밖으로 밀어내기(bPushOutOfRange)용 원 중심/반지름
-                FinalDamage.PushOutOrigin = Origin;
-                FinalDamage.PushOutRadius = Radius;
+                // 일정 거리 밀어내기(bPushAwayFromCenter)용 중심
+                FinalDamage.PushOrigin = Origin;
                 TargetChar->ReceiveCustomDamage(FinalDamage, Hit);
             }
         }

@@ -71,26 +71,23 @@ struct FRLDamageData
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Damage", meta = (ClampMin = "0.0"))
 	float StunDuration = 0.0f;
 
-	// ★ 범위 밖으로 밀어내기. true면 KnockbackForce 대신, 원형 판정(Sector/Location)의 중심에서 바깥 방향으로
-	// "판정 반지름 + PushOutMargin" 지점까지 PushOutDuration초 동안 밀어냄 → 어디에 서 있었든 항상 데칼 밖으로 나감.
-	// 네비메시 경계(낭떠러지)와 벽은 넘지 않음. Box 판정에는 적용 안 됨(기존 넉백 사용). 예: 보스2 울부짖음
+	// ★ 일정 거리 밀어내기. true면 KnockbackForce(튕겨내기) 대신, 판정 중심(원형 판정의 중심 / 박스 판정은 공격자)에서
+	// 바깥 방향으로 PushAwayDistance만큼 PushAwayDuration초 동안 미끄러지듯 밀어냄. 반복 판정(패턴 PulseInterval)과
+	// 같이 쓰면 "범위 안에 있는 동안 계속 조금씩 밀려나는" 장판이 됨. 네비메시 경계(낭떠러지)와 벽은 넘지 않음. 예: 보스2 울부짖음
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Damage")
-	bool bPushOutOfRange = false;
+	bool bPushAwayFromCenter = false;
 
-	// 판정 범위 테두리에서 얼마나 더 바깥까지 밀어낼지(cm)
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Damage", meta = (EditCondition = "bPushOutOfRange", ClampMin = "0.0"))
-	float PushOutMargin = 100.0f;
+	// 한 번 맞을 때 밀려나는 거리(cm)
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Damage", meta = (EditCondition = "bPushAwayFromCenter", ClampMin = "0.0"))
+	float PushAwayDistance = 150.0f;
 
-	// 밀려나는 데 걸리는 시간(초)
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Damage", meta = (EditCondition = "bPushOutOfRange", ClampMin = "0.05"))
-	float PushOutDuration = 0.25f;
+	// 밀려나는 데 걸리는 시간(초). 반복 판정 간격보다 짧게 두면 끊김 없이 이어서 밀림
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Damage", meta = (EditCondition = "bPushAwayFromCenter", ClampMin = "0.05"))
+	float PushAwayDuration = 0.12f;
 
-	// 판정 함수(CreateSectorHitbox/CreateLocationHitbox)가 채워 넣는 원형 판정 중심/반지름 (직접 편집하지 않음)
+	// 판정 함수(Create*Hitbox)가 채워 넣는 밀어내기 중심 (직접 편집하지 않음)
 	UPROPERTY(BlueprintReadOnly, Category = "Damage")
-	FVector PushOutOrigin = FVector::ZeroVector;
-
-	UPROPERTY(BlueprintReadOnly, Category = "Damage")
-	float PushOutRadius = 0.0f;
+	FVector PushOrigin = FVector::ZeroVector;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Damage")
 	bool bIgnoreInvincibility = false;
@@ -201,6 +198,17 @@ struct FRLMonsterPatternData
 	// 비워두면 1.0. 배열보다 히트가 많으면 마지막 값을 계속 씁니다.
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Pattern")
 	TArray<float> HitWidthScales;
+
+	// ★ 반복 판정(펄스) 간격(초). 0보다 크면 몽타주의 Notify_PulseStart ~ Notify_PulseEnd 구간 동안 이 간격마다 같은
+	// 판정(AttackShape가 Sector 또는 Box)을 반복합니다. 예고 데칼은 구간 시작 IndicatorLeadTime초 전부터 구간 끝까지 계속 표시.
+	// Notify_Hit 없이 단독으로 쓰는 용도 (Notify_Hit도 있으면 그 타격은 따로 한 번 더 들어감). 예: 보스2 울부짖음
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Pattern|Pulse", meta = (ClampMin = "0.0"))
+	float PulseInterval = 0.0f;
+
+	// ★ 반복 판정 구간 동안 띄울 돔(반구) 이펙트 머티리얼 (Sector 전용, 반지름 = 판정 반지름). 비우면 표시 안 함.
+	// 반투명 머티리얼을 넣으세요 (예: MI_Howl_Dome). 판정할 때마다 살짝 부풀었다 돌아와서 맥동하는 느낌을 줌
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Pattern|Pulse", meta = (EditCondition = "PulseInterval > 0"))
+	TObjectPtr<UMaterialInterface> PulseDomeMaterial = nullptr;
 
 	// ★ 몽타주를 좌우 반전해서 재생 (예: 오른손 도끼 던지기 → 왼손). 몽타주가 재생되는 동안 AnimBP의 Mirror 노드로
 	// 포즈를 좌우 반전하므로 별도 애니메이션이 필요 없습니다. 반전된 포즈에서는 반대쪽 손이 동작하므로

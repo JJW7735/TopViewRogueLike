@@ -22,6 +22,8 @@
 #include "GameFramework/CharacterMovementComponent.h"
 #include "RLDecalIndicator.h"
 #include "RLThrownAxe.h"
+#include "Components/StaticMeshComponent.h"
+#include "Engine/StaticMesh.h"
 #include "Materials/MaterialInterface.h"
 #include "RLAbilitySystemComponent.h"
 #include "RLGameplayEffects.h"
@@ -168,6 +170,7 @@ void ARLEnemyCharacter::HandleDeath()
 	// 균열 관련 타이머가 사망 후 BT를 재시작하지 않도록 정리
 	EndSoulCrackPattern();
 	StopAttackChase();
+	StopPulse();
 	EndAxeLeap();
 	StopMirrorAnimation();
 	bSoulCrackAIStopped = false;
@@ -343,6 +346,7 @@ void ARLEnemyCharacter::Tick(float DeltaTime)
 	Super::Tick(DeltaTime);
 
 	UpdateAttackChase(DeltaTime);
+	UpdatePulse();
 	UpdateAxeLeap(DeltaTime);
 	UpdateMirrorAnimation();
 
@@ -491,6 +495,7 @@ void ARLEnemyCharacter::BeginAttackPattern(const FRLMonsterPatternData& Pattern,
 	SetAttackHitScales(Pattern.HitRangeScales);
 	SetAttackHitWidthScales(Pattern.HitWidthScales);
 	StartAttackChase(Pattern);
+	StartPulse(Pattern);
 	BeginSoulCrackPattern(Pattern, HitNotifyName);
 
 	// 몽타주 전체 반전, 또는 Notify_MirrorStart ~ Notify_MirrorEnd 구간만 반전 (둘 다 아니면 반전 없음)
@@ -569,6 +574,160 @@ void ARLEnemyCharacter::UpdateAttackChase(float DeltaTime)
 	{
 		AttackIndicator->UpdateBoxTransform(GetIndicatorOrigin(), TelegraphForwardOffset * TelegraphShownScale, GetActorRotation().Yaw);
 	}
+}
+
+// ==========================================
+// ★ 반복 판정 (Pulse)
+// ==========================================
+
+void ARLEnemyCharacter::StartPulse(const FRLMonsterPatternData& Pattern)
+{
+	StopPulse();
+
+	if (Pattern.PulseInterval <= 0.0f || !Pattern.AttackMontage || (HealthComp && HealthComp->bIsDead))
+	{
+		return;
+	}
+
+	const TArray<FVector2D> Starts = ComputeTelegraphWindows(Pattern.AttackMontage, FName("Notify_PulseStart"), 0.0f);
+	const TArray<FVector2D> Ends = ComputeTelegraphWindows(Pattern.AttackMontage, FName("Notify_PulseEnd"), 0.0f);
+	for (int32 Index = 0; Index < Starts.Num(); ++Index)
+	{
+		// 짝이 되는 End가 없으면 몽타주 끝까지
+		const float EndTime = Ends.IsValidIndex(Index) ? Ends[Index].Y : Pattern.AttackMontage->GetPlayLength();
+		PulseWindows.Add(FVector2D(Starts[Index].Y, EndTime));
+	}
+
+	if (PulseWindows.Num() == 0)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[Pulse] %s: 몽타주 '%s'에 Notify_PulseStart가 없어 반복 판정을 건너뜁니다."), *GetName(), *Pattern.AttackMontage->GetName());
+		return;
+	}
+
+	PulseMontage = Pattern.AttackMontage;
+	PulsePattern = Pattern;
+	NextPulseTime = 0.0f;
+}
+
+void ARLEnemyCharacter::UpdatePulse()
+{
+	if (!PulseMontage)
+	{
+		return;
+	}
+
+	UAnimInstance* AnimInstance = GetMesh() ? GetMesh()->GetAnimInstance() : nullptr;
+	if (!AnimInstance || !AnimInstance->Montage_IsPlaying(PulseMontage) || (HealthComp && HealthComp->bIsDead))
+	{
+		StopPulse();
+		return;
+	}
+
+	const float Position = AnimInstance->Montage_GetPosition(PulseMontage);
+	const FVector DecalSize = PulsePattern.IndicatorDecalSize;
+	const bool bSector = PulsePattern.AttackShape == ERLAttackShape::Sector;
+
+	bool bShowIndicator = false;
+	bool bInPulseWindow = false;
+	for (const FVector2D& Window : PulseWindows)
+	{
+		bShowIndicator |= Position >= Window.X - PulsePattern.IndicatorLeadTime && Position < Window.Y;
+		bInPulseWindow |= Position >= Window.X && Position < Window.Y;
+
+		if (Position >= Window.X && Position < Window.Y && Position >= NextPulseTime)
+		{
+			NextPulseTime = Position + PulsePattern.PulseInterval;
+			if (bSector)
+			{
+				CreateSectorHitbox(DecalSize.Y, PulsePattern.SectorSafeZoneAngle, PulsePattern.DamageData, true, PulsePattern.SectorInnerSafeRadius);
+			}
+			else
+			{
+				CreateBoxHitbox(DecalSize, DecalSize.X, PulsePattern.DamageData, true);
+			}
+		}
+	}
+
+	// 예고 데칼: 구간 시작 IndicatorLeadTime초 전부터 구간 끝까지 계속 (보스가 움직이거나 돌아도 따라감)
+	if (bShowIndicator && PulsePattern.bUseIndicator)
+	{
+		if (bSector)
+		{
+			ShowSectorAttackIndicator(DecalSize.Y, PulsePattern.SectorSafeZoneAngle, PulsePattern.IndicatorDecalMaterial, PulsePattern.SectorInnerSafeRadius);
+		}
+		else
+		{
+			ShowBoxAttackIndicator(DecalSize, DecalSize.X, PulsePattern.IndicatorDecalMaterial);
+		}
+		bPulseIndicatorShown = true;
+	}
+	else if (bPulseIndicatorShown)
+	{
+		HideAttackIndicator();
+		bPulseIndicatorShown = false;
+	}
+
+	UpdatePulseDome(bSector && bInPulseWindow && PulsePattern.PulseDomeMaterial != nullptr, Position);
+}
+
+void ARLEnemyCharacter::UpdatePulseDome(bool bActive, float Position)
+{
+	if (!bActive)
+	{
+		if (PulseDome)
+		{
+			PulseDome->SetVisibility(false);
+		}
+		return;
+	}
+
+	if (!PulseDome)
+	{
+		UStaticMesh* SphereMesh = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Sphere.Sphere"));
+		if (!SphereMesh)
+		{
+			return;
+		}
+
+		PulseDome = NewObject<UStaticMeshComponent>(this, TEXT("PulseDome"));
+		PulseDome->SetStaticMesh(SphereMesh);
+		PulseDome->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+		PulseDome->SetCastShadow(false);
+		PulseDome->SetUsingAbsoluteRotation(true);
+		PulseDome->SetUsingAbsoluteScale(true);
+		PulseDome->SetupAttachment(GetRootComponent());
+		PulseDome->RegisterComponent();
+	}
+
+	if (PulseDome->GetMaterial(0) != PulsePattern.PulseDomeMaterial)
+	{
+		PulseDome->SetMaterial(0, PulsePattern.PulseDomeMaterial);
+	}
+
+	// 구 중심을 발 위치에 두면 아래 절반은 바닥에 가려져 돔(반구)으로 보임. 엔진 기본 구는 반지름 50
+	// 판정할 때마다 6% 부풀었다가 다음 판정 전까지 원래 크기로 줄어들어 맥동하는 느낌
+	const float SincePulse = FMath::Clamp(1.0f - (NextPulseTime - Position) / FMath::Max(PulsePattern.PulseInterval, KINDA_SMALL_NUMBER), 0.0f, 1.0f);
+	const float Beat = 1.0f + 0.06f * (1.0f - SincePulse);
+	PulseDome->SetWorldLocation(GetIndicatorOrigin());
+	PulseDome->SetWorldScale3D(FVector(PulsePattern.IndicatorDecalSize.Y / 50.0f * Beat));
+	PulseDome->SetVisibility(true);
+}
+
+void ARLEnemyCharacter::StopPulse()
+{
+	if (bPulseIndicatorShown)
+	{
+		HideAttackIndicator();
+		bPulseIndicatorShown = false;
+	}
+
+	if (PulseDome)
+	{
+		PulseDome->SetVisibility(false);
+	}
+
+	PulseMontage = nullptr;
+	PulseWindows.Reset();
 }
 
 // ==========================================

@@ -23,6 +23,7 @@ class ARLRewardChest;
 class ARLItemDrop;
 class ARLDecalIndicator;
 class ARLThrownAxe;
+class UStaticMeshComponent;
 class UMaterialInterface;
 class URLItemDataAsset;
 
@@ -397,6 +398,27 @@ private:
 	TObjectPtr<UAnimMontage> ChaseMontage = nullptr;
 	float ChaseSpeed = 0.0f;
 	float ChaseStopDistance = 0.0f;
+
+	// ★ 반복 판정(펄스, FRLMonsterPatternData::PulseInterval) 상태
+	void StartPulse(const FRLMonsterPatternData& Pattern);
+	void UpdatePulse();
+	void StopPulse();
+
+	UPROPERTY()
+	TObjectPtr<UAnimMontage> PulseMontage = nullptr;
+
+	UPROPERTY()
+	FRLMonsterPatternData PulsePattern;
+
+	TArray<FVector2D> PulseWindows;   // 몽타주 시간 기준 [Notify_PulseStart, Notify_PulseEnd)
+	float NextPulseTime = 0.0f;       // 다음 판정 몽타주 시각
+	bool bPulseIndicatorShown = false;
+
+	// 반복 판정 구간 동안 띄우는 돔 이펙트 (처음 쓸 때 생성해서 재사용)
+	void UpdatePulseDome(bool bActive, float Position);
+
+	UPROPERTY()
+	TObjectPtr<UStaticMeshComponent> PulseDome = nullptr;
 
 	// ★ 도끼 투척 패턴 상태 (AxeLeap / AxeReturn / AxeDoubleReturn 공용)
 	enum class EAxeLeapStep : uint8
