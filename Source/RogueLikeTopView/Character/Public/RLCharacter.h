@@ -93,6 +93,26 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Combat")
 	bool IsInvulnerable() const;
 
+	// ★ 경직: Duration초 동안 State.Stunned 태그 → 이동/회피/스킬 불가 + 이동 경로/시전 취소.
+	// 이미 경직 중이면 남은 시간보다 길 때만 연장. 경직 면역(CanBeStaggered == false)이면 무시.
+	// 보통 FRLDamageData::StunDuration으로 ReceiveCustomDamage에서 자동 호출됩니다.
+	UFUNCTION(BlueprintCallable, Category = "Combat")
+	void ApplyStun(float Duration);
+
+	UFUNCTION(BlueprintPure, Category = "Combat")
+	bool IsStunned() const;
+
+	// 경직 시작 시 재생할 몽타주 (비우면 몽타주 없이 입력만 막힘). 예: 플레이어 BP에 비틀거리는 피격 모션
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Combat")
+	TObjectPtr<UAnimMontage> StunMontage = nullptr;
+
+	// ★ 경직 시작/종료 훅. BP에서 머리 위 별 VFX, 화면 흔들림 등을 붙이세요
+	UFUNCTION(BlueprintImplementableEvent, Category = "Combat")
+	void OnStunStarted(float Duration);
+
+	UFUNCTION(BlueprintImplementableEvent, Category = "Combat")
+	void OnStunEnded();
+
 	UFUNCTION(BlueprintCallable, Category = "Combat")
 	void CreateBoxHitbox(FVector BoxExtent, float ForwardOffset, const FRLDamageData& DamageData, bool bDrawDebug = true);
 
@@ -384,6 +404,10 @@ protected:
 	// ★ 쿨타임 및 무적 타이머
 	FTimerHandle DashCooldownTimerHandle;
 	FTimerHandle InvincibilityTimerHandle;
+
+	// ★ 경직 타이머
+	FTimerHandle StunTimerHandle;
+	void EndStun();
 
 	// 레벨업 시 보상 선택창을 살짝 지연 팝업시키기 위한 타이머 (처치 연출이 먼저 보이도록)
 	FTimerHandle LevelUpRewardTimerHandle;

@@ -66,6 +66,32 @@ struct FRLDamageData
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Damage")
 	float HitStopDuration = 0.05f;
 
+	// ★ 피격 대상 경직 시간(초). 0보다 크면 넉백 후 이 시간 동안 State.Stunned (이동/회피/스킬 불가).
+	// 경직 면역(CanBeStaggered == false: 보스/엘리트)인 대상에게는 무시됩니다. 예: 보스2 울부짖음
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Damage", meta = (ClampMin = "0.0"))
+	float StunDuration = 0.0f;
+
+	// ★ 범위 밖으로 밀어내기. true면 KnockbackForce 대신, 원형 판정(Sector/Location)의 중심에서 바깥 방향으로
+	// "판정 반지름 + PushOutMargin" 지점까지 PushOutDuration초 동안 밀어냄 → 어디에 서 있었든 항상 데칼 밖으로 나감.
+	// 네비메시 경계(낭떠러지)와 벽은 넘지 않음. Box 판정에는 적용 안 됨(기존 넉백 사용). 예: 보스2 울부짖음
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Damage")
+	bool bPushOutOfRange = false;
+
+	// 판정 범위 테두리에서 얼마나 더 바깥까지 밀어낼지(cm)
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Damage", meta = (EditCondition = "bPushOutOfRange", ClampMin = "0.0"))
+	float PushOutMargin = 100.0f;
+
+	// 밀려나는 데 걸리는 시간(초)
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Damage", meta = (EditCondition = "bPushOutOfRange", ClampMin = "0.05"))
+	float PushOutDuration = 0.25f;
+
+	// 판정 함수(CreateSectorHitbox/CreateLocationHitbox)가 채워 넣는 원형 판정 중심/반지름 (직접 편집하지 않음)
+	UPROPERTY(BlueprintReadOnly, Category = "Damage")
+	FVector PushOutOrigin = FVector::ZeroVector;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Damage")
+	float PushOutRadius = 0.0f;
+
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Damage")
 	bool bIgnoreInvincibility = false;
 

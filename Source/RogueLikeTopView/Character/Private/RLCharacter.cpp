@@ -260,7 +260,26 @@ void ARLCharacter::ReceiveCustomDamage(const FRLDamageData& DamageData, const FH
     // 보스/엘리트처럼 경직 면역(CanBeStaggered == false)인 대상은 넉백으로 밀려나지 않습니다.
     const bool bCanBeStaggered = CanBeStaggered();
 
-    if (bCanBeStaggered && DamageData.KnockbackForce > 0.0f)
+    if (bCanBeStaggered && DamageData.bPushOutOfRange && DamageData.PushOutRadius > 0.0f)
+    {
+        // ★ 범위 밖으로 밀어내기: 원 중심 → 나 방향으로, 테두리 + 여유 거리(+내 캡슐 반지름)까지 대시 이동.
+        // 이미 그보다 바깥이면 밀지 않음. 대시 이동이 네비메시 경계에서 멈춰 주므로 낭떠러지로 떨어지지 않음
+        FVector AwayDir = (GetActorLocation() - DamageData.PushOutOrigin).GetSafeNormal2D();
+        if (AwayDir.IsNearlyZero())
+        {
+            AwayDir = DamageData.DamageCauser ? DamageData.DamageCauser->GetActorForwardVector().GetSafeNormal2D() : -GetActorForwardVector().GetSafeNormal2D();
+        }
+
+        const float MyRadius = GetCapsuleComponent() ? GetCapsuleComponent()->GetScaledCapsuleRadius() : 0.0f;
+        const float PushDistance = DamageData.PushOutRadius + DamageData.PushOutMargin + MyRadius;
+        if (FVector::Dist2D(GetActorLocation(), DamageData.PushOutOrigin) < PushDistance)
+        {
+            FVector PushTarget = DamageData.PushOutOrigin + AwayDir * PushDistance;
+            PushTarget.Z = GetActorLocation().Z;
+            StartDashMovement(PushTarget, DamageData.PushOutDuration);
+        }
+    }
+    else if (bCanBeStaggered && DamageData.KnockbackForce > 0.0f)
     {
         float KnockbackMultiplier = DamageData.bIsCritical ? 1.25f : 1.0f;
         FVector KnockbackDir = (GetActorLocation() - HitInfo.ImpactPoint).GetSafeNormal2D();
@@ -317,6 +336,12 @@ void ARLCharacter::ReceiveCustomDamage(const FRLDamageData& DamageData, const FH
     if (bCanBeStaggered && SkillComp && SkillComp->IsCasting())
     {
         SkillComp->InterruptCasting(TEXT("피격으로 인한 시전 취소"));
+    }
+
+    // ★ 경직 (넉백 후 잠깐 굳음). 경직 면역 판정은 ApplyStun 안에서
+    if (DamageData.StunDuration > 0.0f)
+    {
+        ApplyStun(DamageData.StunDuration);
     }
 }
 
@@ -1134,6 +1159,7 @@ void ARLCharacter::TestAttack()
 void ARLCharacter::Dodge(FVector CursorLocation)
 {
     if (!bCanDash) return; // 쿨타임 중이면 무시
+    if (IsStunned()) return; // 경직 중엔 회피 불가
 
     FVector MyLocation = GetActorLocation();
     FVector DashDirection = CursorLocation - MyLocation;
@@ -1195,6 +1221,63 @@ void ARLCharacter::SetInvulnerable(bool bNewState)
 bool ARLCharacter::IsInvulnerable() const
 {
     return AbilitySystemComp && AbilitySystemComp->HasMatchingGameplayTag(RLGameplayTags::State_Invulnerable);
+}
+
+void ARLCharacter::ApplyStun(float Duration)
+{
+    if (Duration <= 0.0f || !CanBeStaggered() || !AbilitySystemComp || (HealthComp && HealthComp->bIsDead))
+    {
+        return;
+    }
+
+    // 이미 경직 중이면 남은 시간보다 길 때만 연장 (짧은 경직이 긴 경직을 덮어쓰지 않도록)
+    FTimerManager& TimerManager = GetWorldTimerManager();
+    const bool bAlreadyStunned = IsStunned();
+    if (bAlreadyStunned && TimerManager.GetTimerRemaining(StunTimerHandle) >= Duration)
+    {
+        return;
+    }
+    TimerManager.SetTimer(StunTimerHandle, this, &ARLCharacter::EndStun, Duration, false);
+
+    if (bAlreadyStunned)
+    {
+        return;
+    }
+
+    // 스킬은 GA의 ActivationBlockedTags(State.Stunned)로, 이동/회피는 IsStunned 체크로 막힘
+    AbilitySystemComp->SetLooseGameplayTagCount(RLGameplayTags::State_Stunned, 1);
+
+    // 클릭 이동 경로를 끊음 (넉백으로 밀려나는 속도는 유지하려고 StopMovementImmediately는 쓰지 않음)
+    if (AController* MyController = GetController())
+    {
+        MyController->StopMovement();
+    }
+
+    if (SkillComp && SkillComp->IsCasting())
+    {
+        SkillComp->InterruptCasting(TEXT("경직으로 인한 시전 취소"));
+    }
+
+    if (StunMontage)
+    {
+        PlayAnimMontage(StunMontage);
+    }
+
+    OnStunStarted(Duration);
+}
+
+bool ARLCharacter::IsStunned() const
+{
+    return AbilitySystemComp && AbilitySystemComp->HasMatchingGameplayTag(RLGameplayTags::State_Stunned);
+}
+
+void ARLCharacter::EndStun()
+{
+    if (AbilitySystemComp)
+    {
+        AbilitySystemComp->SetLooseGameplayTagCount(RLGameplayTags::State_Stunned, 0);
+    }
+    OnStunEnded();
 }
 
 void ARLCharacter::ResetDashCooldown()
@@ -1419,6 +1502,9 @@ void ARLCharacter::CreateLocationHitbox(FVector TargetLocation, float Radius, co
                 {
                     FRLDamageData FinalDamage = DamageData;
                     FinalDamage.DamageCauser = this;
+                    // 범위 밖으로 밀어내기(bPushOutOfRange)용 원 중심/반지름
+                    FinalDamage.PushOutOrigin = TargetLocation;
+                    FinalDamage.PushOutRadius = Radius;
                     TargetChar->ReceiveCustomDamage(FinalDamage, Hit);
                 }
             }
@@ -1445,14 +1531,19 @@ void ARLCharacter::CreateSectorHitbox(float Radius, float SafeZoneAngleDegrees, 
     TArray<TEnumAsByte<EObjectTypeQuery>> ObjectTypes;
     ObjectTypes.Add(UEngineTypes::ConvertToObjectType(ECollisionChannel::ECC_Pawn));
 
-    EDrawDebugTrace::Type DebugTrace = bDrawDebug ? EDrawDebugTrace::ForDuration : EDrawDebugTrace::None;
-
     // 원 전체(Radius)를 우선 스윕으로 다 모으고, 아래에서 각도로 안전지대만 걸러냅니다.
     // (BoxTrace/ConeTrace 같은 부채꼴 전용 트레이스가 엔진에 없어서, 원형 스윕 + 각도 필터링 방식을 씁니다)
     // ★ 구체는 가장자리로 갈수록 위아래가 얇아져서, 캡슐 중심이 높은 큰 캐릭터는 바깥쪽 플레이어 다리 높이까지 안 닿음.
     // 그래서 반지름을 내 캡슐 반높이만큼 넉넉히 잡아 후보를 모으고, 아래에서 수평 거리로 다시 걸러 "원기둥" 판정으로 만듦
     const UCapsuleComponent* MyCapsule = GetCapsuleComponent();
-    const float SearchRadius = Radius + (MyCapsule ? MyCapsule->GetScaledCapsuleHalfHeight() : 0.f);
+    const float MyHalfHeight = MyCapsule ? MyCapsule->GetScaledCapsuleHalfHeight() : 0.f;
+    const float SearchRadius = Radius + MyHalfHeight;
+
+    // 디버그는 후보 수집용 구체(SearchRadius)가 아니라 실제 판정 범위(반지름 Radius, 바닥~머리 원기둥)를 그림 → 예고 데칼과 같은 크기
+    if (bDrawDebug)
+    {
+        DrawDebugCylinder(GetWorld(), Origin - FVector(0.f, 0.f, MyHalfHeight), Origin + FVector(0.f, 0.f, MyHalfHeight), Radius, 48, FColor::Red, false, 1.5f);
+    }
 
     bool bHit = UKismetSystemLibrary::SphereTraceMultiForObjects(
         GetWorld(),
@@ -1462,7 +1553,7 @@ void ARLCharacter::CreateSectorHitbox(float Radius, float SafeZoneAngleDegrees, 
         ObjectTypes,
         false,
         ActorsToIgnore,
-        DebugTrace,
+        EDrawDebugTrace::None,
         HitResults,
         true,
         FLinearColor::Red,
@@ -1517,6 +1608,9 @@ void ARLCharacter::CreateSectorHitbox(float Radius, float SafeZoneAngleDegrees, 
             {
                 FRLDamageData FinalDamage = DamageData;
                 FinalDamage.DamageCauser = this;
+                // 범위 밖으로 밀어내기(bPushOutOfRange)용 원 중심/반지름
+                FinalDamage.PushOutOrigin = Origin;
+                FinalDamage.PushOutRadius = Radius;
                 TargetChar->ReceiveCustomDamage(FinalDamage, Hit);
             }
         }
@@ -1607,6 +1701,11 @@ void ARLCharacter::SummonMinions(TSubclassOf<AActor> MinionClass, int32 Count, f
 
 void ARLCharacter::AddMovementInput(FVector WorldDirection, float ScaleValue, bool bForce)
 {
+    if (IsStunned())
+    {
+        return;
+    }
+
     if (UAnimInstance* AnimInstance = GetMesh()->GetAnimInstance())
     {
         if (AnimInstance->IsAnyMontagePlaying())

@@ -508,6 +508,9 @@ void ARLPlayerController::OnMoveTriggered()
 {
 	if (ARLCharacter* ControlledChar = Cast<ARLCharacter>(GetPawn()))
 	{
+		// 경직 중엔 클릭 이동 불가 (SimpleMoveToLocation은 AddMovementInput을 거치지 않아서 여기서 막음)
+		if (ControlledChar->IsStunned()) return;
+
 		if (URLSkillComponent* SkillComp = ControlledChar->GetSkillComponent())
 		{
 			if (SkillComp->IsAiming()) return;
