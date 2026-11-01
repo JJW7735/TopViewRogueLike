@@ -1,5 +1,97 @@
 # JJW
-> 최종 갱신: 2026-10-18
+> 최종 갱신: 2026-11-01
+
+## 몬스터 제작 가이드 (일반 몬스터 추가 작업용 — 팀원/AI 참고)
+> 2026-11-01 기준 실제 에셋/코드에서 확인한 값. 보스 작업(JJW)과 겹치지 않게 **일반 몬스터는 아래 구조만 따르면 C++ 수정 없이** 추가 가능.
+
+### 1. 클래스 계층
+```
+ACharacter
+ └─ ARLCharacter (C++)          체력/스탯/GAS, 데미지 수신(ReceiveCustomDamage), 판정 함수(Create*Hitbox), 예고 데칼
+     └─ ARLEnemyCharacter (C++)  보상/드롭, 분노, 사망 페이드, 공격 패턴 진입점(BeginAttackPattern), 보스 기믹
+         └─ BP_EnemyBase          패턴 선택 로직(PatternDataAsset, TrySelectPattern 등) ← BT가 이 BP로 캐스트함
+             ├─ BP_Enemy_Ranged   일반 원거리 몬스터
+             ├─ BP_Boss (세바로그) └─ BP_Boss_2 (카이메라)
+             └─ (새 일반 몬스터는 여기 자식으로)
+```
+- **새 몬스터는 반드시 `BP_EnemyBase`의 자식 BP로** 만들 것. `BTT_SelectPattern`/`BTT_Attack`이 폰을 `BP_EnemyBase`로 캐스트하므로 다른 부모면 공격이 전부 안 됨.
+- 경로: BP `/Game/EnemyAI/Blueprint/Enemy_Character/`, DA `/Game/DataAsset/Enemy/`, 몽타주 `/Game/Animation/AM/`
+
+### 2. 새 일반 몬스터 만드는 순서
+1. `BP_EnemyBase` 우클릭 → 자식 블루프린트 생성 (`BP_Enemy_이름`)
+2. 클래스 디폴트 설정
+   | 항목 | 일반 몬스터 기본값 | 비고 |
+   |---|---|---|
+   | AIControllerClass | `AIC_Enemy` | 보스만 `AIC_Boss` |
+   | PatternDataAsset | 새 DA (`DA_Enemy_이름`) | 아래 3번 |
+   | Mesh / AnimClass | `SKM_Manny` / `ABP_EnemyBase` (기존 몬스터) | 다른 메시면 그 스켈레톤용 AnimBP 필요 |
+   | Mesh 위치/회전 | Z -90, Yaw -90 | 캡슐 반높이 88 / 반지름 34 기준 |
+   | DeathMontage | `AM_Enemy_Death` | |
+   | TeamID | Enemy (기본값) | |
+   | bIsBoss / bIsElite / bImmuneToStagger | false | 엘리트·면역이면 경직 안 받음(슈퍼아머) |
+   | ExpReward / SoulReward / ItemDropChance / Min·MaxGoldDrop | 30 / 2 / 0.35 / 5·20 | 보상 |
+   | DisplayName | 몬스터 이름 | |
+3. 패턴 DataAsset 생성: 기존 `DA_EnemyBase` 복제 → `Patterns` 배열 수정 (클래스 `URLMonsterPatternDataAsset`)
+4. 공격 몽타주 만들기 (아래 5번 규칙 필수)
+5. 레벨/아레나에 배치: `ARLArenaManager`의 Waves → `FRLMonsterSpawnEntry`(EnemyClass, Count, SpecificSpawnPointIndex)에 추가
+
+### 3. 패턴 데이터 (`FRLMonsterPatternData`, `Core/Public/RLTypes.h`)
+일반 몬스터가 주로 쓰는 항목만 정리 (도끼/도약/균열 관련 항목은 보스 전용이라 무시).
+| 항목 | 의미 |
+|---|---|
+| PatternID | 패턴 이름. **쿨타임이 이 이름 기준**이라 패턴마다 고유하게 |
+| AttackMontage | 공격 몽타주 |
+| AttackRange | 이 거리 안이어야 패턴 선택됨 |
+| Cooldown / SelectionWeight | 재사용 대기(초) / 랜덤 선택 가중치 |
+| DamageData | BaseDamage, KnockbackForce, HitStopDuration, bTrueDamage(방어 무시), LifestealRatio(흡혈 0~1) |
+| AttackShape | 판정 형태 (아래 표) |
+| bUseIndicator / IndicatorDecalMaterial | 예고 데칼 사용 여부 / 머티리얼 |
+| IndicatorDecalSize | **판정 크기 겸 데칼 크기** (형태별 의미 아래 표) |
+| IndicatorLeadTime | 타격 몇 초 전부터 데칼 표시 |
+| SectorSafeZoneAngle / SectorInnerSafeRadius | 부채꼴: 뒤쪽 안전 각도 / 안쪽 안전 반경 |
+| HitRangeScales / HitWidthScales | 연타의 N번째 타격 범위 배율 (예: [1, 1.2, 1.5]) |
+| AttackChaseSpeed / AttackChaseStopDistance | 공격하면서 앞으로 전진하는 속도 / 멈추는 거리 |
+| bIsRangedAttack / ProjectileClass / ProjectileSpeed / ProjectileSpawnForwardOffset | 투사체 패턴 (기본 투사체 `BP_RLProjectile_Base`) |
+| bSummonsMinions / SummonClass / SummonCount / SummonRadius | 잔몹 소환 (`Notify_Summon`) |
+| bMirrorAnimation | 몽타주 좌우 반전 (카이메라 AnimBP에만 Mirror 노드 있음 → 일반 몬스터 ABP엔 없음) |
+
+**AttackShape별 동작** (`BTT_Attack`이 분기 — BP 배선은 건드리지 말 것)
+| AttackShape | 판정 | IndicatorDecalSize 의미 | 몽타주 노티파이 |
+|---|---|---|---|
+| Box | 정면 직사각형 | X = 앞 길이 절반(=중심까지 거리), Y = 좌우 폭 절반 | `Notify_Hit` (연타면 여러 개, `Notify_Hit`로 시작하는 이름 모두 인식) |
+| Sector | 자기 중심 원/부채꼴 | Y = 반지름 | `Notify_Hit` |
+| Location | 플레이어 위치 추적 원 → 타격 0.5초 전 고정 | Y = 반지름 | `Notify_Hit` |
+| Projectile | 정면 투사체 (bIsRangedAttack도 true) | 사용 안 함 | `Notify_Hit` |
+| Dash | 정면 돌진, 몸통 충돌 판정 | X×2 = 돌진 거리, Y = 폭 | `Notify_DashStart` |
+| AxeLeap / AxeReturn / AxeDoubleReturn | 보스2 전용 | — | — |
+- 그 밖의 노티파이: `Notify_AttackEnd`(그 시점에 공격 종료 처리), `Notify_Summon`(소환), `Notify_JumpLaunch` / `Notify_LandImpact`(기존 일반 몬스터 점프 공격 `AM_Enemy_JumpSmash`용 — BP_EnemyBase의 `ReceivedNotify_SpawnTargetDecal` / `ReceivedNotify_LandImpact` 이벤트로 연결됨)
+- 참고 예시 DA: `DA_EnemyBase`(근접 BasicAttack + JumpAttack), `DA_Enemy_Ranged`(투사체 Throw)
+
+### 4. 예고 데칼 머티리얼 (`/Game/Effect/Material/`)
+| 머티리얼 | 용도 |
+|---|---|
+| `M_Square_Red` | Box / Dash 직사각형 |
+| `M_Indicator_Red` | Location / Sector 원형 |
+| `M_Sector_Red` | Sector 부채꼴(안전각 있음) |
+| `MI_*_Green` | 보스 균열(카운터) 강화판 전용 — 일반 몬스터는 빨강 사용 |
+- 데칼과 판정은 같은 값(IndicatorDecalSize)을 쓰므로 **보이는 범위 = 맞는 범위**. 데칼은 캐릭터 발 위치 기준으로 깔리고, 박스/부채꼴 판정은 바닥~캐릭터 키 높이를 덮음 (2026-10-29 수정, 큰 몬스터도 OK)
+
+### 5. 몽타주 규칙 (가장 자주 터지는 버그)
+- **슬롯 이름은 그 몬스터 AnimBP에 있는 슬롯과 같아야 재생됨.** `ABP_EnemyBase`(일반 몬스터) = **DefaultSlot**, 카이메라/세바로그 보스 AnimBP = **FullBody**. 안 맞으면 몽타주가 재생 안 되고 멈춤.
+- **노티파이는 반드시 Montage Notify**(Add Notify → Montage Notify, 디테일의 Notify Name에 `Notify_Hit` 등 입력). 스켈레톤 노티파이는 BTT_Attack의 PlayMontage 노드가 이벤트를 못 받음.
+- Paragon 에셋의 `_MSA`, `Q_Intro` 등 **Additive 애니메이션은 몽타주에 일반 애니와 같이 못 넣음** → 애니메이션 복제 후 Additive Anim Type = None으로 바꾼 `*_Full` 복제본 사용
+- 몽타주 세그먼트 추가/길이 변경은 에디터에서 직접 (MCP로 바꾸면 SequenceLength가 갱신 안 됨)
+
+### 6. AI 흐름
+- `AIC_Enemy` → `BT_Enemy` (블랙보드 `BB_Enemy`: TargetActor, IsInAttackRange, TargerAttackRange)
+- `BTS_CheckAttackRange`가 거리 체크 → `BTT_SelectPattern`이 DA의 패턴 중 사거리·쿨타임 맞는 것을 가중치 랜덤 선택 → `BTT_Attack`이 몽타주 재생 + 노티파이마다 AttackShape에 맞는 판정 호출
+- 데미지는 전부 `ARLCharacter::ReceiveCustomDamage` 한 곳으로 모임 (같은 TeamID끼리는 피해 없음)
+
+### 7. 주의점
+- 레벨에 **이미 배치된 몬스터 인스턴스**는 BP 클래스 디폴트를 바꿔도 반영 안 될 수 있음 → 인스턴스 값 확인하거나 재배치
+- MCP로 DA `Patterns` 배열 수정 시 "크기 변경 + 기존 원소 변경"을 한 번에 하면 실패 → 원소 추가 후 따로 수정
+- C++ 헤더(.h, 주석 포함)를 고쳤으면 **라이브 코딩 금지** → 에디터 끄고 빌드 (구조체가 LIVECODING 타입으로 꼬여서 BP 컴파일 다 깨짐)
+- 보스 전용 시스템(도끼 패턴, 영혼의 균열, 미러링, 보호막)은 `IsBossEnemy()`/패턴 플래그로만 동작 → 일반 몬스터는 신경 안 써도 됨
 
 ## GAS(Gameplay Ability System) 구조 전환 — 2026-10-17 ~ 10-18 완료, main 머지됨
 커스텀 스탯/체력/스킬 시스템을 언리얼 GAS 기반으로 단계적으로 옮김. 브랜치 `feat/gas-migration` → main 머지(98b5596e).
