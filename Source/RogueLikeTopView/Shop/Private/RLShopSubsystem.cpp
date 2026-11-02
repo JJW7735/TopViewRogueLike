@@ -4,6 +4,7 @@
 #include "RLStatComponent.h"
 #include "RLHealthComponent.h"
 #include "RLItemDataAsset.h"
+#include "RLItemPoolDataAsset.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "Engine/Engine.h"
 #include "Kismet/GameplayStatics.h"
@@ -469,6 +470,19 @@ void URLShopSubsystem::BuildDefaultPools()
 {
 	ItemPool.Reset();
 	StatPool.Reset();
+
+	// ★ DataAsset 풀(DA_ItemPool)이 있으면 그걸 쓰고, 없거나 비어 있으면 아래 하드코딩 풀을 폴백으로 사용
+	if (const URLItemPoolDataAsset* PoolAsset = URLItemPoolDataAsset::LoadDefault())
+	{
+		PoolAsset->CollectItems(ItemPool);
+		URLItemPoolDataAsset::CollectRewards(PoolAsset->ShopBlessings, StatPool);
+		if (ItemPool.Num() > 0 && StatPool.Num() > 0)
+		{
+			return;
+		}
+		ItemPool.Reset();
+		StatPool.Reset();
+	}
 
 	// ==========================================
 	// 1. 기본 아이템 풀 구축

@@ -3,6 +3,7 @@
 #include "RLStatComponent.h"
 #include "RLHealthComponent.h"
 #include "RLRewardDataAsset.h"
+#include "RLItemPoolDataAsset.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "Engine/Engine.h"
 #include "Kismet/GameplayStatics.h"
@@ -10,7 +11,16 @@
 void URLRewardSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
 	Super::Initialize(Collection);
-	BuildDefaultRewardPool();
+
+	// ★ DataAsset 풀(DA_ItemPool)의 보상 카드가 있으면 그걸 쓰고, 없으면 하드코딩 풀을 폴백으로 사용
+	if (const URLItemPoolDataAsset* PoolAsset = URLItemPoolDataAsset::LoadDefault())
+	{
+		URLItemPoolDataAsset::CollectRewards(PoolAsset->RewardCards, RewardPool);
+	}
+	if (RewardPool.Num() == 0)
+	{
+		BuildDefaultRewardPool();
+	}
 }
 
 URLRewardSubsystem* URLRewardSubsystem::GetRewardSubsystem(const UObject* WorldContextObject)
