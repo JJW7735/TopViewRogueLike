@@ -1,10 +1,11 @@
-#include "RLShopWidget.h"
+﻿#include "RLShopWidget.h"
 #include "RLShopSubsystem.h"
 #include "RLCharacter.h"
 #include "RLInventoryComponent.h"
 #include "Components/TextBlock.h"
 #include "Components/Button.h"
 #include "Components/Border.h"
+#include "Engine/Texture2D.h"
 #include "Kismet/GameplayStatics.h"
 #include "GameFramework/PlayerController.h"
 
@@ -284,6 +285,23 @@ void URLShopWidget::UpdateSlotUIElements(int32 SlotIndex, const FRLShopItem& Ite
 			BorderCol.A = 0.85f;
 			BorderCard->SetBrushColor(BorderCol);
 		}
+	}
+
+	// 아이콘 표시: DataAsset의 Icon을 로드해 Border_Icon 브러시로 설정
+	if (BorderIcon)
+	{
+		// WBP에 지정된 기본 브러시(반투명 플레이스홀더 박스)를 기준으로 시작 → 새로고침 시 이전 아이콘이 남지 않음
+		const UBorder* DefaultBorder = Cast<UBorder>(BorderIcon->GetArchetype());
+		FSlateBrush IconBrush = DefaultBorder ? DefaultBorder->Background : BorderIcon->Background;
+
+		if (UTexture2D* IconTex = Item.Icon.LoadSynchronous())
+		{
+			IconBrush.SetResourceObject(IconTex);
+			IconBrush.TintColor = FSlateColor(FLinearColor::White); // 기본 틴트(알파 0.35) 때문에 아이콘이 흐려지는 것 방지
+		}
+
+		BorderIcon->SetBrush(IconBrush);
+		BorderIcon->SetBrushColor(FLinearColor::White);
 	}
 }
 
