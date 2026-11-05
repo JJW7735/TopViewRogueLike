@@ -332,6 +332,11 @@ void URLGA_Skill_GroundTarget::ReleaseCast()
 
 void URLGA_Skill_GroundTarget::Detonate()
 {
+	if (URLCombatFeedbackSubsystem* FeedbackSub = URLCombatFeedbackSubsystem::Get(Caster))
+	{
+		FeedbackSub->NotifySkillVFX(Caster, Skill, TargetLocation);
+	}
+
 	if (Skill->GroundActorClass)
 	{
 		FActorSpawnParameters SpawnParams;

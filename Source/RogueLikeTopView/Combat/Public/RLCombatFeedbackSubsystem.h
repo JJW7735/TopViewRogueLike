@@ -89,13 +89,13 @@ public:
 };
 
 /**
- * 타격감(Game Feel) 통합 서브시스템.
+ * 타격감(Game Feel) 및 전투/스킬 이펙트(VFX) 통합 서브시스템.
  *
  * RLEnemyCharacter.cpp / RLCharacter.cpp와 충돌하지 않도록 월드 내 캐릭터들을 자동 구독하여:
  *  1) 역경직 (Hit-Stop: CustomTimeDilation 미세 정지 후 자동 복원)
  *  2) 카메라 쉐이크 & 줌 펀치 (어지럽지 않은 절제된 진동 + 치명타/처치 시 살짝 줌인)
- *  3) 피격 탄성 (Mesh Squash & Stretch) & 피격 발광 플래시 (오버레이/머티리얼 + 순간 라이트)
- *  4) 스킬 적중 이펙트(HitVFX, 미지정 시 기본 타격 파티클 자동 스폰) 및 타격음(HitSound) 자동 재생
+ *  3) 피격 탄성 (Mesh Squash & Stretch) & 피격 발광 플래시 (오버레이/머티리얼 + 속성별 순간 라이트)
+ *  4) 스킬 시전 이펙트(검기/대시/마법진/폭발) 및 적중 시 속성별 고유 타격 이펙트(화염/번개/비전/참격/강타) 자동 재생
  * 을 처리합니다.
  */
 UCLASS()
@@ -120,6 +120,9 @@ public:
 	/** 데미지 숫자 서브시스템(URLDamageNumberSubsystem)에서 이번 타격이 치명타인지 즉시 조회합니다. */
 	bool IsCurrentHitCritical(AActor* DamageCauser = nullptr) const;
 
+	/** 스킬 발동/베기/돌진/폭발 시점에 스킬 성격에 맞는 시전·검기·대시 이펙트를 자동 재생합니다. */
+	void NotifySkillVFX(ARLCharacter* Caster, const URLSkillData* SkillData, const FVector& TargetLocation = FVector::ZeroVector, int32 ComboIndex = 0);
+
 	/** 수동으로 카메라 펀치/쉐이크를 발생시킵니다 (스킬 시전 연출, 콘솔 테스트 등). */
 	UFUNCTION(BlueprintCallable, Category = "CombatFeedback")
 	void TriggerCameraFeedback(float ShakeAmplitude = 10.0f, float ShakeDuration = 0.10f, float ZoomPunchAmount = 14.0f);
@@ -131,6 +134,10 @@ public:
 	/** 전체 타격감 강도 배율 (콘솔 명령어 RL.HitFeelIntensity 로 실시간 조절 가능) */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CombatFeedback")
 	float GlobalFeedbackIntensity = 1.0f;
+
+	/** 자동 스킬/속성 타격 이펙트 활성화 여부 (콘솔 명령어 RL.AutoSkillVFX 0 또는 1 로 실시간 ON/OFF 가능) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CombatFeedback")
+	bool bEnableAutoSkillVFX = true;
 
 	/** 리스너 및 데미지 서브시스템 전용 내부 콜백 */
 	void NotifyCharacterDamaged(ARLCharacter* Victim, float Damage, AActor* DamageCauser);
@@ -145,8 +152,11 @@ private:
 	void HandleActorSpawned(AActor* SpawnedActor);
 
 	const FRLPendingDamageContext* FindMatchingContext(AActor* DamageCauser) const;
-	void TriggerMeshImpactAndFlash(ACharacter* Victim, const FVector& ImpactLocation, bool bIsCritical);
-	void SpawnImpactFlashLight(const FVector& Location, bool bIsCritical);
+	UFXSystemAsset* ResolveHitVFXAndColor(const URLSkillData* SkillData, bool bIsCritical, FLinearColor& OutLightColor) const;
+	void SpawnFXAtTransform(UFXSystemAsset* FXAsset, const FVector& Location, const FRotator& Rotation = FRotator::ZeroRotator, const FVector& Scale = FVector::OneVector);
+
+	void TriggerMeshImpactAndFlash(ACharacter* Victim, const FVector& ImpactLocation, bool bIsCritical, const FLinearColor& ElementLightColor);
+	void SpawnImpactFlashLight(const FVector& Location, bool bIsCritical, const FLinearColor& ElementLightColor);
 
 	void UpdateHitStops(double CurrentRealTime);
 	void UpdateMeshImpacts(float DeltaTime);
@@ -158,12 +168,62 @@ private:
 	UPROPERTY()
 	TArray<TObjectPtr<URLCombatFeedbackListener>> Listeners;
 
-	/** 스킬 데이터에 HitVFX가 비어있을 때 자동으로 터뜨려 줄 기본 타격 스파크 이펙트 */
+	// ==========================================
+	// 속성/공격 타입별 타격 이펙트 (Hit VFX) 캐시
+	// ==========================================
 	UPROPERTY()
 	TObjectPtr<UFXSystemAsset> DefaultNormalHitVFX = nullptr;
 
 	UPROPERTY()
 	TObjectPtr<UFXSystemAsset> DefaultCritHitVFX = nullptr;
+
+	UPROPERTY()
+	TObjectPtr<UFXSystemAsset> FireHitVFX = nullptr;
+
+	UPROPERTY()
+	TObjectPtr<UFXSystemAsset> FireCritExplosionVFX = nullptr;
+
+	UPROPERTY()
+	TObjectPtr<UFXSystemAsset> LightningHitVFX = nullptr;
+
+	UPROPERTY()
+	TObjectPtr<UFXSystemAsset> ArcaneNormalHitVFX = nullptr;
+
+	UPROPERTY()
+	TObjectPtr<UFXSystemAsset> ArcaneCritHitVFX = nullptr;
+
+	UPROPERTY()
+	TObjectPtr<UFXSystemAsset> HeavyBluntHitVFX = nullptr;
+
+	UPROPERTY()
+	TObjectPtr<UFXSystemAsset> HeavyShockwaveVFX = nullptr;
+
+	// ==========================================
+	// 스킬 시전/검기/대시 이펙트 (Skill Cast VFX) 캐시
+	// ==========================================
+	UPROPERTY()
+	TObjectPtr<UFXSystemAsset> BladeSlashRedVFX = nullptr;
+
+	UPROPERTY()
+	TObjectPtr<UFXSystemAsset> MagicSlash1VFX = nullptr;
+
+	UPROPERTY()
+	TObjectPtr<UFXSystemAsset> MagicSlash2VFX = nullptr;
+
+	UPROPERTY()
+	TObjectPtr<UFXSystemAsset> DashTrailVFX = nullptr;
+
+	UPROPERTY()
+	TObjectPtr<UFXSystemAsset> DashDustVFX = nullptr;
+
+	UPROPERTY()
+	TObjectPtr<UFXSystemAsset> CastCircleVFX = nullptr;
+
+	UPROPERTY()
+	TObjectPtr<UFXSystemAsset> LightningAuraVFX = nullptr;
+
+	UPROPERTY()
+	TObjectPtr<UFXSystemAsset> FireAuraVFX = nullptr;
 
 	/** 피격 순간 메시 위에 잠깐 씌울 발광 오버레이 머티리얼 */
 	UPROPERTY()

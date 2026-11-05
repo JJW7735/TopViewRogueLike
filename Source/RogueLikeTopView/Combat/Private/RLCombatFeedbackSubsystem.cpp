@@ -5,6 +5,7 @@
 #include "RLGameplayCueNotifies.h"
 #include "Particles/ParticleSystem.h"
 #include "NiagaraSystem.h"
+#include "NiagaraFunctionLibrary.h"
 #include "Materials/MaterialInterface.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Components/CapsuleComponent.h"
@@ -71,6 +72,28 @@ namespace
 			}
 		})
 	);
+
+	static FAutoConsoleCommandWithWorldAndArgs GAutoSkillVFXCmd(
+		TEXT("RL.AutoSkillVFX"),
+		TEXT("스킬 시전/속성 타격 이펙트 자동 재생 ON/OFF (예: RL.AutoSkillVFX 0 또는 1)"),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			if (!World || Args.Num() == 0)
+			{
+				return;
+			}
+			if (URLCombatFeedbackSubsystem* Sub = URLCombatFeedbackSubsystem::Get(World))
+			{
+				Sub->bEnableAutoSkillVFX = FCString::Atoi(*Args[0]) != 0;
+				if (GEngine)
+				{
+					GEngine->AddOnScreenDebugMessage(-1, 3.0f, FColor::Yellow,
+						FString::Printf(TEXT("✨ [RL.AutoSkillVFX] 자동 스킬/타격 이펙트: %s"),
+							Sub->bEnableAutoSkillVFX ? TEXT("ON (활성화)") : TEXT("OFF (기본 스파크만)")));
+				}
+			}
+		})
+	);
 }
 
 void URLCombatFeedbackListener::HandleTakeAnyDamage(AActor* DamagedActor, float Damage, const UDamageType* DamageType, AController* InstigatedBy, AActor* DamageCauser)
@@ -113,7 +136,7 @@ void URLCombatFeedbackSubsystem::EnsureDefaultAssetsLoaded()
 	}
 	bTriedLoadingDefaultAssets = true;
 
-	// 스킬 데이터에 HitVFX가 비어있어도 기본 타격 파티클이 터지도록 프로젝트 내 에셋 로드
+	// 1. 기본 물리/참격 타격 이펙트
 	DefaultNormalHitVFX = LoadObject<UFXSystemAsset>(nullptr,
 		TEXT("/Game/ParagonKhaimera/FX/ParticleSystems/Abilities/Primary/FX/P_Khaimera_LMB_Impact.P_Khaimera_LMB_Impact"));
 	if (!DefaultNormalHitVFX)
@@ -129,8 +152,286 @@ void URLCombatFeedbackSubsystem::EnsureDefaultAssetsLoaded()
 		DefaultCritHitVFX = DefaultNormalHitVFX;
 	}
 
+	// 2. 속성/공격별 고유 타격 이펙트 (Content/Fab 내장 팩 활용)
+	FireHitVFX = LoadObject<UFXSystemAsset>(nullptr,
+		TEXT("/Game/Fab/FXVarietyPack/Particles/P_ky_hit2.P_ky_hit2"));
+	FireCritExplosionVFX = LoadObject<UFXSystemAsset>(nullptr,
+		TEXT("/Game/Fab/FXVarietyPack/Particles/P_ky_explosion.P_ky_explosion"));
+	if (!FireCritExplosionVFX)
+	{
+		FireCritExplosionVFX = LoadObject<UFXSystemAsset>(nullptr,
+			TEXT("/Game/Fab/Free_Spells/VFX_Niagara/NS_Free_Spells_Explosion.NS_Free_Spells_Explosion"));
+	}
+
+	LightningHitVFX = LoadObject<UFXSystemAsset>(nullptr,
+		TEXT("/Game/Fab/FXVarietyPack/Particles/P_ky_ThunderBallHit.P_ky_ThunderBallHit"));
+	if (!LightningHitVFX)
+	{
+		LightningHitVFX = LoadObject<UFXSystemAsset>(nullptr,
+			TEXT("/Game/Effect/Particle/P_Lightning_Small.P_Lightning_Small"));
+	}
+
+	ArcaneNormalHitVFX = LoadObject<UFXSystemAsset>(nullptr,
+		TEXT("/Game/Fab/Free_Magic/VFX_Niagara/NS_Free_Magic_Hit1.NS_Free_Magic_Hit1"));
+	ArcaneCritHitVFX = LoadObject<UFXSystemAsset>(nullptr,
+		TEXT("/Game/Fab/Free_Magic/VFX_Niagara/NS_Free_Magic_Hit2.NS_Free_Magic_Hit2"));
+
+	HeavyBluntHitVFX = LoadObject<UFXSystemAsset>(nullptr,
+		TEXT("/Game/ParagonSevarog/FX/Particles/Abilities/Primary/FX/P_Sevarog_Melee_SucessfulImpact.P_Sevarog_Melee_SucessfulImpact"));
+	HeavyShockwaveVFX = LoadObject<UFXSystemAsset>(nullptr,
+		TEXT("/Game/Fab/FXVarietyPack/Particles/P_ky_shotShockwave.P_ky_shotShockwave"));
+	if (!HeavyShockwaveVFX)
+	{
+		HeavyShockwaveVFX = LoadObject<UFXSystemAsset>(nullptr,
+			TEXT("/Game/Fab/Free_Spells/VFX_Niagara/NS_Free_Spells_Shockwave.NS_Free_Spells_Shockwave"));
+	}
+
+	// 3. 스킬 시전/검기/대시 이펙트
+	BladeSlashRedVFX = LoadObject<UFXSystemAsset>(nullptr,
+		TEXT("/Game/Fab/Free_Magic/VFX_Niagara/NS_Blade_Q_Slash_Red.NS_Blade_Q_Slash_Red"));
+	MagicSlash1VFX = LoadObject<UFXSystemAsset>(nullptr,
+		TEXT("/Game/Fab/Free_Magic/VFX_Niagara/NS_Free_Magic_Slash.NS_Free_Magic_Slash"));
+	MagicSlash2VFX = LoadObject<UFXSystemAsset>(nullptr,
+		TEXT("/Game/Fab/Free_Magic/VFX_Niagara/NS_Free_Magic_Slash2.NS_Free_Magic_Slash2"));
+
+	DashTrailVFX = LoadObject<UFXSystemAsset>(nullptr,
+		TEXT("/Game/ParagonSevarog/FX/Particles/Abilities/Relentless/FX/P_SevarogTrailsDash.P_SevarogTrailsDash"));
+	DashDustVFX = LoadObject<UFXSystemAsset>(nullptr,
+		TEXT("/Game/ParagonSevarog/FX/Particles/Abilities/Relentless/FX/P_Sevarog_Relentless_Dustkick.P_Sevarog_Relentless_Dustkick"));
+
+	CastCircleVFX = LoadObject<UFXSystemAsset>(nullptr,
+		TEXT("/Game/Fab/Free_Magic/VFX_Niagara/NS_Free_Magic_Circle1.NS_Free_Magic_Circle1"));
+	LightningAuraVFX = LoadObject<UFXSystemAsset>(nullptr,
+		TEXT("/Game/Fab/Free_Spells/VFX_Niagara/NS_Free_Spells_Aura_Lightning.NS_Free_Spells_Aura_Lightning"));
+	FireAuraVFX = LoadObject<UFXSystemAsset>(nullptr,
+		TEXT("/Game/Fab/Free_Spells/VFX_Niagara/NS_Free_Spells_Aura_Fire.NS_Free_Spells_Aura_Fire"));
+
+	// 4. 피격 오버레이 머티리얼
 	DefaultHitOverlayMaterial = LoadObject<UMaterialInterface>(nullptr,
 		TEXT("/Game/Effect/Material/M_DropGlow.M_DropGlow"));
+}
+
+void URLCombatFeedbackSubsystem::SpawnFXAtTransform(UFXSystemAsset* FXAsset, const FVector& Location, const FRotator& Rotation, const FVector& Scale)
+{
+	UWorld* World = GetWorld();
+	if (!World || !FXAsset)
+	{
+		return;
+	}
+
+	if (UNiagaraSystem* NiagaraSys = Cast<UNiagaraSystem>(FXAsset))
+	{
+		UNiagaraFunctionLibrary::SpawnSystemAtLocation(World, NiagaraSys, Location, Rotation, Scale, true, true);
+	}
+	else if (UParticleSystem* CascadeSys = Cast<UParticleSystem>(FXAsset))
+	{
+		UGameplayStatics::SpawnEmitterAtLocation(World, CascadeSys, FTransform(Rotation, Location, Scale), true);
+	}
+}
+
+UFXSystemAsset* URLCombatFeedbackSubsystem::ResolveHitVFXAndColor(const URLSkillData* SkillData, bool bIsCritical, FLinearColor& OutLightColor) const
+{
+	OutLightColor = bIsCritical ? FLinearColor(1.0f, 0.55f, 0.1f) : FLinearColor(1.0f, 0.90f, 0.75f);
+
+	if (SkillData && SkillData->HitVFX)
+	{
+		return SkillData->HitVFX.Get();
+	}
+
+	if (!bEnableAutoSkillVFX || !SkillData)
+	{
+		return bIsCritical ? DefaultCritHitVFX.Get() : DefaultNormalHitVFX.Get();
+	}
+
+	const FString AssetName = SkillData->GetName().ToLower();
+	const FString SkillId = SkillData->SkillName.ToString().ToLower();
+	const FString Combined = AssetName + TEXT(" ") + SkillId;
+
+	// 1. 화염 스킬 (Fireball, Inferno, Explosion/Meteor)
+	if (Combined.Contains(TEXT("fire")) || Combined.Contains(TEXT("inferno")) || Combined.Contains(TEXT("explosion")) || Combined.Contains(TEXT("meteor")))
+	{
+		OutLightColor = FLinearColor(1.0f, 0.32f, 0.05f);
+		if (bIsCritical || Combined.Contains(TEXT("explosion")) || Combined.Contains(TEXT("meteor")))
+		{
+			return FireCritExplosionVFX ? FireCritExplosionVFX.Get() : (FireHitVFX ? FireHitVFX.Get() : DefaultCritHitVFX.Get());
+		}
+		return FireHitVFX ? FireHitVFX.Get() : DefaultNormalHitVFX.Get();
+	}
+
+	// 2. 번개/뇌전 스킬 (Lightning)
+	if (Combined.Contains(TEXT("lightning")) || Combined.Contains(TEXT("thunder")) || Combined.Contains(TEXT("shock")))
+	{
+		OutLightColor = FLinearColor(0.20f, 0.78f, 1.0f);
+		return LightningHitVFX ? LightningHitVFX.Get() : DefaultNormalHitVFX.Get();
+	}
+
+	// 3. 소서리스 평타 / 비전 마법 / 원거리 검기(차크라샷)
+	if (Combined.Contains(TEXT("sorceress")) || Combined.Contains(TEXT("chakra")) || SkillData->APScaling > SkillData->ADScaling)
+	{
+		OutLightColor = FLinearColor(0.70f, 0.35f, 1.0f);
+		if (bIsCritical && ArcaneCritHitVFX)
+		{
+			return ArcaneCritHitVFX.Get();
+		}
+		return ArcaneNormalHitVFX ? ArcaneNormalHitVFX.Get() : DefaultNormalHitVFX.Get();
+	}
+
+	// 4. 블레이드 / 참격 계열 (Blade)
+	if (Combined.Contains(TEXT("blade")) || Combined.Contains(TEXT("slash")))
+	{
+		OutLightColor = FLinearColor(1.0f, 0.22f, 0.18f);
+		if (bIsCritical && ArcaneCritHitVFX)
+		{
+			return ArcaneCritHitVFX.Get();
+		}
+		return DefaultNormalHitVFX.Get();
+	}
+
+	// 5. 디스트로이어 / 중전사 강타 계열 (Destroyer)
+	if (Combined.Contains(TEXT("destroyer")) || SkillData->CastType == ESkillCastType::Charge || SkillData->CastType == ESkillCastType::ChargeDash)
+	{
+		OutLightColor = bIsCritical ? FLinearColor(1.0f, 0.65f, 0.15f) : FLinearColor(0.45f, 1.0f, 0.60f);
+		if (bIsCritical && HeavyShockwaveVFX)
+		{
+			return HeavyShockwaveVFX.Get();
+		}
+		return HeavyBluntHitVFX ? HeavyBluntHitVFX.Get() : DefaultNormalHitVFX.Get();
+	}
+
+	return bIsCritical ? DefaultCritHitVFX.Get() : DefaultNormalHitVFX.Get();
+}
+
+void URLCombatFeedbackSubsystem::NotifySkillVFX(ARLCharacter* Caster, const URLSkillData* SkillData, const FVector& TargetLocation, int32 ComboIndex)
+{
+	if (!bEnableAutoSkillVFX || !Caster || !SkillData)
+	{
+		return;
+	}
+
+	EnsureDefaultAssetsLoaded();
+
+	// 스킬 데이터에 이미 ReleaseVFX가 지정되어 있으면 중복 스폰하지 않음
+	if (SkillData->ReleaseVFX)
+	{
+		return;
+	}
+
+	const FVector CasterLoc = Caster->GetActorLocation();
+	const FRotator CasterRot = Caster->GetActorRotation();
+	const FVector Forward = Caster->GetActorForwardVector();
+	const FString Combined = (SkillData->GetName() + TEXT(" ") + SkillData->SkillName.ToString()).ToLower();
+
+	switch (SkillData->CastType)
+	{
+	case ESkillCastType::Instant:
+	{
+		// 근접 베기/휘두르기 검기 이펙트 (콤보 타수에 따라 검기 궤적 교차)
+		const FVector SlashLoc = CasterLoc + Forward * FMath::Clamp(SkillData->HitboxForwardOffset * 0.65f, 70.0f, 140.0f) + FVector(0.0f, 0.0f, 35.0f);
+		FRotator SlashRot = CasterRot;
+		if (ComboIndex % 2 == 1)
+		{
+			SlashRot.Roll += 180.0f;
+		}
+
+		if (Combined.Contains(TEXT("blade")))
+		{
+			UFXSystemAsset* SlashFX = (ComboIndex % 2 == 0 && BladeSlashRedVFX) ? BladeSlashRedVFX.Get() : (MagicSlash1VFX ? MagicSlash1VFX.Get() : BladeSlashRedVFX.Get());
+			SpawnFXAtTransform(SlashFX, SlashLoc, SlashRot, FVector(1.05f));
+		}
+		else if (Combined.Contains(TEXT("destroyer")))
+		{
+			UFXSystemAsset* HeavySlashFX = (ComboIndex % 2 == 0 && MagicSlash2VFX) ? MagicSlash2VFX.Get() : MagicSlash1VFX.Get();
+			SpawnFXAtTransform(HeavySlashFX, SlashLoc, SlashRot, FVector(1.25f));
+		}
+		else
+		{
+			SpawnFXAtTransform(MagicSlash1VFX.Get(), SlashLoc, SlashRot, FVector(1.0f));
+		}
+		break;
+	}
+	case ESkillCastType::Dash:
+	case ESkillCastType::ChargeDash:
+	{
+		// 돌진/대시 시 발밑 먼지 폭발 + 잔상 트레일 + 전방 참격
+		if (DashDustVFX)
+		{
+			SpawnFXAtTransform(DashDustVFX.Get(), CasterLoc - FVector(0.0f, 0.0f, 40.0f), CasterRot, FVector(1.0f));
+		}
+		if (DashTrailVFX)
+		{
+			RLGameplayCueUtils::SpawnVFX(Caster, DashTrailVFX.Get(), CasterLoc, true, NAME_None);
+		}
+		if (Combined.Contains(TEXT("blade")) && BladeSlashRedVFX)
+		{
+			SpawnFXAtTransform(BladeSlashRedVFX.Get(), CasterLoc + Forward * 110.0f + FVector(0.0f, 0.0f, 35.0f), CasterRot, FVector(1.15f));
+		}
+		break;
+	}
+	case ESkillCastType::Charge:
+	{
+		// 차지 해방 순간 강력한 회전/충격파 검기
+		const FVector ReleaseLoc = CasterLoc + Forward * 120.0f + FVector(0.0f, 0.0f, 35.0f);
+		if (Combined.Contains(TEXT("blade")) && BladeSlashRedVFX)
+		{
+			SpawnFXAtTransform(BladeSlashRedVFX.Get(), ReleaseLoc, CasterRot, FVector(1.4f));
+		}
+		else if (MagicSlash2VFX)
+		{
+			SpawnFXAtTransform(MagicSlash2VFX.Get(), ReleaseLoc, CasterRot, FVector(1.4f));
+		}
+		if (HeavyShockwaveVFX)
+		{
+			SpawnFXAtTransform(HeavyShockwaveVFX.Get(), ReleaseLoc, CasterRot, FVector(0.9f));
+		}
+		break;
+	}
+	case ESkillCastType::GroundTarget:
+	{
+		// 지면 타겟 스킬 폭발 순간 (메테오/익스플로전 등)
+		const FVector EffectLoc = TargetLocation.IsNearlyZero() ? CasterLoc : TargetLocation;
+		if (Combined.Contains(TEXT("explosion")) || Combined.Contains(TEXT("meteor")) || Combined.Contains(TEXT("fire")))
+		{
+			if (FireCritExplosionVFX)
+			{
+				SpawnFXAtTransform(FireCritExplosionVFX.Get(), EffectLoc + FVector(0.0f, 0.0f, 20.0f), FRotator::ZeroRotator, FVector(1.35f));
+			}
+		}
+		else if (HeavyShockwaveVFX)
+		{
+			SpawnFXAtTransform(HeavyShockwaveVFX.Get(), EffectLoc + FVector(0.0f, 0.0f, 20.0f), FRotator::ZeroRotator, FVector(1.2f));
+		}
+		break;
+	}
+	case ESkillCastType::Hold:
+	{
+		// 홀드/채널링 시전 중 전방 이펙트 (라이트닝 / 휠윈드 등)
+		if (Combined.Contains(TEXT("lightning")) || Combined.Contains(TEXT("thunder")))
+		{
+			if (LightningHitVFX)
+			{
+				const FVector StrikeLoc = CasterLoc + Forward * FMath::Max(160.0f, SkillData->HitboxForwardOffset) + FVector(0.0f, 0.0f, 40.0f);
+				SpawnFXAtTransform(LightningHitVFX.Get(), StrikeLoc, CasterRot, FVector(1.1f));
+			}
+		}
+		else if (MagicSlash2VFX)
+		{
+			SpawnFXAtTransform(MagicSlash2VFX.Get(), CasterLoc + FVector(0.0f, 0.0f, 35.0f), CasterRot + FRotator(0.0f, ComboIndex * 90.0f, 0.0f), FVector(1.15f));
+		}
+		break;
+	}
+	case ESkillCastType::Cast:
+	{
+		// 캐스팅 완료 해방 순간 전방 충격파/참격
+		const FVector BlastLoc = CasterLoc + Forward * FMath::Max(120.0f, SkillData->HitboxForwardOffset);
+		if (HeavyShockwaveVFX)
+		{
+			SpawnFXAtTransform(HeavyShockwaveVFX.Get(), BlastLoc, CasterRot, FVector(1.25f));
+		}
+		break;
+	}
+	default:
+		break;
+	}
 }
 
 void URLCombatFeedbackSubsystem::OnWorldBeginPlay(UWorld& InWorld)
@@ -398,18 +699,23 @@ void URLCombatFeedbackSubsystem::NotifyCharacterDamaged(ARLCharacter* Victim, fl
 		}
 	}
 
-	// 2. 피격 메시 탄성 스케일 펀치(Squash & Stretch) + 오버레이 발광 플래시
+	// 2. 스킬 속성별 고유 타격 이펙트(HitVFX) 및 광원 색상 결정
+	FLinearColor ElementLightColor;
+	UFXSystemAsset* VFXToSpawn = ResolveHitVFXAndColor(SkillData, bIsCritical, ElementLightColor);
+
+	// 3. 피격 메시 탄성 스케일 펀치(Squash & Stretch) + 속성별 오버레이 발광 플래시
 	const FVector ImpactLoc = Victim->GetActorLocation();
-	TriggerMeshImpactAndFlash(Victim, ImpactLoc, bIsCritical);
+	TriggerMeshImpactAndFlash(Victim, ImpactLoc, bIsCritical, ElementLightColor);
 
-	// 3. 피격 이펙트(HitVFX: 미지정 시 기본 타격 스파크 자동 재생) 및 타격음(HitSound) 재생
-	UFXSystemAsset* VFXToSpawn = (SkillData && SkillData->HitVFX)
-		? SkillData->HitVFX.Get()
-		: (bIsCritical ? DefaultCritHitVFX.Get() : DefaultNormalHitVFX.Get());
-
+	// 4. 고유 타격 이펙트 스폰 (치명타일 때는 기본 치명타 스파크도 함께 겹쳐서 터뜨려 박력 강화)
 	if (VFXToSpawn)
 	{
-		RLGameplayCueUtils::SpawnVFX(Victim, VFXToSpawn, ImpactLoc + FVector(0.0f, 0.0f, 50.0f), false, NAME_None);
+		const FRotator HitRot = AttackerChar ? AttackerChar->GetActorRotation() : Victim->GetActorRotation();
+		SpawnFXAtTransform(VFXToSpawn, ImpactLoc + FVector(0.0f, 0.0f, 50.0f), HitRot, FVector(bIsCritical ? 1.25f : 1.0f));
+	}
+	if (bIsCritical && DefaultCritHitVFX && VFXToSpawn != DefaultCritHitVFX.Get())
+	{
+		RLGameplayCueUtils::SpawnVFX(Victim, DefaultCritHitVFX.Get(), ImpactLoc + FVector(0.0f, 0.0f, 55.0f), false, NAME_None);
 	}
 
 	if (SkillData && SkillData->HitSound)
@@ -417,7 +723,7 @@ void URLCombatFeedbackSubsystem::NotifyCharacterDamaged(ARLCharacter* Victim, fl
 		UGameplayStatics::PlaySoundAtLocation(Victim, SkillData->HitSound, ImpactLoc);
 	}
 
-	// 4. 절제된 카메라 쉐이크 & 줌 펀치 (눈이 피로하지 않도록 진폭과 줌인 폭을 대폭 완화)
+	// 5. 절제된 카메라 쉐이크 & 줌 펀치
 	const bool bPlayerInvolved = (Victim->TeamID == ERLTeam::Player) || !AttackerChar || (AttackerChar->TeamID == ERLTeam::Player);
 	if (bPlayerInvolved)
 	{
@@ -428,21 +734,18 @@ void URLCombatFeedbackSubsystem::NotifyCharacterDamaged(ARLCharacter* Victim, fl
 
 		if (Victim->TeamID == ERLTeam::Player)
 		{
-			// 플레이어 피격 시에만 살짝 더 흔들림
 			ShakeAmp = 16.0f;
 			ShakeDur = 0.14f;
 			ZoomPunch = 22.0f;
 		}
 		else if (bIsCritical)
 		{
-			// 치명타 적중 시 절제된 임팩트 펀치
 			ShakeAmp = 14.0f * SkillShakeScale;
 			ShakeDur = 0.11f;
 			ZoomPunch = 20.0f * SkillShakeScale;
 		}
 		else if (SkillData && SkillData->CastType == ESkillCastType::Hold)
 		{
-			// 채널링 스킬은 거의 흔들리지 않게 미세 진동만 유지
 			ShakeAmp = 2.5f * SkillShakeScale;
 			ShakeDur = 0.05f;
 			ZoomPunch = 0.0f;
@@ -450,7 +753,6 @@ void URLCombatFeedbackSubsystem::NotifyCharacterDamaged(ARLCharacter* Victim, fl
 
 		TriggerCameraFeedback(ShakeAmp * GlobalFeedbackIntensity, ShakeDur, ZoomPunch * GlobalFeedbackIntensity);
 
-		// 선택적 블루프린트 카메라 쉐이크 에셋이 지정되어 있으면 함께 실행
 		if (SkillData && SkillData->CameraShakeClass)
 		{
 			if (APlayerController* PC = GetWorld() ? GetWorld()->GetFirstPlayerController() : nullptr)
@@ -468,16 +770,20 @@ void URLCombatFeedbackSubsystem::NotifyCharacterDied(ARLCharacter* DeadCharacter
 		return;
 	}
 
-	// 사망한 캐릭터의 역경직 즉시 해제 (사망 모션/랙돌이 멈추지 않도록)
 	DeadCharacter->CustomTimeDilation = 1.0f;
 
-	// 적 처치 시 깔끔한 마무리 임팩트 이펙트 및 가벼운 줌 펀치
+	// 적 처치 시 마무리 임팩트 이펙트 및 가벼운 줌 펀치
 	if (DeadCharacter->TeamID == ERLTeam::Enemy)
 	{
 		EnsureDefaultAssetsLoaded();
+		const FVector DeathLoc = DeadCharacter->GetActorLocation() + FVector(0.0f, 0.0f, 50.0f);
 		if (DefaultCritHitVFX)
 		{
-			RLGameplayCueUtils::SpawnVFX(DeadCharacter, DefaultCritHitVFX, DeadCharacter->GetActorLocation() + FVector(0.0f, 0.0f, 50.0f), false, NAME_None);
+			RLGameplayCueUtils::SpawnVFX(DeadCharacter, DefaultCritHitVFX, DeathLoc, false, NAME_None);
+		}
+		if (bEnableAutoSkillVFX && HeavyShockwaveVFX)
+		{
+			SpawnFXAtTransform(HeavyShockwaveVFX.Get(), DeathLoc, FRotator::ZeroRotator, FVector(0.85f));
 		}
 		TriggerCameraFeedback(15.0f * GlobalFeedbackIntensity, 0.12f, 24.0f * GlobalFeedbackIntensity);
 	}
@@ -508,7 +814,7 @@ void URLCombatFeedbackSubsystem::ApplyHitStop(AActor* TargetActor, float Duratio
 	ActiveHitStops.Add(NewHitStop);
 }
 
-void URLCombatFeedbackSubsystem::TriggerMeshImpactAndFlash(ACharacter* Victim, const FVector& ImpactLocation, bool bIsCritical)
+void URLCombatFeedbackSubsystem::TriggerMeshImpactAndFlash(ACharacter* Victim, const FVector& ImpactLocation, bool bIsCritical, const FLinearColor& ElementLightColor)
 {
 	if (!Victim)
 	{
@@ -549,7 +855,6 @@ void URLCombatFeedbackSubsystem::TriggerMeshImpactAndFlash(ACharacter* Victim, c
 		NewImpact.Character = Victim;
 		NewImpact.BaseScale = BaseScale;
 
-		// 머티리얼 다이나믹 인스턴스 캐싱
 		const int32 NumMats = Mesh->GetNumMaterials();
 		for (int32 i = 0; i < NumMats; ++i)
 		{
@@ -579,7 +884,7 @@ void URLCombatFeedbackSubsystem::TriggerMeshImpactAndFlash(ACharacter* Victim, c
 
 	const FLinearColor FlashColor = bIsCritical
 		? FLinearColor(5.0f, 2.2f, 0.2f, 1.0f)
-		: FLinearColor(3.0f, 3.0f, 3.0f, 1.0f);
+		: (ElementLightColor * 3.5f);
 
 	for (const TWeakObjectPtr<UMaterialInstanceDynamic>& MIDPtr : ExistingImpact->DynamicMaterials)
 	{
@@ -591,11 +896,11 @@ void URLCombatFeedbackSubsystem::TriggerMeshImpactAndFlash(ACharacter* Victim, c
 		}
 	}
 
-	// 타격 순간 포인트 라이트 스파크 생성
-	SpawnImpactFlashLight(ImpactLocation + FVector(0.0f, 0.0f, 75.0f), bIsCritical);
+	// 타격 순간 속성 색상에 맞는 포인트 라이트 스파크 생성
+	SpawnImpactFlashLight(ImpactLocation + FVector(0.0f, 0.0f, 75.0f), bIsCritical, ElementLightColor);
 }
 
-void URLCombatFeedbackSubsystem::SpawnImpactFlashLight(const FVector& Location, bool bIsCritical)
+void URLCombatFeedbackSubsystem::SpawnImpactFlashLight(const FVector& Location, bool bIsCritical, const FLinearColor& ElementLightColor)
 {
 	UWorld* World = GetWorld();
 	if (!World)
@@ -620,7 +925,7 @@ void URLCombatFeedbackSubsystem::SpawnImpactFlashLight(const FVector& Location, 
 	FlashLight->SetWorldLocation(Location);
 	FlashLight->SetCastShadows(false);
 	FlashLight->SetAttenuationRadius(bIsCritical ? 420.0f : 300.0f);
-	FlashLight->SetLightColor(bIsCritical ? FLinearColor(1.0f, 0.55f, 0.1f) : FLinearColor(1.0f, 0.90f, 0.75f));
+	FlashLight->SetLightColor(ElementLightColor);
 
 	const float Intensity = (bIsCritical ? 60000.0f : 30000.0f) * GlobalFeedbackIntensity;
 	FlashLight->SetIntensity(Intensity);
@@ -671,7 +976,6 @@ void URLCombatFeedbackSubsystem::TriggerCameraFeedback(float ShakeAmplitude, flo
 
 	if (ShakeDuration > 0.0f && ShakeAmplitude > 0.0f)
 	{
-		// 다중 타격 시 진폭이 무한정 중첩되지 않도록 상한(25.0f) 적용
 		CurrentShakeAmplitude = FMath::Clamp(FMath::Max(CurrentShakeAmplitude, ShakeAmplitude), 0.0f, 25.0f);
 		ShakeTimeRemaining = FMath::Clamp(FMath::Max(ShakeTimeRemaining, ShakeDuration), 0.0f, 0.18f);
 		ShakeTotalDuration = FMath::Max(ShakeTotalDuration, ShakeTimeRemaining);
@@ -679,7 +983,6 @@ void URLCombatFeedbackSubsystem::TriggerCameraFeedback(float ShakeAmplitude, flo
 
 	if (ZoomPunchAmount > 0.0f)
 	{
-		// 다중 타격(광역기 등) 시 줌인이 중첩되어 멀미를 유발하지 않도록 합산(+) 대신 최대값(Max)만 반영하고 상한(32.0f) 제한
 		TargetZoomPunch = FMath::Clamp(FMath::Max(TargetZoomPunch, ZoomPunchAmount), 0.0f, 32.0f);
 		CurrentZoomOffset = TargetZoomPunch;
 	}
@@ -737,14 +1040,12 @@ void URLCombatFeedbackSubsystem::UpdateMeshImpacts(float DeltaTime)
 		Impact.Elapsed += DeltaTime;
 		const float Alpha = FMath::Clamp(Impact.Elapsed / FMath::Max(Impact.Duration, KINDA_SMALL_NUMBER), 0.0f, 1.0f);
 
-		// 피격 후 초반 40% 지점에서 오버레이 발광 해제 (짧고 강렬한 번쩍임)
 		if (Impact.bAppliedOverlay && Alpha >= 0.40f)
 		{
 			Mesh->SetOverlayMaterial(nullptr);
 			Impact.bAppliedOverlay = false;
 		}
 
-		// 탄성 복원 (EaseOut으로 빠르게 원래 스케일로 복귀)
 		const float EaseAlpha = FMath::InterpEaseOut(0.0f, 1.0f, Alpha, 2.5f);
 		const FVector CurrentScale = FMath::Lerp(Impact.PunchScale, Impact.BaseScale, EaseAlpha);
 		Mesh->SetRelativeScale3D(CurrentScale);
@@ -812,18 +1113,20 @@ void URLCombatFeedbackSubsystem::UpdateCameraFeedback(float DeltaTime)
 		return;
 	}
 
-	// 1. 카메라 오프셋 진동(Shake) 업데이트 (부드러운 2차 감쇠 적용)
 	FVector ShakeOffset = FVector::ZeroVector;
 	if (ShakeTimeRemaining > 0.0f)
 	{
 		ShakeTimeRemaining = FMath::Max(0.0f, ShakeTimeRemaining - DeltaTime);
-		const float Damping = FMath::Clamp(ShakeTimeRemaining / FMath::Max(ShakeTotalDuration, KINDA_SMALL_NUMBER), 0.0f, 1.0f);
-		const float Amp = CurrentShakeAmplitude * Damping * Damping;
+		ShakePhase += DeltaTime * 58.0f;
 
-		ShakePhase += DeltaTime * 50.0f;
-		ShakeOffset.X = FMath::Sin(ShakePhase * 1.13f) * Amp * 0.45f;
-		ShakeOffset.Y = FMath::Cos(ShakePhase * 1.71f) * Amp;
-		ShakeOffset.Z = FMath::Sin(ShakePhase * 2.37f) * Amp * 0.55f;
+		const float Decay = ShakeTotalDuration > KINDA_SMALL_NUMBER
+			? FMath::Clamp(ShakeTimeRemaining / ShakeTotalDuration, 0.0f, 1.0f)
+			: 0.0f;
+		const float Amp = CurrentShakeAmplitude * Decay;
+
+		ShakeOffset.Y = FMath::Sin(ShakePhase * 1.13f) * Amp;
+		ShakeOffset.Z = FMath::Cos(ShakePhase * 1.79f) * Amp * 0.7f;
+		ShakeOffset.X = FMath::Sin(ShakePhase * 2.41f) * Amp * 0.35f;
 
 		if (ShakeTimeRemaining <= 0.0f)
 		{
@@ -831,21 +1134,20 @@ void URLCombatFeedbackSubsystem::UpdateCameraFeedback(float DeltaTime)
 			ShakeTotalDuration = 0.0f;
 		}
 	}
-	Boom->SocketOffset = BaseSocketOffset + ShakeOffset;
 
-	// 2. 카메라 줌 펀치(TargetArmLength 순간 당김 후 부드러운 복귀) 업데이트
-	if (!FMath::IsNearlyZero(CurrentZoomOffset, 0.1f) || !FMath::IsNearlyZero(TargetZoomPunch, 0.1f))
+	if (!FMath::IsNearlyZero(CurrentZoomOffset, 0.1f))
 	{
 		CurrentZoomOffset = FMath::FInterpTo(CurrentZoomOffset, 0.0f, DeltaTime, 16.0f);
 		TargetZoomPunch = CurrentZoomOffset;
-		Boom->TargetArmLength = FMath::Max(300.0f, BaseTargetArmLength - CurrentZoomOffset);
 	}
 	else
 	{
 		CurrentZoomOffset = 0.0f;
 		TargetZoomPunch = 0.0f;
-		Boom->TargetArmLength = BaseTargetArmLength;
 	}
+
+	Boom->SocketOffset = BaseSocketOffset + ShakeOffset;
+	Boom->TargetArmLength = FMath::Max(250.0f, BaseTargetArmLength - CurrentZoomOffset);
 }
 
 TStatId URLCombatFeedbackSubsystem::GetStatId() const

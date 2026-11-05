@@ -209,6 +209,14 @@ void URLGameplayAbility_Skill::CreateSkillBoxHitbox(float DamageMultiplier, bool
 	{
 		return;
 	}
+
+	// 타격 판정 순간 스킬 성격(검기/대시/차지/채널링 등)에 맞는 스킬 시전 이펙트 자동 재생
+	if (URLCombatFeedbackSubsystem* FeedbackSub = URLCombatFeedbackSubsystem::Get(Caster))
+	{
+		static int32 GlobalSwingCounter = 0;
+		FeedbackSub->NotifySkillVFX(Caster, Skill, Caster->GetActorLocation(), GlobalSwingCounter++);
+	}
+
 	FRLDamageData DamageData = BuildDamageData(Caster, Skill);
 	DamageData.BaseDamage *= DamageMultiplier;
 	Caster->CreateBoxHitbox(Skill->HitboxExtent, Skill->HitboxForwardOffset, DamageData, bDrawDebug);
