@@ -984,15 +984,18 @@ void ARLCharacter::SetAttackHitScales(const TArray<float>& Scales)
 {
     AttackHitScales = Scales;
     AttackHitCounter = 0;
+    AttackHitGrowthScale = 1.0f;
+    AttackHitGrowthHitCount = 0;
 }
 
 float ARLCharacter::GetAttackHitScale(int32 HitIndex) const
 {
+    const float Growth = HitIndex < AttackHitGrowthHitCount ? AttackHitGrowthScale : 1.0f;
     if (AttackHitScales.Num() == 0)
     {
-        return 1.0f;
+        return Growth;
     }
-    return FMath::Max(0.01f, AttackHitScales[FMath::Clamp(HitIndex, 0, AttackHitScales.Num() - 1)]);
+    return FMath::Max(0.01f, AttackHitScales[FMath::Clamp(HitIndex, 0, AttackHitScales.Num() - 1)] * Growth);
 }
 
 void ARLCharacter::SetAttackHitWidthScales(const TArray<float>& WidthScales)
@@ -1094,6 +1097,16 @@ void ARLCharacter::UpdateAttackTelegraph(float DeltaTime)
                 ShowBoxAttackIndicator(ScaledExtent, TelegraphForwardOffset * TelegraphShownScale, TelegraphMaterial);
             }
         }
+    }
+    else if (bShouldShow && bTelegraphVisible && TelegraphShape == ETelegraphShape::Box
+        && !FMath::IsNearlyEqual(GetAttackHitScale(ActiveWindowIndex), TelegraphShownScale))
+    {
+        // ★ 연타처럼 히트 구간이 붙어 있으면 데칼이 꺼지지 않고 다음 히트로 넘어가서, 처음 뜰 때 계산한 크기가
+        // 계속 유지됨. 이번 히트의 배율이 달라졌으면(HitRangeScales/연타 바퀴별 증가) 방향은 그대로 두고 크기만 다시 그림
+        TelegraphShownScale = GetAttackHitScale(ActiveWindowIndex);
+        FVector ScaledExtent = TelegraphBoxExtent * TelegraphShownScale;
+        ScaledExtent.Y *= GetAttackHitWidthScale(ActiveWindowIndex);
+        ShowBoxAttackIndicator(ScaledExtent, TelegraphForwardOffset * TelegraphShownScale, TelegraphMaterial);
     }
     else if (!bShouldShow && bTelegraphVisible)
     {

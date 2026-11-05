@@ -510,6 +510,9 @@ protected:
 	TArray<float> AttackHitScales;
 	TArray<float> AttackHitWidthScales;
 	int32 AttackHitCounter = 0;
+	// ★ 연타 반복 중 바퀴마다 커지는 범위 배율. 히트 순번이 AttackHitGrowthHitCount 미만(반복 구간 타격)일 때만 곱함
+	float AttackHitGrowthScale = 1.0f;
+	int32 AttackHitGrowthHitCount = 0;
 	float ConsumeAttackHitScale();
 	float GetAttackHitScale(int32 HitIndex) const;
 	float GetAttackHitWidthScale(int32 HitIndex) const;

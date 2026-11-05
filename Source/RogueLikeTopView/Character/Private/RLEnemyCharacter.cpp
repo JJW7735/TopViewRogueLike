@@ -348,6 +348,8 @@ void ARLEnemyCharacter::Tick(float DeltaTime)
 	Super::Tick(DeltaTime);
 
 	UpdateAttackChase(DeltaTime);
+	UpdateComboLoop();
+	UpdateAttackStep();
 	UpdateChainNextAttack();
 	UpdatePulse();
 	UpdateAxeLeap(DeltaTime);
@@ -533,6 +535,23 @@ void ARLEnemyCharacter::BeginAttackPattern(const FRLMonsterPatternData& Pattern,
 	}
 	StartAttackChase(Pattern);
 	StartPulse(Pattern);
+	StartComboLoop(Pattern);
+
+	// 타격마다 한 걸음: 각 Notify_Hit보다 AttackStepLeadTime 앞선 시각들을 미리 계산
+	StepMontage = nullptr;
+	StepTimes.Reset();
+	NextStepIndex = 0;
+	if (Pattern.AttackStepDistance > 0.0f && Pattern.AttackMontage)
+	{
+		for (const FVector2D& Window : ComputeTelegraphWindows(Pattern.AttackMontage, FName("Notify_Hit"), 0.0f))
+		{
+			StepTimes.Add(FMath::Max(0.0f, Window.Y - Pattern.AttackStepLeadTime));
+		}
+		StepMontage = StepTimes.Num() > 0 ? Pattern.AttackMontage.Get() : nullptr;
+		StepDistance = Pattern.AttackStepDistance;
+		StepDuration = Pattern.AttackStepDuration;
+		ChaseStopDistance = Pattern.AttackChaseStopDistance;
+	}
 	BeginSoulCrackPattern(Pattern, HitNotifyName);
 
 	// 몽타주 전체 반전, 또는 Notify_MirrorStart ~ Notify_MirrorEnd 구간만 반전 (둘 다 아니면 반전 없음)
@@ -571,10 +590,170 @@ void ARLEnemyCharacter::StartAttackChase(const FRLMonsterPatternData& Pattern)
 	ChaseStopDistance = Pattern.AttackChaseStopDistance;
 }
 
+// ==========================================
+// ★ 연타 반복 (ComboLoop)
+// ==========================================
+
+void ARLEnemyCharacter::StartComboLoop(const FRLMonsterPatternData& Pattern)
+{
+	ComboMontage = nullptr;
+	if (Pattern.ComboLoopCount <= 0 || !Pattern.AttackMontage)
+	{
+		return;
+	}
+
+	UAnimInstance* AnimInstance = GetMesh() ? GetMesh()->GetAnimInstance() : nullptr;
+	UAnimMontage* Montage = Pattern.AttackMontage;
+	if (!AnimInstance || Montage->GetSectionIndex(Pattern.ComboLoopSection) == INDEX_NONE || Montage->GetSectionIndex(Pattern.ComboFinishSection) == INDEX_NONE)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[ComboLoop] %s: 몽타주 '%s'에 '%s' / '%s' 섹션이 있어야 합니다."), *GetName(), *Montage->GetName(),
+			*Pattern.ComboLoopSection.ToString(), *Pattern.ComboFinishSection.ToString());
+		return;
+	}
+
+	ComboMontage = Montage;
+	ComboLoopSectionName = Pattern.ComboLoopSection;
+	ComboFinishSectionName = Pattern.ComboFinishSection;
+	ComboCyclesLeft = Pattern.ComboLoopCount - 1; // 첫 바퀴는 지금 재생 중
+	ComboCycleIndex = 0;
+	ComboRateStep = Pattern.ComboPlayRateStep;
+	ComboMaxRate = Pattern.ComboMaxPlayRate;
+	ComboFinishRate = Pattern.ComboFinishPlayRate;
+	ComboRangeStep = Pattern.ComboRangeScaleStep;
+	ComboRangeMax = FMath::Max(1.0f, Pattern.ComboRangeMaxScale);
+	ComboLastPosition = 0.0f;
+	bComboInFinish = false;
+
+	// 바퀴마다 커지는 범위는 반복 구간 타격에만 적용: Finish 섹션 시작 전에 있는 Notify_Hit 개수 = 반복 구간 타격 수
+	// (SetAttackHitScales가 먼저 호출되어 1.0/0으로 초기화된 뒤 여기서 설정)
+	AttackHitGrowthScale = 1.0f;
+	AttackHitGrowthHitCount = 0;
+	if (ComboRangeStep > 0.0f)
+	{
+		const float FinishStart = Montage->GetAnimCompositeSection(Montage->GetSectionIndex(ComboFinishSectionName)).GetTime();
+		for (const FVector2D& Window : ComputeTelegraphWindows(Montage, FName("Notify_Hit"), 0.0f))
+		{
+			if (Window.Y < FinishStart)
+			{
+				++AttackHitGrowthHitCount;
+			}
+		}
+	}
+
+	// 반복이 남아 있으면 Loop 섹션이 끝날 때 다시 Loop로, 아니면 바로 Finish로
+	AnimInstance->Montage_SetNextSection(ComboLoopSectionName, ComboCyclesLeft > 0 ? ComboLoopSectionName : ComboFinishSectionName, Montage);
+}
+
+void ARLEnemyCharacter::UpdateComboLoop()
+{
+	if (!ComboMontage)
+	{
+		return;
+	}
+
+	UAnimInstance* AnimInstance = GetMesh() ? GetMesh()->GetAnimInstance() : nullptr;
+	if (!AnimInstance || !AnimInstance->Montage_IsPlaying(ComboMontage) || (HealthComp && HealthComp->bIsDead))
+	{
+		ComboMontage = nullptr;
+		return;
+	}
+
+	const float Position = AnimInstance->Montage_GetPosition(ComboMontage);
+	const FName Section = AnimInstance->Montage_GetCurrentSection(ComboMontage);
+
+	if (Section == ComboFinishSectionName)
+	{
+		if (!bComboInFinish)
+		{
+			bComboInFinish = true;
+			AnimInstance->Montage_SetPlayRate(ComboMontage, ComboFinishRate);
+		}
+	}
+	else if (Section == ComboLoopSectionName && Position + KINDA_SMALL_NUMBER < ComboLastPosition)
+	{
+		// 위치가 뒤로 돌아감 = Loop 섹션 한 바퀴 완료 → 속도 올리고 남은 횟수 차감
+		++ComboCycleIndex;
+		--ComboCyclesLeft;
+		AnimInstance->Montage_SetPlayRate(ComboMontage, FMath::Min(1.0f + ComboRateStep * ComboCycleIndex, ComboMaxRate));
+		AnimInstance->Montage_SetNextSection(ComboLoopSectionName, ComboCyclesLeft > 0 ? ComboLoopSectionName : ComboFinishSectionName, ComboMontage);
+
+		// 히트별 범위 배율(HitRangeScales)도 바퀴마다 처음부터 (예고 데칼은 몽타주 시간 기준 순번을 쓰므로 판정과 맞춤)
+		AttackHitCounter = 0;
+		AttackHitGrowthScale = FMath::Min(1.0f + ComboRangeStep * ComboCycleIndex, ComboRangeMax);
+
+		// 타격마다 한 걸음: 새 바퀴의 타격에도 다시 적용
+		NextStepIndex = 0;
+		while (StepTimes.IsValidIndex(NextStepIndex) && StepTimes[NextStepIndex] < Position)
+		{
+			++NextStepIndex;
+		}
+	}
+
+	ComboLastPosition = Position;
+}
+
+void ARLEnemyCharacter::UpdateAttackStep()
+{
+	if (!StepMontage)
+	{
+		return;
+	}
+
+	UAnimInstance* AnimInstance = GetMesh() ? GetMesh()->GetAnimInstance() : nullptr;
+	if (!AnimInstance || !AnimInstance->Montage_IsPlaying(StepMontage) || (HealthComp && HealthComp->bIsDead))
+	{
+		StepMontage = nullptr;
+		return;
+	}
+
+	// 내딛는 동안 떠 있는 Box 예고 데칼도 보스를 따라가게 해서 실제 판정 위치와 어긋나지 않게 함
+	if (bTelegraphVisible && AttackIndicator && TelegraphShape == ETelegraphShape::Box)
+	{
+		AttackIndicator->UpdateBoxTransform(GetIndicatorOrigin(), TelegraphForwardOffset * TelegraphShownScale, GetActorRotation().Yaw);
+	}
+
+	if (!StepTimes.IsValidIndex(NextStepIndex) || AnimInstance->Montage_GetPosition(StepMontage) < StepTimes[NextStepIndex])
+	{
+		return;
+	}
+	++NextStepIndex;
+
+	// 플레이어와 ChaseStopDistance보다 가까워지지 않게 걸음을 줄임 (이미 붙어 있으면 제자리)
+	float Distance = StepDistance;
+	if (const APawn* Player = UGameplayStatics::GetPlayerPawn(this, 0))
+	{
+		Distance = FMath::Min(Distance, FVector::Dist2D(Player->GetActorLocation(), GetActorLocation()) - ChaseStopDistance);
+	}
+	if (Distance > 1.0f)
+	{
+		// 방향은 현재 정면 (텔레그래프 회전 로직이 타격 사이에 플레이어 쪽으로 돌려놓음)
+		const FVector StepDirection = GetActorForwardVector().GetSafeNormal2D();
+		StartDashMovement(GetActorLocation() + StepDirection * Distance, StepDuration);
+
+		// 내딛는 동안 AnimBP가 "이동 중"으로 보게 해서 하체는 이동 모션, 상체는 UpperBody 슬롯 공격으로 섞이게 함
+		StepVelocity = StepDirection * (Distance / FMath::Max(StepDuration, KINDA_SMALL_NUMBER));
+		StepEndWorldTime = GetWorld()->GetTimeSeconds() + StepDuration;
+	}
+}
+
 void ARLEnemyCharacter::StopAttackChase()
 {
 	ChaseMontage = nullptr;
 	ChaseSpeed = 0.0f;
+	bChaseMovingThisFrame = false;
+}
+
+FVector ARLEnemyCharacter::GetVelocity() const
+{
+	if (bChaseMovingThisFrame)
+	{
+		return GetActorForwardVector().GetSafeNormal2D() * ChaseSpeed;
+	}
+	if (GetWorld() && GetWorld()->GetTimeSeconds() < StepEndWorldTime)
+	{
+		return StepVelocity;
+	}
+	return Super::GetVelocity();
 }
 
 // ARLCharacter::Tick은 몽타주 재생 중 CharacterMovement 속도를 매 프레임 0으로 만들기 때문에(공격 중 미끄러짐 방지),
@@ -595,6 +774,7 @@ void ARLEnemyCharacter::UpdateAttackChase(float DeltaTime)
 	}
 
 	// 플레이어에게 충분히 붙었으면 더 전진하지 않음
+	bChaseMovingThisFrame = false;
 	if (const APawn* Player = UGameplayStatics::GetPlayerPawn(this, 0))
 	{
 		if (FVector::Dist2D(Player->GetActorLocation(), GetActorLocation()) <= ChaseStopDistance)
@@ -605,6 +785,7 @@ void ARLEnemyCharacter::UpdateAttackChase(float DeltaTime)
 
 	const FVector Forward = GetActorForwardVector().GetSafeNormal2D();
 	SetActorLocation(GetActorLocation() + Forward * ChaseSpeed * DeltaTime, true);
+	bChaseMovingThisFrame = true;
 
 	// 보스가 움직였으니 떠 있는 Box 예고 데칼도 같이 옮겨서 실제 판정 위치와 어긋나지 않게 함
 	if (bTelegraphVisible && AttackIndicator && TelegraphShape == ETelegraphShape::Box)

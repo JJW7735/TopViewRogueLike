@@ -222,6 +222,38 @@ struct FRLMonsterPatternData
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Pattern|Chase", meta = (ClampMin = "0.0"))
 	float AttackChaseSpeed = 0.0f;
 
+	// ★ 연타 반복(콤보 루프). 0보다 크면 몽타주의 ComboLoopSection 섹션을 이 횟수만큼 반복하고(한 바퀴마다 재생 속도
+	// +ComboPlayRateStep, 최대 ComboMaxPlayRate), 끝나면 ComboFinishSection 섹션(마무리 공격)을 ComboFinishPlayRate로 재생.
+	// 몽타주에 두 섹션을 만들고 각 타격에 Notify_Hit을 넣으면 됨 (예: 보스2 광란 연타 = Melee A/B/C 반복 → 마무리)
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Pattern|ComboLoop", meta = (ClampMin = "0"))
+	int32 ComboLoopCount = 0;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Pattern|ComboLoop", meta = (EditCondition = "ComboLoopCount > 0"))
+	FName ComboLoopSection = FName("Loop");
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Pattern|ComboLoop", meta = (EditCondition = "ComboLoopCount > 0"))
+	FName ComboFinishSection = FName("Finish");
+
+	// 한 바퀴 돌 때마다 더할 재생 속도
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Pattern|ComboLoop", meta = (EditCondition = "ComboLoopCount > 0", ClampMin = "0.0"))
+	float ComboPlayRateStep = 0.15f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Pattern|ComboLoop", meta = (EditCondition = "ComboLoopCount > 0", ClampMin = "0.1"))
+	float ComboMaxPlayRate = 2.0f;
+
+	// 마무리 섹션 재생 속도
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Pattern|ComboLoop", meta = (EditCondition = "ComboLoopCount > 0", ClampMin = "0.1"))
+	float ComboFinishPlayRate = 1.0f;
+
+	// ★ 한 바퀴 돌 때마다 반복 구간 타격의 범위(판정+데칼)에 더할 배율. 마무리 섹션 타격에는 적용 안 됨.
+	// 예: 0.05면 1바퀴 1.0 → 2바퀴 1.05 → 3바퀴 1.1 ... (ComboRangeMaxScale까지)
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Pattern|ComboLoop", meta = (EditCondition = "ComboLoopCount > 0", ClampMin = "0.0"))
+	float ComboRangeScaleStep = 0.0f;
+
+	// 반복 구간 범위 배율 상한 (마무리 공격의 HitRangeScales보다 작게 두면 마무리가 항상 더 큼)
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Pattern|ComboLoop", meta = (EditCondition = "ComboLoopCount > 0", ClampMin = "1.0"))
+	float ComboRangeMaxScale = 1.5f;
+
 	// ★ 이 패턴이 끝나면 공격 후 대기(BT의 Wait)를 건너뛰고 바로 다음 패턴으로 이어감. 거리 좁히기용 돌진처럼
 	// 다음 공격으로 연결하는 패턴에 사용 (경직/사망 등으로 끊기면 적용 안 됨). 예: 보스2 Pounce
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Pattern")
@@ -240,6 +272,21 @@ struct FRLMonsterPatternData
 	// 도끼를 앞으로 내려치는 도약처럼 몸보다 앞까지 닿는 돌진에 사용 (예: 보스2 Pounce)
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Pattern", meta = (EditCondition = "AttackShape == ERLAttackShape::Dash", ClampMin = "0.0"))
 	float DashForwardReach = 0.0f;
+
+	// ★ 타격마다 한 걸음 내딛기(cm). 0보다 크면 각 Notify_Hit 직전(AttackStepLeadTime초 전)에 정면으로 이만큼
+	// AttackStepDuration초 동안 짧게 이동. 계속 미끄러지는 AttackChaseSpeed 대신 "한 대 칠 때마다 한 발" 연출 (예: 보스2 연타).
+	// 플레이어에게 AttackChaseStopDistance보다 가까워지지 않게 줄여서 내딛음.
+	// 내딛는 동안은 이동 중으로 처리되므로, 몽타주 슬롯을 UpperBody로 두면 하체는 이동 모션 + 상체는 공격으로 섞임
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Pattern|Chase", meta = (ClampMin = "0.0"))
+	float AttackStepDistance = 0.0f;
+
+	// 타격 몇 초 전에 내딛기 시작할지
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Pattern|Chase", meta = (EditCondition = "AttackStepDistance > 0", ClampMin = "0.0"))
+	float AttackStepLeadTime = 0.15f;
+
+	// 한 걸음에 걸리는 시간(초)
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Pattern|Chase", meta = (EditCondition = "AttackStepDistance > 0", ClampMin = "0.05"))
+	float AttackStepDuration = 0.15f;
 
 	// 플레이어와의 2D 거리가 이 값 이하이면 전진을 멈춥니다 (밀고 들어가지 않도록)
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Pattern|Chase", meta = (ClampMin = "0.0", EditCondition = "AttackChaseSpeed > 0"))

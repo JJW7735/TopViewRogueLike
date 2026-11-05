@@ -310,6 +310,10 @@ public:
 	virtual void ReceiveCustomDamage(const FRLDamageData& DamageData, const FHitResult& HitInfo) override;
 	virtual void Tick(float DeltaTime) override;
 
+	// ★ 공격 중 전진(AttackChase)은 위치를 직접 옮겨서 무브먼트 속도가 0이므로, 전진하는 동안에는 전진 속도를 돌려줌.
+	// AnimBP가 이 속도로 "이동 중"을 판단해서 하체는 달리기 + 상체는 UpperBody 슬롯 몽타주로 섞어 재생할 수 있음
+	virtual FVector GetVelocity() const override;
+
 protected:
 	virtual void BeginPlay() override;
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
@@ -398,6 +402,37 @@ private:
 	TObjectPtr<UAnimMontage> ChaseMontage = nullptr;
 	float ChaseSpeed = 0.0f;
 	float ChaseStopDistance = 0.0f;
+	bool bChaseMovingThisFrame = false; // 이번 프레임에 실제로 전진했는지 (플레이어에게 붙어서 멈춘 경우 false)
+
+	// ★ 연타 반복 (FRLMonsterPatternData::ComboLoopCount)
+	void StartComboLoop(const FRLMonsterPatternData& Pattern);
+	void UpdateComboLoop();
+
+	UPROPERTY()
+	TObjectPtr<UAnimMontage> ComboMontage = nullptr;
+	FName ComboLoopSectionName;
+	FName ComboFinishSectionName;
+	int32 ComboCyclesLeft = 0;     // 남은 반복 횟수 (0이 되면 마무리로)
+	int32 ComboCycleIndex = 0;     // 지금 몇 번째 바퀴인지 (재생 속도 계산용)
+	float ComboRateStep = 0.0f;
+	float ComboMaxRate = 1.0f;
+	float ComboFinishRate = 1.0f;
+	float ComboRangeStep = 0.0f;   // 바퀴마다 반복 구간 범위 배율 증가폭
+	float ComboRangeMax = 1.0f;
+	float ComboLastPosition = 0.0f;
+	bool bComboInFinish = false;
+
+	// ★ 타격마다 한 걸음 (FRLMonsterPatternData::AttackStepDistance)
+	void UpdateAttackStep();
+
+	UPROPERTY()
+	TObjectPtr<UAnimMontage> StepMontage = nullptr;
+	TArray<float> StepTimes;      // 내딛기 시작할 몽타주 시각들 (각 Notify_Hit - LeadTime)
+	int32 NextStepIndex = 0;
+	float StepDistance = 0.0f;
+	float StepDuration = 0.0f;
+	FVector StepVelocity = FVector::ZeroVector; // 내딛는 동안 GetVelocity가 돌려줄 속도 (AnimBP 하체 이동 모션용)
+	float StepEndWorldTime = 0.0f;
 
 	// ★ 다음 패턴 바로 잇기(FRLMonsterPatternData::bChainNextAttack) 상태: 몽타주가 정상 종료되면 BT 재시작
 	void UpdateChainNextAttack();
