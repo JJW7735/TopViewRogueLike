@@ -1,4 +1,5 @@
 ﻿#include "RLShopSubsystem.h"
+#include "RogueLikeTopView.h"
 #include "RLCharacter.h"
 #include "RLInventoryComponent.h"
 #include "RLStatComponent.h"
@@ -478,10 +479,19 @@ void URLShopSubsystem::BuildDefaultPools()
 		URLItemPoolDataAsset::CollectRewards(PoolAsset->ShopBlessings, StatPool);
 		if (ItemPool.Num() > 0 && StatPool.Num() > 0)
 		{
+			UE_LOG(LogRogueLikeTopView, Log, TEXT("[Shop] BuildDefaultPools: DataAsset 경로 사용 (%s) - Items=%d, Blessings=%d"),
+				*PoolAsset->GetPathName(), ItemPool.Num(), StatPool.Num());
 			return;
 		}
+		UE_LOG(LogRogueLikeTopView, Warning, TEXT("[Shop] BuildDefaultPools: DA_ItemPool은 로드됐지만 비어 있음 (Items=%d, Blessings=%d) → 하드코딩 폴백"),
+			ItemPool.Num(), StatPool.Num());
 		ItemPool.Reset();
 		StatPool.Reset();
+	}
+	else
+	{
+		UE_LOG(LogRogueLikeTopView, Warning, TEXT("[Shop] BuildDefaultPools: DA_ItemPool 로드 실패 (%s) → 하드코딩 폴백"),
+			URLItemPoolDataAsset::DefaultAssetPath);
 	}
 
 	// ==========================================
