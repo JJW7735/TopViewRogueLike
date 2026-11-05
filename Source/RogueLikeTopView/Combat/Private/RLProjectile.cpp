@@ -1,10 +1,11 @@
-// Fill out your copyright notice in the Description page of Project Settings.
+﻿// Fill out your copyright notice in the Description page of Project Settings.
 
 #include "RLProjectile.h"
 #include "Components/SphereComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "GameFramework/ProjectileMovementComponent.h"
 #include "RLCharacter.h"
+#include "RLCombatFeedbackSubsystem.h"
 #include "Kismet/KismetSystemLibrary.h"
 #include "DrawDebugHelpers.h"
 
@@ -81,6 +82,12 @@ void ARLProjectile::OnHit(UPrimitiveComponent* OverlappedComp, AActor* OtherActo
 	FRLDamageData FinalDamageData = DamageData;
 	FinalDamageData.DamageCauser = GetInstigator();
 
+	if (URLCombatFeedbackSubsystem* FeedbackSub = URLCombatFeedbackSubsystem::Get(this))
+	{
+		AActor* AttackerActor = GetInstigator() ? static_cast<AActor*>(GetInstigator()) : static_cast<AActor*>(this);
+		FeedbackSub->PushDamageContext(AttackerActor, FinalDamageData, SourceSkill);
+	}
+
 	HitCharacter->ReceiveCustomDamage(FinalDamageData, SweepResult);
 
 	CurrentHitCount++;
@@ -150,10 +157,17 @@ void ARLProjectile::ApplySplashDamage(AActor* DirectHitActor, const FVector& Ori
 	FHitResult SplashHit;
 	SplashHit.ImpactPoint = Origin;
 
+	URLCombatFeedbackSubsystem* FeedbackSub = URLCombatFeedbackSubsystem::Get(this);
+	AActor* AttackerActor = GetInstigator() ? static_cast<AActor*>(GetInstigator()) : static_cast<AActor*>(this);
+
 	for (AActor* SplashTarget : OverlappedActors)
 	{
 		if (ARLCharacter* SplashCharacter = Cast<ARLCharacter>(SplashTarget))
 		{
+			if (FeedbackSub)
+			{
+				FeedbackSub->PushDamageContext(AttackerActor, SplashDamageData, SourceSkill);
+			}
 			SplashCharacter->ReceiveCustomDamage(SplashDamageData, SplashHit);
 		}
 	}

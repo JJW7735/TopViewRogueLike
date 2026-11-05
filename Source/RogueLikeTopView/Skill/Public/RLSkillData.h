@@ -6,6 +6,8 @@
 #include "RLSkillData.generated.h"
 
 class UFXSystemAsset;
+class USoundBase;
+class UCameraShakeBase;
 class URLGameplayAbility_Skill;
 
 UENUM(BlueprintType)
@@ -162,7 +164,7 @@ public:
 	float BuffDuration = 3.0f;
 
 	// ==========================================
-	// 시각 효과 (VFX)
+	// 시각 효과 & 사운드 & 타격감 (VFX / SFX / Feel)
 	// ==========================================
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Skill|Effect")
 	UFXSystemAsset* ChargeVFX;
@@ -170,9 +172,29 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Skill|Effect")
 	UFXSystemAsset* ReleaseVFX;
 
+	/** 적에게 적중했을 때 타격 위치에 스폰할 피격 이펙트 (나이아가라/캐스케이드 공용) */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Skill|Effect")
+	TObjectPtr<UFXSystemAsset> HitVFX = nullptr;
+
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Skill|Effect")
 	bool bAttachToWeapon = false;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Skill|Effect", meta = (EditCondition = "bAttachToWeapon"))
 	FName WeaponSocketName = TEXT("HammerHeadSocket");
+
+	/** 스킬 시전 순간 재생할 효과음 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Skill|Sound")
+	TObjectPtr<USoundBase> CastSound = nullptr;
+
+	/** 스킬이 적에게 적중했을 때 재생할 타격 효과음 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Skill|Sound")
+	TObjectPtr<USoundBase> HitSound = nullptr;
+
+	/** 스킬 적중 시 카메라 흔들림/줌 펀치 강도 배율 (1.0 = 기본, 0 = 흔들림 없음, 궁극기 등은 1.5~2.5 추천) */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Skill|Feel", meta = (ClampMin = "0.0", ClampMax = "5.0"))
+	float CameraShakeScale = 1.0f;
+
+	/** 선택적 카메라 쉐이크 에셋 (비워두어도 C++ 프로시저럴 카메라 펀치/쉐이크가 자동 작동합니다) */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Skill|Feel")
+	TSubclassOf<UCameraShakeBase> CameraShakeClass;
 };

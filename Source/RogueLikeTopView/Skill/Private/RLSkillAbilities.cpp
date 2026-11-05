@@ -8,6 +8,7 @@
 #include "RLAttributeSet.h"
 #include "RLGameplayEffects.h"
 #include "RLGameplayTags.h"
+#include "RLCombatFeedbackSubsystem.h"
 #include "AbilitySystemComponent.h"
 #include "GameFramework/ProjectileMovementComponent.h"
 #include "TimerManager.h"
@@ -70,7 +71,13 @@ void URLGA_Skill_Projectile::ActivateSkill()
 		if (ARLProjectile* Projectile = Caster->GetWorld()->SpawnActor<ARLProjectile>(Skill->ProjectileClass, SpawnLoc, Caster->GetActorRotation(), SpawnParams))
 		{
 			Projectile->DamageData = BuildDamageData(Caster, Skill);
+			Projectile->SourceSkill = Skill;
 			Projectile->MovementComp->Velocity = Caster->GetActorRotation().Vector() * Skill->ProjectileSpeed;
+
+			if (URLCombatFeedbackSubsystem* FeedbackSub = URLCombatFeedbackSubsystem::Get(Caster))
+			{
+				FeedbackSub->RegisterDamageSourceActor(Projectile, Caster, Projectile->DamageData, Skill);
+			}
 		}
 	}
 
@@ -332,9 +339,15 @@ void URLGA_Skill_GroundTarget::Detonate()
 		SpawnParams.Instigator = Caster;
 		if (AActor* GroundActor = Caster->GetWorld()->SpawnActor<AActor>(Skill->GroundActorClass, TargetLocation, FRotator::ZeroRotator, SpawnParams))
 		{
+			const FRLDamageData EvaluatedDamage = BuildDamageData(Caster, Skill);
 			if (ARLGroundAreaEffect* GroundEffect = Cast<ARLGroundAreaEffect>(GroundActor))
 			{
-				GroundEffect->DamageData = BuildDamageData(Caster, Skill);
+				GroundEffect->DamageData = EvaluatedDamage;
+				GroundEffect->SourceSkill = Skill;
+			}
+			if (URLCombatFeedbackSubsystem* FeedbackSub = URLCombatFeedbackSubsystem::Get(Caster))
+			{
+				FeedbackSub->RegisterDamageSourceActor(GroundActor, Caster, EvaluatedDamage, Skill);
 			}
 		}
 	}

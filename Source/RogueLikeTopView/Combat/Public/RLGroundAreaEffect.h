@@ -1,9 +1,11 @@
-#pragma once
+﻿#pragma once
 
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
 #include "RLTypes.h"
 #include "RLGroundAreaEffect.generated.h"
+
+class URLSkillData;
 
 // ★ 인페르노/메테오처럼 GroundActorClass로 스폰되는 장판형 스킬의 공용 베이스입니다.
 // RLSkillComponent가 스폰 직후 DamageData에 스탯 스케일링이 적용된 최종 데미지를 넣어줍니다.
@@ -19,4 +21,8 @@ public:
 	// 스킬 데이터의 AD/AP 스케일링까지 반영된 최종 데미지. RLSkillComponent가 스폰 직후 채워줍니다.
 	UPROPERTY(BlueprintReadWrite, Category = "GroundAreaEffect")
 	FRLDamageData DamageData;
+
+	// 이 장판을 생성한 원본 스킬 데이터 (피격 시 HitVFX / HitSound / 타격감 연동용)
+	UPROPERTY(BlueprintReadWrite, Category = "GroundAreaEffect")
+	TObjectPtr<const URLSkillData> SourceSkill = nullptr;
 };

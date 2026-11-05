@@ -10,6 +10,7 @@
 class USphereComponent;
 class UStaticMeshComponent;
 class UProjectileMovementComponent;
+class URLSkillData;
 
 UCLASS()
 class ROGUELIKETOPVIEW_API ARLProjectile : public AActor
@@ -38,6 +39,10 @@ public:
 	// 스킬 데이터에서 넘겨받는 데미지 정보
 	UPROPERTY(BlueprintReadWrite, Category = "Projectile")
 	FRLDamageData DamageData;
+
+	// 이 투사체를 발사한 원본 스킬 데이터 (피격 시 HitVFX / HitSound / 타격감 연동용)
+	UPROPERTY(BlueprintReadWrite, Category = "Projectile")
+	TObjectPtr<const URLSkillData> SourceSkill = nullptr;
 
 	// 최대 생존 시간 (초). 아무것도 안 맞아도 이 시간 지나면 자동 소멸
 	UPROPERTY(EditDefaultsOnly, Category = "Projectile")

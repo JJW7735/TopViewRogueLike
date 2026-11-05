@@ -1,6 +1,6 @@
 # 🎮 RLTV (RogueLikeTopView) 개발 진행 상황 & 프로젝트 가이드
 
-> **최종 갱신일:** 2026-10-01  
+> **최종 갱신일:** 2026-11-05  
 > **프로젝트 성격:** 3인 포트폴리오/공모전 탑다운 로그라이크 액션  
 > **엔진 버전:** Unreal Engine 5.8  
 > **AI 어시스턴트 협업:** Gemini (Antigravity CLI), Claude (Claude Code)
@@ -99,6 +99,7 @@
 
 ## 📝 4. 작업 히스토리 (Work Log)
 
+| 2026-11-05 | HSJ (Gemini) | 전투 타격감(Combat Feedback) 서브시스템 구축 (URLCombatFeedbackSubsystem: 역경직 Hit-Stop, 프로시저럴 카메라 셰이크 & 줌 펀치, 피격 메시 Squash & Stretch 탄성 및 오버레이/광원 플래시, URLSkillData 타격 VFX/시전·타격 SFX 확장 및 기본 파티클 폴백 연동, URLDamageNumberSubsystem 치명타 전용 골드/오렌지 대형 팝업 연출 연동) |
 | 2026-10-01 | HSJ (Gemini) | 보상 상자 수령 시 소멸 라이프사이클 및 포탈 전이 시 잔여 액터 자동 정리 구현 (카드 선택 시 `ARLRewardChest` 콜리전/FX 즉시 차단 및 지연 Destroy, 포탈 이동 시 이전 아레나 상자 및 포탈 자체 파괴 처리, `ARLArenaManager` 생성 액터 추적 및 정리 함수 추가) |
 | 2026-09-29 | HSJ (Gemini) | 아레나/전투 구역 총괄 매니저 & 웨이브 스포너 구축 (`ARLArenaManager`: TriggerVolume 영역 감지, 다중 웨이브 및 순차 스폰 `FRLWaveData`, 문 폐쇄/개방 `BarrierActors`, 처치 카운팅 `OnEnemyDied` 연동, 클리어 시 `ARLRewardChest` & `ARLPortal` 자동 스폰, 테스트 치트 3종 탑재) |
 | 2026-09-28 | HSJ (Gemini) | 인벤토리 & 아이템 시스템 백엔드 구축 (`URLInventoryComponent`, `URLItemDataAsset`, 5종 아이템 분류, 골드 관리, 패시브 스탯 자동 연동, 테스트 치트 3종 탑재, UI 연동 가이드 문서화: `progress/UI_INVENTORY_GUIDE.md`) |

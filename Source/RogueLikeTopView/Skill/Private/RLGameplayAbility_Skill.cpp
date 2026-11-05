@@ -6,8 +6,10 @@
 #include "RLGameplayEffects.h"
 #include "RLGameplayTags.h"
 #include "RLAbilityTask_Tick.h"
+#include "RLCombatFeedbackSubsystem.h"
 #include "AbilitySystemComponent.h"
 #include "Animation/AnimInstance.h"
+#include "Kismet/GameplayStatics.h"
 
 URLGameplayAbility_Skill::URLGameplayAbility_Skill()
 {
@@ -55,6 +57,12 @@ void URLGameplayAbility_Skill::ActivateAbility(const FGameplayAbilitySpecHandle 
 	{
 		EndAbility(Handle, ActorInfo, ActivationInfo, true, true);
 		return;
+	}
+
+	// 스킬 시전 효과음(CastSound)이 지정되어 있으면 시전 위치에서 재생
+	if (Skill->CastSound)
+	{
+		UGameplayStatics::PlaySoundAtLocation(Caster, Skill->CastSound, Caster->GetActorLocation());
 	}
 
 	ActivateSkill();
@@ -258,6 +266,15 @@ FRLDamageData URLGameplayAbility_Skill::BuildDamageData(ARLCharacter* InCaster, 
 				GEngine->AddOnScreenDebugMessage(-1, 2.0f, FColor::Cyan, FString::Printf(TEXT("Skill Base(%.1f) + Bonus(%.1f) = Final Damage(%.1f)"),
 					InSkill->DamageData.BaseDamage, BonusDamage, FinalDamage.BaseDamage));
 			}
+		}
+	}
+
+	// ★ 타격감 서브시스템에 이번 스킬 시전의 치명타/역경직/VFX·SFX 컨텍스트 등록
+	if (InCaster)
+	{
+		if (URLCombatFeedbackSubsystem* FeedbackSub = URLCombatFeedbackSubsystem::Get(InCaster))
+		{
+			FeedbackSub->PushDamageContext(InCaster, FinalDamage, InSkill);
 		}
 	}
 

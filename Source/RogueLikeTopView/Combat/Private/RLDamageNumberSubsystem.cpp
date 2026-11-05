@@ -1,9 +1,11 @@
 ﻿#include "RLDamageNumberSubsystem.h"
 #include "RLEnemyCharacter.h"
 #include "RLHealthComponent.h"
+#include "RLCombatFeedbackSubsystem.h"
 #include "Blueprint/UserWidget.h"
 #include "Components/CapsuleComponent.h"
 #include "Components/TextBlock.h"
+#include "Styling/SlateColor.h"
 #include "EngineUtils.h"
 #include "GameFramework/PlayerController.h"
 
@@ -23,7 +25,22 @@ void URLDamageNumberListener::HandleHealthChanged(float CurrentHealth, float Max
 	}
 	Location.Z += OwnerSubsystem->HeadOffset;
 
-	OwnerSubsystem->SpawnDamageNumber(HealthDelta, Location);
+	bool bIsCritical = false;
+	if (URLCombatFeedbackSubsystem* FeedbackSub = URLCombatFeedbackSubsystem::Get(Victim.Get()))
+	{
+		bIsCritical = FeedbackSub->IsCurrentHitCritical(nullptr);
+
+		if (ARLCharacter* VictimRL = Cast<ARLCharacter>(Victim.Get()))
+		{
+			FeedbackSub->NotifyCharacterDamaged(VictimRL, HealthDelta, nullptr);
+			if (CurrentHealth <= 0.0f)
+			{
+				FeedbackSub->NotifyCharacterDied(VictimRL);
+			}
+		}
+	}
+
+	OwnerSubsystem->SpawnDamageNumber(HealthDelta, Location, bIsCritical);
 }
 
 bool URLDamageNumberSubsystem::DoesSupportWorldType(const EWorldType::Type WorldType) const
@@ -106,7 +123,7 @@ void URLDamageNumberSubsystem::TryRegisterActor(AActor* Actor)
 	Listeners.Add(Listener);
 }
 
-void URLDamageNumberSubsystem::SpawnDamageNumber(float Damage, FVector WorldLocation)
+void URLDamageNumberSubsystem::SpawnDamageNumber(float Damage, FVector WorldLocation, bool bIsCritical)
 {
 	APlayerController* PC = GetWorld() ? GetWorld()->GetFirstPlayerController() : nullptr;
 	if (!PC || !DamageNumberWidgetClass)
@@ -122,12 +139,22 @@ void URLDamageNumberSubsystem::SpawnDamageNumber(float Damage, FVector WorldLoca
 
 	if (UTextBlock* DamageText = Cast<UTextBlock>(Widget->GetWidgetFromName(TEXT("Txt_Damage"))))
 	{
-		DamageText->SetText(FText::AsNumber(FMath::RoundToInt(Damage)));
+		const int32 RoundedDamage = FMath::RoundToInt(Damage);
+		if (bIsCritical)
+		{
+			DamageText->SetText(FText::FromString(FString::Printf(TEXT("%d!"), RoundedDamage)));
+			DamageText->SetColorAndOpacity(FSlateColor(FLinearColor(1.0f, 0.55f, 0.05f, 1.0f)));
+		}
+		else
+		{
+			DamageText->SetText(FText::AsNumber(RoundedDamage));
+			DamageText->SetColorAndOpacity(FSlateColor(FLinearColor(1.0f, 0.96f, 0.88f, 1.0f)));
+		}
 	}
 
-	// 보상 선택창(ZOrder 50)보다 아래
-	Widget->AddToViewport(5);
-	Widget->SetDesiredSizeInViewport(FVector2D(200.0f, 60.0f));
+	// 보상 선택창(ZOrder 50)보다 아래, 치명타는 일반 숫자보다 한 단계 위(6)에 배치
+	Widget->AddToViewport(bIsCritical ? 6 : 5);
+	Widget->SetDesiredSizeInViewport(FVector2D(240.0f, 70.0f));
 	Widget->SetAlignmentInViewport(FVector2D(0.5f, 1.0f));
 	Widget->SetVisibility(ESlateVisibility::HitTestInvisible);
 
@@ -135,6 +162,7 @@ void URLDamageNumberSubsystem::SpawnDamageNumber(float Damage, FVector WorldLoca
 	Entry.Widget = Widget;
 	Entry.WorldLocation = WorldLocation;
 	Entry.JitterX = FMath::FRandRange(-HorizontalJitter, HorizontalJitter);
+	Entry.bIsCritical = bIsCritical;
 
 	// 생성된 프레임에 바로 위치를 잡아 (0,0)에서 한 프레임 깜빡이는 것 방지
 	UpdateDamageNumber(Entry, PC);
@@ -175,8 +203,9 @@ void URLDamageNumberSubsystem::Tick(float DeltaTime)
 
 bool URLDamageNumberSubsystem::UpdateDamageNumber(FRLActiveDamageNumber& Entry, APlayerController* PC) const
 {
-	const float T = FMath::Clamp(Entry.Elapsed / FMath::Max(Lifetime, KINDA_SMALL_NUMBER), 0.0f, 1.0f);
-	if (Entry.Elapsed >= Lifetime)
+	const float EntryLifetime = Entry.bIsCritical ? CritLifetime : Lifetime;
+	const float T = FMath::Clamp(Entry.Elapsed / FMath::Max(EntryLifetime, KINDA_SMALL_NUMBER), 0.0f, 1.0f);
+	if (Entry.Elapsed >= EntryLifetime)
 	{
 		return false;
 	}
@@ -189,14 +218,17 @@ bool URLDamageNumberSubsystem::UpdateDamageNumber(FRLActiveDamageNumber& Entry, 
 		return true;
 	}
 
-	// 위로 떠오르기 (처음엔 빠르게, 끝으로 갈수록 느리게)
-	const float Rise = RiseDistance * FMath::InterpEaseOut(0.0f, 1.0f, T, 2.0f);
+	// 위로 떠오르기 (치명타는 조금 더 높이 솟아오름)
+	const float EffectiveRise = Entry.bIsCritical ? (RiseDistance * 1.25f) : RiseDistance;
+	const float Rise = EffectiveRise * FMath::InterpEaseOut(0.0f, 1.0f, T, 2.0f);
 	ScreenPos += FVector2D(Entry.JitterX, -Rise);
 	Entry.Widget->SetPositionInViewport(ScreenPos, true);
 
-	// 등장 직후 살짝 커졌다가 원래 크기로
-	const float PopT = FMath::Clamp(T / 0.15f, 0.0f, 1.0f);
-	const float Scale = FMath::Lerp(PopScale, 1.0f, PopT);
+	// 등장 직후 살짝 커졌다가 목표 크기로 탄성 복귀
+	const float PopT = FMath::Clamp(T / 0.16f, 0.0f, 1.0f);
+	const float StartScale = Entry.bIsCritical ? CritPopScale : PopScale;
+	const float EndScale = Entry.bIsCritical ? CritBaseScale : 1.0f;
+	const float Scale = FMath::Lerp(StartScale, EndScale, PopT);
 	Entry.Widget->SetRenderScale(FVector2D(Scale, Scale));
 
 	// 후반부 페이드아웃
