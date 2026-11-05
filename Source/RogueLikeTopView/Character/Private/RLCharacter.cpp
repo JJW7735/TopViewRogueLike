@@ -257,6 +257,12 @@ void ARLCharacter::ReceiveCustomDamage(const FRLDamageData& DamageData, const FH
         return;
     }
 
+    // ★ 공격자에게 "명중" 알림 (회피 무적/아군은 위에서 걸러짐). 보스 패턴의 "맞으면 연결 안 함" 판정 등에 사용
+    if (ARLCharacter* CauserCharacter = Cast<ARLCharacter>(DamageData.DamageCauser))
+    {
+        ++CauserCharacter->AttackLandedCount;
+    }
+
     // 보스/엘리트처럼 경직 면역(CanBeStaggered == false)인 대상은 넉백으로 밀려나지 않습니다.
     const bool bCanBeStaggered = CanBeStaggered();
 
@@ -905,6 +911,13 @@ void ARLCharacter::StartBoxAttackTelegraph(UAnimMontage* Montage, FName HitNotif
 {
     StopAttackTelegraph();
 
+    // ★ 돌진 패턴의 앞쪽 연장(DashForwardReach): 사각형 앞 끝만 그만큼 늘림 (길이 절반 + 중심 이동을 Reach/2씩)
+    if (DashForwardReach > 0.0f)
+    {
+        BoxExtent.X += DashForwardReach * 0.5f;
+        ForwardOffset += DashForwardReach * 0.5f;
+    }
+
     TelegraphWindows = ComputeTelegraphWindows(Montage, HitNotifyName, LeadTime);
     if (TelegraphWindows.Num() == 0)
     {
@@ -1362,11 +1375,22 @@ void ARLCharacter::PerformDashHitCheck()
 
     const FVector Location = GetActorLocation();
 
+    // ★ 판정 반지름 = DashHitRadius + 내 몸통(캡슐) 반지름. 몸통으로 부딪히는 공격이라, 덩치 큰 캐릭터(예: 3배 보스2)는
+    // 상대가 캡슐에 막혀 중심에서 멀리 멈추므로 몸통 크기를 더해야 닿음. 높이는 원형 판정과 같은 원기둥 방식
+    // (후보는 반높이만큼 넉넉한 구체로 모으고 수평 거리로 다시 거름 → 캡슐 중심이 높아도 플레이어 다리까지 닿음)
+    const UCapsuleComponent* MyCapsule = GetCapsuleComponent();
+    const float BodyRadius = MyCapsule ? MyCapsule->GetScaledCapsuleRadius() : 0.f;
+    const float HitRadius = DashHitRadius + BodyRadius;
+    const float SearchRadius = HitRadius + (MyCapsule ? MyCapsule->GetScaledCapsuleHalfHeight() : 0.f);
+
+    // 판정 구간 = 몸통 위치 ~ 정면 DashForwardReach 앞 (도끼를 앞으로 내려치는 등 몸보다 앞까지 닿는 돌진)
+    const FVector ReachEnd = Location + GetActorForwardVector().GetSafeNormal2D() * DashForwardReach;
+
     const bool bHit = UKismetSystemLibrary::SphereTraceMultiForObjects(
         GetWorld(),
         Location,
-        Location + FVector(0.f, 0.f, 1.f),
-        DashHitRadius,
+        ReachEnd + FVector(0.f, 0.f, 1.f),
+        SearchRadius,
         ObjectTypes,
         false,
         ActorsToIgnore,
@@ -1384,6 +1408,15 @@ void ARLCharacter::PerformDashHitCheck()
     {
         AActor* HitActor = Hit.GetActor();
         if (!HitActor || DashHitActors.Contains(HitActor))
+        {
+            continue;
+        }
+
+        const ACharacter* HitCharacter = Cast<ACharacter>(HitActor);
+        const float TargetRadius = HitCharacter && HitCharacter->GetCapsuleComponent() ? HitCharacter->GetCapsuleComponent()->GetScaledCapsuleRadius() : 0.f;
+        const FVector TargetFlat(HitActor->GetActorLocation().X, HitActor->GetActorLocation().Y, Location.Z);
+        const FVector ReachEndFlat(ReachEnd.X, ReachEnd.Y, Location.Z);
+        if (FMath::PointDistToSegment(TargetFlat, Location, ReachEndFlat) - TargetRadius > HitRadius)
         {
             continue;
         }

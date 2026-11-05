@@ -222,6 +222,25 @@ struct FRLMonsterPatternData
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Pattern|Chase", meta = (ClampMin = "0.0"))
 	float AttackChaseSpeed = 0.0f;
 
+	// ★ 이 패턴이 끝나면 공격 후 대기(BT의 Wait)를 건너뛰고 바로 다음 패턴으로 이어감. 거리 좁히기용 돌진처럼
+	// 다음 공격으로 연결하는 패턴에 사용 (경직/사망 등으로 끊기면 적용 안 됨). 예: 보스2 Pounce
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Pattern")
+	bool bChainNextAttack = false;
+
+	// 공격이 빗나갔을 때만 다음 패턴으로 연결 (맞았으면 모션을 끝까지 재생하고 평소처럼 대기). 예: 보스2 Pounce
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Pattern", meta = (EditCondition = "bChainNextAttack"))
+	bool bChainOnlyOnMiss = false;
+
+	// 마지막 공격 노티파이(Notify_DashStart / Notify_Hit) 후 이 시간(초)이 지나면 남은 모션을 끊고 다음 패턴으로.
+	// 몽타주에 Notify_ChainCancel을 넣으면 그 위치가 우선. 공격 노티파이가 없으면 몽타주가 끝나고 이 시간 뒤
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Pattern", meta = (EditCondition = "bChainNextAttack", ClampMin = "0.0"))
+	float ChainNextAttackDelay = 0.5f;
+
+	// ★ Dash 전용: 돌진 거리(IndicatorDecalSize.X × 2)는 그대로 두고, 판정과 예고 데칼만 정면으로 이만큼 더 늘림(cm).
+	// 도끼를 앞으로 내려치는 도약처럼 몸보다 앞까지 닿는 돌진에 사용 (예: 보스2 Pounce)
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Pattern", meta = (EditCondition = "AttackShape == ERLAttackShape::Dash", ClampMin = "0.0"))
+	float DashForwardReach = 0.0f;
+
 	// 플레이어와의 2D 거리가 이 값 이하이면 전진을 멈춥니다 (밀고 들어가지 않도록)
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Pattern|Chase", meta = (ClampMin = "0.0", EditCondition = "AttackChaseSpeed > 0"))
 	float AttackChaseStopDistance = 150.0f;

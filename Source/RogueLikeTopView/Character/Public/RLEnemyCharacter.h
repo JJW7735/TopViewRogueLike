@@ -399,6 +399,19 @@ private:
 	float ChaseSpeed = 0.0f;
 	float ChaseStopDistance = 0.0f;
 
+	// ★ 다음 패턴 바로 잇기(FRLMonsterPatternData::bChainNextAttack) 상태: 몽타주가 정상 종료되면 BT 재시작
+	void UpdateChainNextAttack();
+	void RestartAIForChain();
+
+	UPROPERTY()
+	TObjectPtr<UAnimMontage> ChainMontage = nullptr;
+	float ChainDelay = 0.0f;
+	bool bChainOnlyOnMiss = false;
+	FTimerHandle ChainTimerHandle;
+	float ChainCancelTime = -1.0f;   // 이 몽타주 시각에 남은 모션을 끊고 다음 패턴으로 (-1이면 몽타주가 끝난 뒤 ChainDelay)
+	int32 AttackPatternSerial = 0;   // BeginAttackPattern마다 +1 (대기 중 새 공격이 시작됐는지 판별)
+	int32 ChainPatternSerial = 0;    // 연결을 예약한 공격의 번호
+
 	// ★ 반복 판정(펄스, FRLMonsterPatternData::PulseInterval) 상태
 	void StartPulse(const FRLMonsterPatternData& Pattern);
 	void UpdatePulse();

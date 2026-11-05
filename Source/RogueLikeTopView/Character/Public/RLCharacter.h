@@ -99,6 +99,10 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Combat")
 	void ApplyStun(float Duration);
 
+	// ★ 내 공격이 상대에게 들어간 횟수 (회피 무적/아군 제외). ARLEnemyCharacter::BeginAttackPattern에서 패턴마다 0으로 리셋
+	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = "Combat")
+	int32 AttackLandedCount = 0;
+
 	UFUNCTION(BlueprintPure, Category = "Combat")
 	bool IsStunned() const;
 
@@ -397,6 +401,10 @@ protected:
 	bool bDashDealsDamage = false;
 	float DashHitRadius = 0.0f;
 	FRLDamageData DashDamageData;
+
+	// ★ 돌진 판정/예고 데칼을 정면으로 더 늘리는 거리 (FRLMonsterPatternData::DashForwardReach).
+	// ARLEnemyCharacter::BeginAttackPattern이 Dash 패턴일 때 세팅 → 다음 StartBoxAttackTelegraph와 돌진 판정에 적용
+	float DashForwardReach = 0.0f;
 	TSet<TWeakObjectPtr<AActor>> DashHitActors; // 이번 돌진 동안 이미 맞힌 대상 (중복 타격 방지)
 
 	void PerformDashHitCheck();

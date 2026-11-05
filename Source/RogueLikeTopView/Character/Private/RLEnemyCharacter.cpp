@@ -170,6 +170,8 @@ void ARLEnemyCharacter::HandleDeath()
 	// 균열 관련 타이머가 사망 후 BT를 재시작하지 않도록 정리
 	EndSoulCrackPattern();
 	StopAttackChase();
+	ChainMontage = nullptr;
+	GetWorldTimerManager().ClearTimer(ChainTimerHandle);
 	StopPulse();
 	EndAxeLeap();
 	StopMirrorAnimation();
@@ -346,6 +348,7 @@ void ARLEnemyCharacter::Tick(float DeltaTime)
 	Super::Tick(DeltaTime);
 
 	UpdateAttackChase(DeltaTime);
+	UpdateChainNextAttack();
 	UpdatePulse();
 	UpdateAxeLeap(DeltaTime);
 	UpdateMirrorAnimation();
@@ -494,6 +497,40 @@ void ARLEnemyCharacter::BeginAttackPattern(const FRLMonsterPatternData& Pattern,
 {
 	SetAttackHitScales(Pattern.HitRangeScales);
 	SetAttackHitWidthScales(Pattern.HitWidthScales);
+	// BTT_Attack이 이 직후 StartBoxAttackTelegraph / StartDashAttack을 부르므로 여기서 미리 세팅
+	DashForwardReach = Pattern.AttackShape == ERLAttackShape::Dash ? Pattern.DashForwardReach : 0.0f;
+	++AttackPatternSerial;
+	AttackLandedCount = 0;
+	ChainMontage = Pattern.bChainNextAttack ? Pattern.AttackMontage : nullptr;
+	ChainDelay = Pattern.ChainNextAttackDelay;
+	bChainOnlyOnMiss = Pattern.bChainOnlyOnMiss;
+	GetWorldTimerManager().ClearTimer(ChainTimerHandle);
+
+	// 캔슬 시점: Notify_ChainCancel이 있으면 그 위치, 없으면 마지막 공격 노티파이(Notify_DashStart/Notify_Hit*) + 대기 시간
+	ChainCancelTime = -1.0f;
+	if (ChainMontage)
+	{
+		const TArray<FVector2D> CancelNotifies = ComputeTelegraphWindows(ChainMontage, FName("Notify_ChainCancel"), 0.0f);
+		if (CancelNotifies.Num() > 0)
+		{
+			ChainCancelTime = CancelNotifies[0].Y;
+		}
+		else
+		{
+			float LastAttackTime = -1.0f;
+			for (const TCHAR* NotifyName : { TEXT("Notify_DashStart"), TEXT("Notify_Hit") })
+			{
+				for (const FVector2D& Window : ComputeTelegraphWindows(ChainMontage, FName(NotifyName), 0.0f))
+				{
+					LastAttackTime = FMath::Max(LastAttackTime, Window.Y);
+				}
+			}
+			if (LastAttackTime >= 0.0f)
+			{
+				ChainCancelTime = LastAttackTime + ChainDelay;
+			}
+		}
+	}
 	StartAttackChase(Pattern);
 	StartPulse(Pattern);
 	BeginSoulCrackPattern(Pattern, HitNotifyName);
@@ -573,6 +610,87 @@ void ARLEnemyCharacter::UpdateAttackChase(float DeltaTime)
 	if (bTelegraphVisible && AttackIndicator && TelegraphShape == ETelegraphShape::Box)
 	{
 		AttackIndicator->UpdateBoxTransform(GetIndicatorOrigin(), TelegraphForwardOffset * TelegraphShownScale, GetActorRotation().Yaw);
+	}
+}
+
+// ==========================================
+// ★ 다음 패턴 바로 잇기 (bChainNextAttack)
+// ==========================================
+
+void ARLEnemyCharacter::UpdateChainNextAttack()
+{
+	if (!ChainMontage)
+	{
+		return;
+	}
+
+	// "빗나갔을 때만 연결"인데 맞았으면 연결하지 않음 → 모션을 끝까지 재생하고 BT의 평소 대기로
+	if (bChainOnlyOnMiss && AttackLandedCount > 0)
+	{
+		UE_LOG(LogTemp, Log, TEXT("[Chain] %s: '%s' 명중 → 연결 안 함 (모션 끝까지 재생)"), *GetName(), *GetNameSafe(ChainMontage));
+		ChainMontage = nullptr;
+		return;
+	}
+
+	UAnimInstance* AnimInstance = GetMesh() ? GetMesh()->GetAnimInstance() : nullptr;
+	if (AnimInstance && AnimInstance->Montage_IsPlaying(ChainMontage))
+	{
+		// 캔슬 시점에 도달하면 남은 모션(착지 후 추스르기 등)을 끊고 곧바로 다음 패턴으로
+		if (ChainCancelTime >= 0.0f && AnimInstance->Montage_GetPosition(ChainMontage) >= ChainCancelTime
+			&& !(HealthComp && HealthComp->bIsDead) && !bSoulCrackAIStopped)
+		{
+			UE_LOG(LogTemp, Log, TEXT("[Chain] %s: '%s' %.2f초 지점에서 캔슬 → 다음 패턴으로 연결"), *GetName(), *GetNameSafe(ChainMontage), ChainCancelTime);
+			UAnimMontage* CancelledMontage = ChainMontage;
+			ChainMontage = nullptr;
+			ChainPatternSerial = AttackPatternSerial;
+			AnimInstance->Montage_Stop(0.25f, CancelledMontage);
+			RestartAIForChain();
+		}
+		return;
+	}
+
+	UAnimMontage* FinishedMontage = ChainMontage;
+	ChainMontage = nullptr;
+
+	// 사망 / 균열 경직(BT 정지 중) / 다른 몽타주(경직 등)로 끊긴 경우는 잇지 않음
+	// (끝난 몽타주가 블렌드 아웃 중이면 GetCurrentActiveMontage가 그 몽타주를 돌려주므로 정상 종료로 취급)
+	const UAnimMontage* ActiveMontage = AnimInstance ? AnimInstance->GetCurrentActiveMontage() : nullptr;
+	if ((HealthComp && HealthComp->bIsDead) || bSoulCrackAIStopped || (ActiveMontage && ActiveMontage != FinishedMontage))
+	{
+		return;
+	}
+
+	UE_LOG(LogTemp, Log, TEXT("[Chain] %s: '%s' 종료 → %.2f초 뒤 다음 패턴으로 연결"), *GetName(), *GetNameSafe(FinishedMontage), ChainDelay);
+	ChainPatternSerial = AttackPatternSerial;
+	if (ChainDelay > 0.0f)
+	{
+		GetWorldTimerManager().SetTimer(ChainTimerHandle, this, &ARLEnemyCharacter::RestartAIForChain, ChainDelay, false);
+	}
+	else
+	{
+		RestartAIForChain();
+	}
+}
+
+void ARLEnemyCharacter::RestartAIForChain()
+{
+	// 기다리는 동안 죽었거나 균열 경직이 걸렸거나 이미 다음 공격을 시작했으면 취소
+	// (몽타주 재생 여부로 판단하면 블렌드 아웃/다른 슬롯 몽타주에 걸려 오판할 수 있어서 공격 번호로 비교)
+	if ((HealthComp && HealthComp->bIsDead) || bSoulCrackAIStopped || ChainPatternSerial != AttackPatternSerial)
+	{
+		UE_LOG(LogTemp, Log, TEXT("[Chain] %s: 연결 취소 (사망=%d, 균열경직=%d, 새 공격 시작=%d)"), *GetName(),
+			HealthComp && HealthComp->bIsDead, bSoulCrackAIStopped, ChainPatternSerial != AttackPatternSerial);
+		return;
+	}
+
+	// BT를 처음부터 다시 돌려 공격 후 Wait을 건너뛰고 곧바로 패턴 선택으로 감
+	if (AAIController* AICon = Cast<AAIController>(GetController()))
+	{
+		if (UBrainComponent* Brain = AICon->GetBrainComponent())
+		{
+			Brain->RestartLogic();
+			UE_LOG(LogTemp, Log, TEXT("[Chain] %s: BT 재시작 → 다음 패턴 선택"), *GetName());
+		}
 	}
 }
 
