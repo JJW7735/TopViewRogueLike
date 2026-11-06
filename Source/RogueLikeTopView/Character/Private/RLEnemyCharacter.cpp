@@ -345,10 +345,13 @@ void ARLEnemyCharacter::HandleDeath()
 
 void ARLEnemyCharacter::Tick(float DeltaTime)
 {
+	// ★ 연타 반복은 부모 Tick(예고 데칼 갱신)보다 먼저: 바퀴가 넘어간 프레임에 범위 배율을 먼저 올려야
+	// 새 바퀴 1타 데칼이 이전 바퀴 크기로 잠깐 떴다가 커지는 현상이 없음
+	UpdateComboLoop();
+
 	Super::Tick(DeltaTime);
 
 	UpdateAttackChase(DeltaTime);
-	UpdateComboLoop();
 	UpdateAttackStep();
 	UpdateChainNextAttack();
 	UpdatePulse();
@@ -624,20 +627,14 @@ void ARLEnemyCharacter::StartComboLoop(const FRLMonsterPatternData& Pattern)
 	ComboLastPosition = 0.0f;
 	bComboInFinish = false;
 
-	// 바퀴마다 커지는 범위는 반복 구간 타격에만 적용: Finish 섹션 시작 전에 있는 Notify_Hit 개수 = 반복 구간 타격 수
+	// 바퀴마다 커지는 범위는 마지막 타격(마무리)을 뺀 나머지 전부에 적용. 반복 구간 타격(예: A·B)뿐 아니라
+	// 마지막 바퀴에 Finish 섹션에서 이어지는 타격(예: C)도 그 바퀴 크기로 나감
 	// (SetAttackHitScales가 먼저 호출되어 1.0/0으로 초기화된 뒤 여기서 설정)
 	AttackHitGrowthScale = 1.0f;
 	AttackHitGrowthHitCount = 0;
 	if (ComboRangeStep > 0.0f)
 	{
-		const float FinishStart = Montage->GetAnimCompositeSection(Montage->GetSectionIndex(ComboFinishSectionName)).GetTime();
-		for (const FVector2D& Window : ComputeTelegraphWindows(Montage, FName("Notify_Hit"), 0.0f))
-		{
-			if (Window.Y < FinishStart)
-			{
-				++AttackHitGrowthHitCount;
-			}
-		}
+		AttackHitGrowthHitCount = FMath::Max(0, ComputeTelegraphWindows(Montage, FName("Notify_Hit"), 0.0f).Num() - 1);
 	}
 
 	// 반복이 남아 있으면 Loop 섹션이 끝날 때 다시 Loop로, 아니면 바로 Finish로
@@ -660,6 +657,21 @@ void ARLEnemyCharacter::UpdateComboLoop()
 
 	const float Position = AnimInstance->Montage_GetPosition(ComboMontage);
 	const FName Section = AnimInstance->Montage_GetCurrentSection(ComboMontage);
+
+	// ★ Finish 섹션 안에 있는 타격(예: C)의 예고 데칼은 Finish 섹션에 들어간 뒤에만 뜨게 함. 안 그러면 표시 시작
+	// 시각(히트 - IndicatorLeadTime)이 Loop 섹션 끝보다 앞이라, 반복 중 Loop 끝마다 C 데칼이 잠깐 떴다가 다음 바퀴
+	// 1타 데칼로 바뀜. (예고 텔레그래프는 BTT_Attack이 이 패턴 시작 뒤에 걸어서 여기서 매 프레임 보정)
+	if (TelegraphMontage == ComboMontage)
+	{
+		const float FinishStart = ComboMontage->GetAnimCompositeSection(ComboMontage->GetSectionIndex(ComboFinishSectionName)).GetTime();
+		for (FVector2D& Window : TelegraphWindows)
+		{
+			if (Window.Y > FinishStart && Window.X < FinishStart)
+			{
+				Window.X = FinishStart;
+			}
+		}
+	}
 
 	if (Section == ComboFinishSectionName)
 	{
