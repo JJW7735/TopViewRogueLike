@@ -6,6 +6,10 @@
 #include "GameplayEffectTypes.h"
 #include "RLEnemyCharacter.generated.h"
 
+class UMaterialInstanceDynamic;
+class UNiagaraComponent;
+class UPostProcessComponent;
+
 // ★ ARLCharacter와 BP_EnemyBase 사이에 끼워넣는 "적 전용" C++ 계층입니다.
 // 플레이어 캐릭터는 여전히 ARLCharacter를 그대로 쓰고, 몬스터(일반+보스)만 이 클래스를 거쳐 갑니다.
 //
@@ -467,6 +471,57 @@ private:
 
 	UPROPERTY()
 	TObjectPtr<UStaticMeshComponent> PulseDome = nullptr;
+
+	// ★ 잠행 강습 (FRLMonsterPatternData::bVanishStrike) 상태
+	enum class EVanishStep : uint8
+	{
+		None,
+		Waiting,   // Notify_Vanish 대기
+		FadingOut, // 가라앉는 중 (몽타주 정지)
+		Hidden,    // 사라짐 + 표식
+		FadingIn   // 플레이어 뒤에서 솟아오르는 중 (몽타주 재개)
+	};
+
+	void StartVanish(const FRLMonsterPatternData& Pattern);
+	void UpdateVanish(float DeltaTime);
+	void EndVanish(); // 즉시 원래 상태로 복구 (사망/중단/정상 종료 공용)
+	void SetVanishVisual(float Alpha); // 0 = 원래 모습, 1 = 완전히 가라앉아 안 보임
+	void ShowVanishMark(bool bShow);
+	void TeleportBehindPlayer();
+
+	UPROPERTY()
+	TObjectPtr<UAnimMontage> VanishMontage = nullptr;
+
+	UPROPERTY()
+	FRLMonsterPatternData VanishPattern;
+
+	EVanishStep VanishStep = EVanishStep::None;
+	float VanishNotifyTime = -1.0f; // 몽타주 시각
+	float VanishStepElapsed = 0.0f;
+	float VanishSinkDepthApplied = 0.0f;
+	FVector VanishMeshBaseLocation = FVector::ZeroVector; // 메시 원래 상대 위치 (가라앉기 복구용)
+	bool bVanishOverlayApplied = false;
+	bool bVanishOutFXSpawned = false; // 사라지기 연기 (Notify_Vanish보다 VanishFXLeadTime 먼저)
+	bool bVanishInPrepared = false;   // 나타날 자리로 미리 이동 + 연기 (나타나기 VanishFXLeadTime 전)
+	TWeakObjectPtr<UNiagaraComponent> VanishOutFXComp; // 사라지기 연기 (다 가라앉으면 빠르게 흩어지게)
+
+	// ★ 잠행 중 주변 어둡게 (FRLMonsterPatternData::VanishDarkenExposure). 무한 범위 포스트 프로세스의 가중치를 0~1로 보간.
+	// 잠행이 끝난 뒤에도 밝아지는 동안 계속 갱신해야 해서 UpdateVanish와 따로 매 프레임 호출
+	void UpdateVanishDarken(float DeltaTime);
+
+	UPROPERTY()
+	TObjectPtr<UPostProcessComponent> VanishDarkenPP = nullptr;
+	float VanishDarkenWeight = 0.0f;
+	TEnumAsByte<ECollisionResponse> VanishSavedPawnResponse = ECR_Block; // 사라지는 동안 플레이어와 충돌 끔 → 복구용
+
+	UPROPERTY()
+	TObjectPtr<UMaterialInterface> VanishSavedOverlay = nullptr;
+
+	UPROPERTY()
+	TObjectPtr<UMaterialInstanceDynamic> VanishOverlayMID = nullptr;
+
+	UPROPERTY()
+	TObjectPtr<UStaticMeshComponent> VanishMark = nullptr;
 
 	// ★ 도끼 투척 패턴 상태 (AxeLeap / AxeReturn / AxeDoubleReturn 공용)
 	enum class EAxeLeapStep : uint8

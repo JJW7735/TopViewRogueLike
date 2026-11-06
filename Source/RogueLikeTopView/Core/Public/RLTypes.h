@@ -6,6 +6,8 @@
 class UAnimMontage;
 class UMaterialInterface;
 class ARLThrownAxe;
+class UNiagaraSystem;
+class UStaticMesh;
 
 // ★ 마우스 커서 → 바닥 지점 판정 전용 트레이스 채널 (DefaultEngine.ini의 Name="Ground", GameTraceChannel3).
 // 기본 반응 Block(기존 Visibility처럼 모든 메시가 막음), Pawn/CharacterMesh 프로필은 Ignore.
@@ -245,7 +247,8 @@ struct FRLMonsterPatternData
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Pattern|ComboLoop", meta = (EditCondition = "ComboLoopCount > 0", ClampMin = "0.1"))
 	float ComboFinishPlayRate = 1.0f;
 
-	// ★ 한 바퀴 돌 때마다 반복 구간 타격의 범위(판정+데칼)에 더할 배율. 마무리 섹션 타격에는 적용 안 됨.
+	// ★ 한 바퀴 돌 때마다 타격 범위(판정+데칼)에 더할 배율. 마지막 타격(마무리)에는 적용 안 됨
+	// (마지막 바퀴에 Finish 섹션에서 이어지는 타격도 그 바퀴 크기로 나감).
 	// 예: 0.05면 1바퀴 1.0 → 2바퀴 1.05 → 3바퀴 1.1 ... (ComboRangeMaxScale까지)
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Pattern|ComboLoop", meta = (EditCondition = "ComboLoopCount > 0", ClampMin = "0.0"))
 	float ComboRangeScaleStep = 0.0f;
@@ -415,6 +418,77 @@ struct FRLMonsterPatternData
 	// 두 번째(왼손) 도끼 액터 클래스 (본 축이 오른손과 반대라 보통 왼손 전용 BP를 넣음. 비우면 ThrownAxeClass 사용)
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Pattern|AxeDouble", meta = (EditCondition = "AttackShape == ERLAttackShape::AxeDoubleReturn"))
 	TSubclassOf<ARLThrownAxe> SecondThrownAxeClass;
+
+	// ==========================================
+	// ★ 잠행 강습(Vanish Strike): 몽타주의 Notify_Vanish 지점에서 몽타주를 멈추고 보스가 어둠 속으로 가라앉아 사라짐
+	// → 플레이어 머리 위에 표식 → VanishHiddenTime 뒤 플레이어 등 뒤에서 솟아오르며 나타나 몽타주 이어서 재생.
+	// 사라져 있는 동안은 무적 + 플레이어와 충돌 안 함. 예: 보스2 처형 일격 (R_Ability_Intro → 사라짐 → R_Ability)
+	// ==========================================
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Pattern|Vanish")
+	bool bVanishStrike = false;
+
+	// 가라앉으며 사라지는 시간 (이 동안 어두운 오버레이가 짙어짐)
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Pattern|Vanish", meta = (EditCondition = "bVanishStrike", ClampMin = "0.0"))
+	float VanishFadeOutTime = 0.5f;
+
+	// 완전히 사라져 있는 시간 (표식이 떠 있는 시간)
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Pattern|Vanish", meta = (EditCondition = "bVanishStrike", ClampMin = "0.0"))
+	float VanishHiddenTime = 2.0f;
+
+	// 솟아오르며 나타나는 시간 (몽타주는 나타나기 시작할 때 바로 이어서 재생)
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Pattern|Vanish", meta = (EditCondition = "bVanishStrike", ClampMin = "0.0"))
+	float VanishFadeInTime = 0.3f;
+
+	// 가라앉는 깊이(cm). 0이면 캡슐 전체 높이만큼
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Pattern|Vanish", meta = (EditCondition = "bVanishStrike", ClampMin = "0.0"))
+	float VanishSinkDepth = 0.0f;
+
+	// 플레이어 등 뒤 거리(cm, 두 캡슐 표면 사이). 플레이어가 바라보는 방향의 반대편에 나타남
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Pattern|Vanish", meta = (EditCondition = "bVanishStrike", ClampMin = "0.0"))
+	float VanishAppearDistance = 120.0f;
+
+	// 사라지고 나타날 때 몸에 씌우는 어두운 오버레이 (M_SoulCrack_Overlay 계열 MI. 비우면 오버레이 없이 가라앉기만)
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Pattern|Vanish", meta = (EditCondition = "bVanishStrike"))
+	TObjectPtr<UMaterialInterface> VanishOverlayMaterial = nullptr;
+
+	// 사라지는 위치 / 나타나는 위치(발밑)에 재생할 이펙트 (선택)
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Pattern|Vanish", meta = (EditCondition = "bVanishStrike"))
+	TObjectPtr<UNiagaraSystem> VanishFX = nullptr;
+
+	// 이펙트를 가라앉기/솟아오르기 시작보다 몇 초 먼저 터뜨릴지 (연기가 먼저 피어오른 뒤 그 속으로 사라지고, 그 속에서 나타남).
+	// 나타날 위치는 이 시점에 미리 정해짐 (연기가 나타날 자리를 예고)
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Pattern|Vanish", meta = (EditCondition = "bVanishStrike", ClampMin = "0.0"))
+	float VanishFXLeadTime = 0.4f;
+
+	// 이펙트 크기 배율 (나이아가라 유저 파라미터 User.Scale_All에 전달. 해당 파라미터가 없는 시스템은 영향 없음)
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Pattern|Vanish", meta = (EditCondition = "bVanishStrike", ClampMin = "0.01"))
+	float VanishFXScale = 3.0f;
+
+	// ★ 잠행 중 주변 어둡게: 사라지기 연기가 피어오를 때부터 어두워지기 시작해 숨어 있는 동안 유지되고, 다시 나타나면
+	// 밝아짐. 노출 보정값(음수일수록 어두움, 0 = 끔)과 화면 가장자리 비네팅 세기
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Pattern|Vanish", meta = (EditCondition = "bVanishStrike", ClampMax = "0.0"))
+	float VanishDarkenExposure = -1.5f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Pattern|Vanish", meta = (EditCondition = "bVanishStrike", ClampMin = "0.0"))
+	float VanishDarkenVignette = 1.0f;
+
+	// 어두워지고 / 밝아지는 데 걸리는 시간
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Pattern|Vanish", meta = (EditCondition = "bVanishStrike", ClampMin = "0.01"))
+	float VanishDarkenFadeTime = 0.5f;
+
+	// 플레이어 머리 위 표식 메시 / 머티리얼 / 크기 / 머리 위 높이. 메시를 비우면 엔진 기본 원뿔(거꾸로)
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Pattern|Vanish", meta = (EditCondition = "bVanishStrike"))
+	TObjectPtr<UStaticMesh> VanishMarkMesh = nullptr;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Pattern|Vanish", meta = (EditCondition = "bVanishStrike"))
+	TObjectPtr<UMaterialInterface> VanishMarkMaterial = nullptr;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Pattern|Vanish", meta = (EditCondition = "bVanishStrike", ClampMin = "0.01"))
+	float VanishMarkScale = 0.6f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Pattern|Vanish", meta = (EditCondition = "bVanishStrike"))
+	float VanishMarkHeight = 80.0f;
 
 	// ==========================================
 	// ★ 영혼의 균열(Soul Crack) 강화판 설정

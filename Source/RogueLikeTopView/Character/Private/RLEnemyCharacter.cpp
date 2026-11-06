@@ -28,6 +28,11 @@
 #include "RLAbilitySystemComponent.h"
 #include "RLGameplayEffects.h"
 #include "RLGameplayTags.h"
+#include "Materials/MaterialInstanceDynamic.h"
+#include "NiagaraFunctionLibrary.h"
+#include "NiagaraSystem.h"
+#include "NiagaraComponent.h"
+#include "Components/PostProcessComponent.h"
 
 ARLEnemyCharacter::ARLEnemyCharacter()
 {
@@ -356,6 +361,8 @@ void ARLEnemyCharacter::Tick(float DeltaTime)
 	UpdateChainNextAttack();
 	UpdatePulse();
 	UpdateAxeLeap(DeltaTime);
+	UpdateVanish(DeltaTime);
+	UpdateVanishDarken(DeltaTime);
 	UpdateMirrorAnimation();
 
 	// ★ 균열 경직 중인데 BT가 다시 돌고 있으면(다른 경로에서 재시작된 경우) 원인 로그를 남기고 다시 멈춤
@@ -539,6 +546,7 @@ void ARLEnemyCharacter::BeginAttackPattern(const FRLMonsterPatternData& Pattern,
 	StartAttackChase(Pattern);
 	StartPulse(Pattern);
 	StartComboLoop(Pattern);
+	StartVanish(Pattern);
 
 	// 타격마다 한 걸음: 각 Notify_Hit보다 AttackStepLeadTime 앞선 시각들을 미리 계산
 	StepMontage = nullptr;
@@ -1629,6 +1637,7 @@ void ARLEnemyCharacter::EndPlay(const EEndPlayReason::Type EndPlayReason)
 		}
 	}
 	AxeIndicators.Reset();
+	EndVanish();
 
 	Super::EndPlay(EndPlayReason);
 }
@@ -2089,4 +2098,432 @@ void ARLEnemyCharacter::TickDeathFade()
 		GetWorldTimerManager().ClearTimer(DeathFadeTimerHandle);
 		Destroy();
 	}
+}
+
+// ==========================================
+// ★ 잠행 강습 (FRLMonsterPatternData::bVanishStrike)
+// Notify_Vanish에서 몽타주 정지 → 가라앉으며 사라짐 → 플레이어 머리 위 표식 → 플레이어 등 뒤에서 솟아오르며 몽타주 재개
+// ==========================================
+
+// 사라지기/나타나기 이펙트: 반복 재생형(연기처럼 계속 뿜는) 시스템도 쓸 수 있게 Duration초 뒤 Deactivate
+// (새 파티클 생성만 멈추고 남은 연기는 자연스럽게 사라진 뒤 컴포넌트 자동 파괴)
+static UNiagaraComponent* SpawnVanishFX(AActor* Owner, UNiagaraSystem* System, const FVector& Location, float Duration, float Scale)
+{
+	if (!Owner || !System)
+	{
+		return nullptr;
+	}
+
+	UNiagaraComponent* FX = UNiagaraFunctionLibrary::SpawnSystemAtLocation(Owner, System, Location);
+	if (!FX)
+	{
+		return nullptr;
+	}
+	FX->SetVariableFloat(FName("User.Scale_All"), Scale);
+
+	TWeakObjectPtr<UNiagaraComponent> WeakFX = FX;
+	FTimerHandle Handle;
+	Owner->GetWorldTimerManager().SetTimer(Handle, FTimerDelegate::CreateWeakLambda(FX, [WeakFX]()
+	{
+		if (WeakFX.IsValid())
+		{
+			WeakFX->Deactivate();
+		}
+	}), FMath::Max(Duration, 0.05f), false);
+	return FX;
+}
+
+void ARLEnemyCharacter::StartVanish(const FRLMonsterPatternData& Pattern)
+{
+	EndVanish();
+
+	if (!Pattern.bVanishStrike || !Pattern.AttackMontage || (HealthComp && HealthComp->bIsDead))
+	{
+		return;
+	}
+
+	const TArray<FVector2D> Notifies = ComputeTelegraphWindows(Pattern.AttackMontage, FName("Notify_Vanish"), 0.0f);
+	if (Notifies.Num() == 0)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[Vanish] %s: 몽타주 '%s'에 Notify_Vanish 노티파이가 없습니다."), *GetName(), *Pattern.AttackMontage->GetName());
+		return;
+	}
+
+	VanishMontage = Pattern.AttackMontage;
+	VanishPattern = Pattern;
+	VanishNotifyTime = Notifies[0].Y;
+	VanishStepElapsed = 0.0f;
+	bVanishOutFXSpawned = false;
+	bVanishInPrepared = false;
+	VanishStep = EVanishStep::Waiting;
+}
+
+void ARLEnemyCharacter::UpdateVanish(float DeltaTime)
+{
+	if (VanishStep == EVanishStep::None)
+	{
+		return;
+	}
+
+	UAnimInstance* AnimInstance = GetMesh() ? GetMesh()->GetAnimInstance() : nullptr;
+	// 정지(Pause)된 몽타주는 Montage_IsPlaying이 false라서 IsActive로 확인
+	if (!AnimInstance || !AnimInstance->Montage_IsActive(VanishMontage) || (HealthComp && HealthComp->bIsDead))
+	{
+		EndVanish();
+		return;
+	}
+
+	VanishStepElapsed += DeltaTime;
+
+	// ★ 사라지기 전에 걸쳐 있는 예고 데칼(표시 시작이 Notify_Vanish 앞)은 다시 나타난 뒤에 뜨게 미룸.
+	// 안 그러면 원래 자리에 데칼이 뜬 채로 사라지고, 나타난 뒤에도 엉뚱한 곳을 가리킴
+	if (TelegraphMontage == VanishMontage)
+	{
+		for (FVector2D& Window : TelegraphWindows)
+		{
+			if (Window.Y > VanishNotifyTime && Window.X <= VanishNotifyTime)
+			{
+				Window.X = VanishNotifyTime + 0.01f;
+			}
+		}
+	}
+
+	switch (VanishStep)
+	{
+	case EVanishStep::Waiting:
+	{
+		const float Position = AnimInstance->Montage_GetPosition(VanishMontage);
+
+		// 연기는 가라앉기 시작보다 먼저 피어오름 (그 연기 속으로 가라앉는 느낌)
+		if (!bVanishOutFXSpawned && Position >= VanishNotifyTime - VanishPattern.VanishFXLeadTime)
+		{
+			bVanishOutFXSpawned = true;
+			VanishOutFXComp = SpawnVanishFX(this, VanishPattern.VanishFX, GetIndicatorOrigin(),
+				VanishPattern.VanishFXLeadTime + VanishPattern.VanishFadeOutTime + 0.2f, VanishPattern.VanishFXScale);
+		}
+
+		if (Position >= VanishNotifyTime)
+		{
+			AnimInstance->Montage_Pause(VanishMontage);
+
+			SetInvulnerable(true);
+			if (UCapsuleComponent* Capsule = GetCapsuleComponent())
+			{
+				VanishSavedPawnResponse = Capsule->GetCollisionResponseToChannel(ECC_Pawn);
+				Capsule->SetCollisionResponseToChannel(ECC_Pawn, ECR_Ignore);
+			}
+			if (UCharacterMovementComponent* Move = GetCharacterMovement())
+			{
+				Move->StopMovementImmediately();
+			}
+
+			VanishMeshBaseLocation = GetMesh()->GetRelativeLocation();
+			VanishSinkDepthApplied = VanishPattern.VanishSinkDepth > 0.0f ? VanishPattern.VanishSinkDepth
+				: (GetCapsuleComponent() ? GetCapsuleComponent()->GetScaledCapsuleHalfHeight() * 2.0f : 200.0f);
+
+			if (!bVanishOutFXSpawned)
+			{
+				bVanishOutFXSpawned = true;
+				VanishOutFXComp = SpawnVanishFX(this, VanishPattern.VanishFX, GetIndicatorOrigin(), VanishPattern.VanishFadeOutTime + 0.2f, VanishPattern.VanishFXScale);
+			}
+
+			VanishStep = EVanishStep::FadingOut;
+			VanishStepElapsed = 0.0f;
+			SetVanishVisual(0.0f);
+		}
+		break;
+	}
+
+	case EVanishStep::FadingOut:
+	{
+		const float Alpha = VanishPattern.VanishFadeOutTime > 0.0f ? FMath::Clamp(VanishStepElapsed / VanishPattern.VanishFadeOutTime, 0.0f, 1.0f) : 1.0f;
+		SetVanishVisual(Alpha);
+
+		// 다 가라앉을 즈음 연기가 퍼지듯 흩어지며 사라짐: 70%부터 새 연기 생성을 멈추고, 다 가라앉으면 남은 연기를
+		// 빠르게 재생(시간 배속)해서 크기 커짐 + 투명해짐 커브가 금방 끝나게 함 (즉시 제거하면 뚝 끊겨 보임)
+		if (VanishOutFXComp.IsValid())
+		{
+			if (Alpha >= 0.7f && VanishOutFXComp->IsActive())
+			{
+				VanishOutFXComp->Deactivate();
+			}
+			if (Alpha >= 1.0f)
+			{
+				VanishOutFXComp->SetCustomTimeDilation(2.5f);
+				VanishOutFXComp.Reset();
+			}
+		}
+
+		if (Alpha >= 1.0f)
+		{
+			GetMesh()->SetVisibility(false);
+			ShowVanishMark(true);
+			VanishStep = EVanishStep::Hidden;
+			VanishStepElapsed = 0.0f;
+		}
+		break;
+	}
+
+	case EVanishStep::Hidden:
+		ShowVanishMark(true); // 플레이어를 따라다니며 회전
+
+		// 나타나기 VanishFXLeadTime 전에 나타날 자리(플레이어 등 뒤)로 미리 이동해 두고 연기부터 피어오르게 함
+		if (!bVanishInPrepared && VanishStepElapsed >= VanishPattern.VanishHiddenTime - VanishPattern.VanishFXLeadTime)
+		{
+			bVanishInPrepared = true;
+			TeleportBehindPlayer();
+			SpawnVanishFX(this, VanishPattern.VanishFX, GetIndicatorOrigin(),
+				VanishPattern.VanishFXLeadTime + VanishPattern.VanishFadeInTime + 0.2f, VanishPattern.VanishFXScale);
+		}
+
+		if (VanishStepElapsed >= VanishPattern.VanishHiddenTime)
+		{
+			ShowVanishMark(false);
+			if (!bVanishInPrepared)
+			{
+				bVanishInPrepared = true;
+				TeleportBehindPlayer();
+				SpawnVanishFX(this, VanishPattern.VanishFX, GetIndicatorOrigin(), VanishPattern.VanishFadeInTime + 0.2f, VanishPattern.VanishFXScale);
+			}
+
+			// 이동해 있던 동안 플레이어가 움직였을 수 있으니 나타나는 순간 다시 플레이어를 바라봄
+			if (const APawn* Player = UGameplayStatics::GetPlayerPawn(this, 0))
+			{
+				SetActorRotation(FRotator(0.0f, (Player->GetActorLocation() - GetActorLocation()).GetSafeNormal2D().Rotation().Yaw, 0.0f));
+			}
+
+			GetMesh()->SetVisibility(true);
+			SetVanishVisual(1.0f);
+			AnimInstance->Montage_Resume(VanishMontage);
+
+			VanishStep = EVanishStep::FadingIn;
+			VanishStepElapsed = 0.0f;
+		}
+		break;
+
+	case EVanishStep::FadingIn:
+	{
+		const float Alpha = VanishPattern.VanishFadeInTime > 0.0f ? 1.0f - FMath::Clamp(VanishStepElapsed / VanishPattern.VanishFadeInTime, 0.0f, 1.0f) : 0.0f;
+		SetVanishVisual(Alpha);
+		if (Alpha <= 0.0f)
+		{
+			EndVanish();
+		}
+		break;
+	}
+
+	default:
+		break;
+	}
+}
+
+void ARLEnemyCharacter::SetVanishVisual(float Alpha)
+{
+	USkeletalMeshComponent* MeshComp = GetMesh();
+	if (!MeshComp)
+	{
+		return;
+	}
+
+	const float Eased = FMath::SmoothStep(0.0f, 1.0f, Alpha);
+	MeshComp->SetRelativeLocation(VanishMeshBaseLocation - FVector(0.0f, 0.0f, VanishSinkDepthApplied * Eased));
+
+	if (!VanishPattern.VanishOverlayMaterial)
+	{
+		return;
+	}
+
+	if (!bVanishOverlayApplied)
+	{
+		VanishSavedOverlay = MeshComp->GetOverlayMaterial();
+		VanishOverlayMID = UMaterialInstanceDynamic::Create(VanishPattern.VanishOverlayMaterial, this);
+		MeshComp->SetOverlayMaterial(VanishOverlayMID);
+		bVanishOverlayApplied = true;
+	}
+
+	// 어둠이 먼저 몸을 덮고(앞 40%) 그다음 가라앉는 느낌: 오버레이 불투명도를 빠르게 끝값까지 올림
+	if (VanishOverlayMID)
+	{
+		static const FName RimOpacityName(TEXT("RimOpacity"));
+		float TargetOpacity = 1.0f;
+		VanishPattern.VanishOverlayMaterial->GetScalarParameterValue(FMaterialParameterInfo(RimOpacityName), TargetOpacity);
+		VanishOverlayMID->SetScalarParameterValue(RimOpacityName, TargetOpacity * FMath::Clamp(Alpha / 0.4f, 0.0f, 1.0f));
+	}
+}
+
+void ARLEnemyCharacter::ShowVanishMark(bool bShow)
+{
+	if (!bShow)
+	{
+		if (VanishMark)
+		{
+			VanishMark->SetVisibility(false);
+		}
+		return;
+	}
+
+	const ACharacter* Player = Cast<ACharacter>(UGameplayStatics::GetPlayerPawn(this, 0));
+	if (!Player)
+	{
+		return;
+	}
+
+	if (!VanishMark)
+	{
+		VanishMark = NewObject<UStaticMeshComponent>(this, TEXT("VanishMark"));
+		VanishMark->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+		VanishMark->SetCastShadow(false);
+		VanishMark->SetUsingAbsoluteLocation(true);
+		VanishMark->SetUsingAbsoluteRotation(true);
+		VanishMark->SetUsingAbsoluteScale(true);
+		VanishMark->SetupAttachment(GetRootComponent());
+		VanishMark->RegisterComponent();
+	}
+
+	UStaticMesh* MarkMesh = VanishPattern.VanishMarkMesh ? VanishPattern.VanishMarkMesh.Get()
+		: LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cone.Cone"));
+	if (VanishMark->GetStaticMesh() != MarkMesh)
+	{
+		VanishMark->SetStaticMesh(MarkMesh);
+	}
+	if (VanishPattern.VanishMarkMaterial && VanishMark->GetMaterial(0) != VanishPattern.VanishMarkMaterial)
+	{
+		VanishMark->SetMaterial(0, VanishPattern.VanishMarkMaterial);
+	}
+
+	// 머리 위에 거꾸로 뒤집어 띄우고(원뿔 끝이 아래 = 머리를 가리킴) 천천히 회전 + 위아래로 살짝 흔들림
+	const float HalfHeight = Player->GetCapsuleComponent() ? Player->GetCapsuleComponent()->GetScaledCapsuleHalfHeight() : 90.0f;
+	const float Time = GetWorld()->GetTimeSeconds();
+	const float Bob = FMath::Sin(Time * 6.0f) * 10.0f;
+	VanishMark->SetWorldLocation(Player->GetActorLocation() + FVector(0.0f, 0.0f, HalfHeight + VanishPattern.VanishMarkHeight + Bob));
+	VanishMark->SetWorldRotation(FRotator(180.0f, FMath::Fmod(Time * 180.0f, 360.0f), 0.0f));
+	VanishMark->SetWorldScale3D(FVector(VanishPattern.VanishMarkScale));
+	VanishMark->SetVisibility(true);
+}
+
+void ARLEnemyCharacter::TeleportBehindPlayer()
+{
+	const ACharacter* Player = Cast<ACharacter>(UGameplayStatics::GetPlayerPawn(this, 0));
+	UCapsuleComponent* MyCapsule = GetCapsuleComponent();
+	if (!Player || !MyCapsule)
+	{
+		return;
+	}
+
+	const FVector PlayerLoc = Player->GetActorLocation();
+	FVector Back = -Player->GetActorForwardVector().GetSafeNormal2D();
+	if (Back.IsNearlyZero())
+	{
+		Back = (GetActorLocation() - PlayerLoc).GetSafeNormal2D();
+	}
+
+	const float PlayerRadius = Player->GetCapsuleComponent() ? Player->GetCapsuleComponent()->GetScaledCapsuleRadius() : 40.0f;
+	const float PlayerHalfHeight = Player->GetCapsuleComponent() ? Player->GetCapsuleComponent()->GetScaledCapsuleHalfHeight() : 90.0f;
+	const float MyRadius = MyCapsule->GetScaledCapsuleRadius();
+	const float Distance = PlayerRadius + MyRadius + VanishPattern.VanishAppearDistance;
+
+	// 벽 너머로 나타나지 않게: 플레이어 → 등 뒤 방향으로 벽(WorldStatic)이 있으면 그 앞에서 멈춤
+	FVector Target = PlayerLoc + Back * Distance;
+	FHitResult Hit;
+	FCollisionQueryParams Params(SCENE_QUERY_STAT(VanishTeleport), false, this);
+	Params.AddIgnoredActor(Player);
+	if (GetWorld()->SweepSingleByChannel(Hit, PlayerLoc, Target, FQuat::Identity, ECC_WorldStatic, FCollisionShape::MakeSphere(MyRadius * 0.5f), Params))
+	{
+		Target = Hit.Location;
+	}
+
+	// 발 높이를 플레이어와 맞춤 (보스 캡슐이 더 커서 중심 높이가 다름)
+	Target.Z = PlayerLoc.Z - PlayerHalfHeight + MyCapsule->GetScaledCapsuleHalfHeight();
+
+	const FRotator FaceRot(0.0f, (PlayerLoc - Target).GetSafeNormal2D().Rotation().Yaw, 0.0f);
+	GetWorld()->FindTeleportSpot(this, Target, FaceRot);
+	TeleportTo(Target, FaceRot, false, true);
+	SetActorRotation(FaceRot);
+}
+
+void ARLEnemyCharacter::EndVanish()
+{
+	if (VanishStep == EVanishStep::None)
+	{
+		return;
+	}
+
+	const bool bStarted = VanishStep != EVanishStep::Waiting;
+	const bool bWasPaused = VanishStep == EVanishStep::FadingOut || VanishStep == EVanishStep::Hidden;
+	VanishStep = EVanishStep::None;
+
+	ShowVanishMark(false);
+	if (VanishOutFXComp.IsValid())
+	{
+		VanishOutFXComp->DeactivateImmediate();
+	}
+	VanishOutFXComp.Reset();
+
+	if (bStarted)
+	{
+		if (USkeletalMeshComponent* MeshComp = GetMesh())
+		{
+			MeshComp->SetRelativeLocation(VanishMeshBaseLocation);
+			MeshComp->SetVisibility(true);
+			if (bVanishOverlayApplied)
+			{
+				MeshComp->SetOverlayMaterial(VanishSavedOverlay);
+			}
+
+			if (bWasPaused)
+			{
+				if (UAnimInstance* AnimInstance = MeshComp->GetAnimInstance())
+				{
+					if (AnimInstance->Montage_IsActive(VanishMontage))
+					{
+						AnimInstance->Montage_Resume(VanishMontage);
+					}
+				}
+			}
+		}
+
+		if (UCapsuleComponent* Capsule = GetCapsuleComponent())
+		{
+			Capsule->SetCollisionResponseToChannel(ECC_Pawn, VanishSavedPawnResponse);
+		}
+		SetInvulnerable(false);
+	}
+
+	bVanishOverlayApplied = false;
+	VanishSavedOverlay = nullptr;
+	VanishOverlayMID = nullptr;
+	VanishMontage = nullptr;
+}
+
+void ARLEnemyCharacter::UpdateVanishDarken(float DeltaTime)
+{
+	const bool bWantDark = VanishPattern.bVanishStrike && VanishPattern.VanishDarkenExposure < 0.0f
+		&& ((VanishStep == EVanishStep::Waiting && bVanishOutFXSpawned)
+			|| VanishStep == EVanishStep::FadingOut
+			|| VanishStep == EVanishStep::Hidden);
+
+	if (!bWantDark && VanishDarkenWeight <= 0.0f)
+	{
+		return;
+	}
+
+	if (!VanishDarkenPP)
+	{
+		VanishDarkenPP = NewObject<UPostProcessComponent>(this, TEXT("VanishDarkenPP"));
+		VanishDarkenPP->bUnbound = true;   // 위치와 상관없이 화면 전체
+		VanishDarkenPP->Priority = 100.0f; // 맵의 분위기 PPV보다 위에서 섞임
+		VanishDarkenPP->BlendWeight = 0.0f;
+		VanishDarkenPP->SetupAttachment(GetRootComponent());
+		VanishDarkenPP->RegisterComponent();
+	}
+
+	FPostProcessSettings& Settings = VanishDarkenPP->Settings;
+	Settings.bOverride_AutoExposureBias = true;
+	Settings.AutoExposureBias = VanishPattern.VanishDarkenExposure;
+	Settings.bOverride_VignetteIntensity = true;
+	Settings.VignetteIntensity = VanishPattern.VanishDarkenVignette;
+
+	const float Rate = 1.0f / FMath::Max(VanishPattern.VanishDarkenFadeTime, 0.01f);
+	VanishDarkenWeight = FMath::FInterpConstantTo(VanishDarkenWeight, bWantDark ? 1.0f : 0.0f, DeltaTime, Rate);
+	VanishDarkenPP->BlendWeight = VanishDarkenWeight;
 }
