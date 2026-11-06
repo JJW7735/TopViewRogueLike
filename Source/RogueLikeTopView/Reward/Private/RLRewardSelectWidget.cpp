@@ -4,6 +4,7 @@
 #include "RLCharacter.h"
 #include "GameFramework/PlayerController.h"
 #include "Kismet/GameplayStatics.h"
+#include "Engine/Texture2D.h"
 
 void URLRewardSelectWidget::InitializeWidget(ARLCharacter* InPlayer, const TArray<FRLRewardData>& InRewards, ARLRewardChest* InSourceChest, ERLRewardTriggerSource InTriggerSource)
 {
@@ -29,6 +30,17 @@ void URLRewardSelectWidget::InitializeWidget(ARLCharacter* InPlayer, const TArra
 			InputMode.SetHideCursorDuringCapture(false);
 			PC->SetInputMode(InputMode);
 			PC->bShowMouseCursor = true;
+		}
+	}
+
+	// 아이콘 로드: WBP는 Icon을 "Resolve Soft Reference"(로드 안 함)로 꺼내 쓰므로,
+	// 메모리에 없는 텍스처는 null이 되어 아이콘이 비어 보인다. 상점(RLShopWidget)과 동일하게 여기서 동기 로드해 둔다.
+	LoadedIcons.Reset();
+	for (const FRLRewardData& Reward : RewardOptions)
+	{
+		if (UTexture2D* IconTex = Reward.Icon.LoadSynchronous())
+		{
+			LoadedIcons.Add(IconTex);
 		}
 	}
 
