@@ -114,6 +114,16 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input|Action")
 	UInputAction* InteractAction;
 
+	// 퀵슬롯 1~3 (소비 아이템 사용, IMC_Default에서 1/2/3 키)
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input|QuickSlot")
+	UInputAction* QuickSlot1_Action;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input|QuickSlot")
+	UInputAction* QuickSlot2_Action;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input|QuickSlot")
+	UInputAction* QuickSlot3_Action;
+
 private:
 	void OnMoveStarted();
 	void OnMoveTriggered();
@@ -140,6 +150,11 @@ private:
 
 	void OnDodge_Started();
 	void OnInteract_Started();
+
+	void OnQuickSlot1_Started() { UseQuickSlot(0); }
+	void OnQuickSlot2_Started() { UseQuickSlot(1); }
+	void OnQuickSlot3_Started() { UseQuickSlot(2); }
+	void UseQuickSlot(int32 QuickIndex);
 
 	void HideStageClearScreen();
 

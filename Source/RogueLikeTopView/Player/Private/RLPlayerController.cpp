@@ -8,6 +8,7 @@
 #include "EnhancedInputSubsystems.h"
 #include "Blueprint/AIBlueprintHelperLibrary.h"
 #include "RLSkillComponent.h"
+#include "RLInventoryComponent.h"
 #include "NiagaraSystem.h"
 #include "NiagaraFunctionLibrary.h"
 #include "Components/CapsuleComponent.h"
@@ -93,6 +94,18 @@ void ARLPlayerController::SetupInputComponent()
 		if (InteractAction)
 		{
 			EnhancedInputComponent->BindAction(InteractAction, ETriggerEvent::Started, this, &ARLPlayerController::OnInteract_Started);
+		}
+		if (QuickSlot1_Action)
+		{
+			EnhancedInputComponent->BindAction(QuickSlot1_Action, ETriggerEvent::Started, this, &ARLPlayerController::OnQuickSlot1_Started);
+		}
+		if (QuickSlot2_Action)
+		{
+			EnhancedInputComponent->BindAction(QuickSlot2_Action, ETriggerEvent::Started, this, &ARLPlayerController::OnQuickSlot2_Started);
+		}
+		if (QuickSlot3_Action)
+		{
+			EnhancedInputComponent->BindAction(QuickSlot3_Action, ETriggerEvent::Started, this, &ARLPlayerController::OnQuickSlot3_Started);
 		}
 	}
 
@@ -437,6 +450,30 @@ void ARLPlayerController::OnInteract_Started()
 	if (ARLCharacter* RLChar = Cast<ARLCharacter>(GetPawn()))
 	{
 		RLChar->TryInteract();
+	}
+}
+
+// ==========================================
+// 퀵슬롯 (1/2/3 키 → 소비 아이템 사용)
+// ==========================================
+void ARLPlayerController::UseQuickSlot(int32 QuickIndex)
+{
+	ARLCharacter* RLChar = Cast<ARLCharacter>(GetPawn());
+	if (!RLChar)
+	{
+		return;
+	}
+
+	// 사망 후에는 물약 사용 불가
+	const URLHealthComponent* HealthComp = RLChar->FindComponentByClass<URLHealthComponent>();
+	if (HealthComp && HealthComp->bIsDead)
+	{
+		return;
+	}
+
+	if (URLInventoryComponent* InvComp = RLChar->GetInventoryComponent())
+	{
+		InvComp->UseQuickSlot(QuickIndex);
 	}
 }
 

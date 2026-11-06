@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include "CoreMinimal.h"
 #include "Components/ActorComponent.h"
@@ -126,6 +126,26 @@ public:
 	/** 첫 번째 빈 슬롯 인덱스 반환 (없으면 INDEX_NONE) */
 	UFUNCTION(BlueprintPure, Category = "Inventory")
 	int32 FindFirstEmptySlotIndex() const;
+
+	// ==========================================
+	// 퀵슬롯 (HUD 상시 표시용, 소비 아이템 자동 모음)
+	// ==========================================
+
+	/**
+	 * 소비 아이템을 종류(ItemData)별로 하나씩 묶어, 인벤토리에서 처음 등장한 순서대로 최대 MaxCount개 반환합니다.
+	 * Quantity는 해당 아이템이 여러 슬롯에 나뉘어 있어도 합계입니다.
+	 * 별도 저장 상태가 없으므로 세이브 구조와 무관하며, OnInventoryUpdated 때 다시 조회하면 됩니다.
+	 */
+	UFUNCTION(BlueprintPure, Category = "Inventory|QuickSlot")
+	TArray<FRLInventorySlot> GetQuickSlotEntries(int32 MaxCount = 3) const;
+
+	/**
+	 * QuickIndex번째 퀵슬롯 아이템을 사용합니다.
+	 * 해당 아이템이 들어있는 실제 슬롯을 찾아 UseItemAtIndex를 호출합니다 (뒤쪽 슬롯부터 소모해 덜 찬 스택을 먼저 비움).
+	 * @return 사용 성공 여부 (빈 퀵슬롯이거나 사용 불가면 false)
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Inventory|QuickSlot")
+	bool UseQuickSlot(int32 QuickIndex);
 
 protected:
 	// 기본 슬롯 개수 (기본 20칸)

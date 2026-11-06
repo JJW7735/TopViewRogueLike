@@ -1,4 +1,4 @@
-#include "RLInventoryComponent.h"
+﻿#include "RLInventoryComponent.h"
 #include "RLItemDataAsset.h"
 #include "RLCharacter.h"
 #include "RLStatComponent.h"
@@ -278,6 +278,65 @@ int32 URLInventoryComponent::FindFirstEmptySlotIndex() const
 		}
 	}
 	return INDEX_NONE;
+}
+
+TArray<FRLInventorySlot> URLInventoryComponent::GetQuickSlotEntries(int32 MaxCount) const
+{
+	TArray<FRLInventorySlot> Entries;
+	if (MaxCount <= 0)
+	{
+		return Entries;
+	}
+
+	for (const FRLInventorySlot& Slot : Slots)
+	{
+		if (!Slot.IsValid() || Slot.ItemData->ItemType != ERLItemType::Consumable)
+		{
+			continue;
+		}
+
+		// 같은 아이템이 이미 퀵슬롯 목록에 있으면 수량만 합산 (ItemID가 비어 있는 에셋도 있어서 포인터로 비교)
+		FRLInventorySlot* Existing = Entries.FindByPredicate([&Slot](const FRLInventorySlot& Entry)
+		{
+			return Entry.ItemData == Slot.ItemData;
+		});
+
+		if (Existing)
+		{
+			Existing->Quantity += Slot.Quantity;
+		}
+		else if (Entries.Num() < MaxCount)
+		{
+			Entries.Add(Slot);
+		}
+	}
+
+	return Entries;
+}
+
+bool URLInventoryComponent::UseQuickSlot(int32 QuickIndex)
+{
+	if (QuickIndex < 0)
+	{
+		return false;
+	}
+
+	const TArray<FRLInventorySlot> Entries = GetQuickSlotEntries(QuickIndex + 1);
+	if (!Entries.IsValidIndex(QuickIndex))
+	{
+		return false;
+	}
+
+	const URLItemDataAsset* TargetItem = Entries[QuickIndex].ItemData;
+	for (int32 i = Slots.Num() - 1; i >= 0; --i)
+	{
+		if (Slots[i].IsValid() && Slots[i].ItemData == TargetItem)
+		{
+			return UseItemAtIndex(i);
+		}
+	}
+
+	return false;
 }
 
 void URLInventoryComponent::RefreshPassiveItemEffects()
