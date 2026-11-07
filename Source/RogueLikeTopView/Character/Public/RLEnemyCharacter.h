@@ -501,6 +501,7 @@ private:
 	float VanishSinkDepthApplied = 0.0f;
 	FVector VanishMeshBaseLocation = FVector::ZeroVector; // 메시 원래 상대 위치 (가라앉기 복구용)
 	bool bVanishOverlayApplied = false;
+	bool bSoulCrackZonesHiddenByVanish = false; // 균열 강화판 안내 데칼을 잠행 중이라 숨겨 둔 상태
 	bool bVanishOutFXSpawned = false; // 사라지기 연기 (Notify_Vanish보다 VanishFXLeadTime 먼저)
 	bool bVanishInPrepared = false;   // 나타날 자리로 미리 이동 + 연기 (나타나기 VanishFXLeadTime 전)
 	TWeakObjectPtr<UNiagaraComponent> VanishOutFXComp; // 사라지기 연기 (다 가라앉으면 빠르게 흩어지게)

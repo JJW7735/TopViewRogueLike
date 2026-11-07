@@ -44,6 +44,20 @@ void ARLEnemyCharacter::BeginPlay()
 {
 	Super::BeginPlay();
 
+	// ★ 레벨에 미리 배치된 보스 인스턴스는 BP 기본값을 나중에 바꿔도 균열 몽타주가 비어 있는 채로 남는 경우가 있음
+	// (EditDefaultsOnly라 인스턴스에서 고칠 수도 없음) → 비어 있으면 클래스 기본값(BP에 넣은 값)으로 채움
+	if (const ARLEnemyCharacter* Defaults = GetClass()->GetDefaultObject<ARLEnemyCharacter>())
+	{
+		if (!SoulCrackHitMontage)
+		{
+			SoulCrackHitMontage = Defaults->SoulCrackHitMontage;
+		}
+		if (!SoulShatterMontage)
+		{
+			SoulShatterMontage = Defaults->SoulShatterMontage;
+		}
+	}
+
 	// EnrageHealthPercentThreshold가 음수(기본값)인 일반 몬스터도 델리게이트 바인딩 자체는 걸어두지만,
 	// HandleEnemyHealthChanged 내부에서 threshold < 0이면 바로 return하므로 실질적인 비용은 거의 없습니다.
 	if (HealthComp)
@@ -384,8 +398,9 @@ void ARLEnemyCharacter::Tick(float DeltaTime)
 	// 강화판 몽타주가 끝났거나 끊겼으면 자동 정리 (녹색 아우라 OFF)
 	if (SoulCrackMontage)
 	{
+		// 잠행 강습처럼 몽타주를 잠깐 멈추는(Pause) 패턴도 있어서 IsPlaying(정지 중 false)이 아니라 IsActive로 확인
 		UAnimInstance* AnimInstance = GetMesh() ? GetMesh()->GetAnimInstance() : nullptr;
-		if (!AnimInstance || !AnimInstance->Montage_IsPlaying(SoulCrackMontage))
+		if (!AnimInstance || !AnimInstance->Montage_IsActive(SoulCrackMontage))
 		{
 			EndSoulCrackPattern();
 		}
@@ -394,7 +409,25 @@ void ARLEnemyCharacter::Tick(float DeltaTime)
 	// 강화판 진행 중: 카운터 방향 안내 데칼이 보스를 따라가고, 균열 구간 동안 몸 발광
 	if (SoulCrackMontage)
 	{
-		UpdateSoulCrackZones();
+		// 땅속으로 사라져 있는 동안은 안내 데칼도 숨김 (안 그러면 숨은 위치가 드러남)
+		const bool bVanished = VanishStep == EVanishStep::FadingOut || VanishStep == EVanishStep::Hidden;
+		if (bVanished)
+		{
+			if (!bSoulCrackZonesHiddenByVanish)
+			{
+				bSoulCrackZonesHiddenByVanish = true;
+				HideSoulCrackZones();
+			}
+		}
+		else
+		{
+			if (bSoulCrackZonesHiddenByVanish)
+			{
+				bSoulCrackZonesHiddenByVanish = false;
+				ShowSoulCrackZones();
+			}
+			UpdateSoulCrackZones();
+		}
 		SetSoulCrackWindowVisual(IsSoulCrackWindowOpen());
 	}
 }
@@ -1781,6 +1814,15 @@ bool ARLEnemyCharacter::BeginSoulCrackPattern(const FRLMonsterPatternData& Patte
 	const int32 Index = Pattern.SoulCrackHitIndex < 0 ? Windows.Num() - 1 : FMath::Min(Pattern.SoulCrackHitIndex, Windows.Num() - 1);
 	SoulCrackMontage = Pattern.AttackMontage;
 	SoulCrackWindow = Windows[Index];
+
+	// ★ 잠행 강습 강화판: 사라지기 전/숨어 있는 동안/솟아오르는(무적) 동안에는 균열 불가 → 다 나타난 뒤부터 타격 전까지만 열림
+	// (StartVanish가 이 함수보다 먼저 호출되어 VanishNotifyTime이 정해져 있음. 몽타주는 사라짐 지점에서 멈췄다가 이어지므로
+	// 나타난 뒤 VanishFadeInTime만큼 진행된 몽타주 시각부터)
+	if (VanishStep != EVanishStep::None && VanishMontage == Pattern.AttackMontage && SoulCrackWindow.Y > VanishNotifyTime)
+	{
+		SoulCrackWindow.X = FMath::Max(SoulCrackWindow.X, VanishNotifyTime + VanishPattern.VanishFadeInTime + 0.02f);
+	}
+
 	SoulCrackFrontAngle = Pattern.SoulCrackFrontAngle;
 	SoulCrackBackAngle = Pattern.SoulCrackBackAngle;
 	bSoulCrackConsumed = false;
@@ -1800,6 +1842,7 @@ void ARLEnemyCharacter::EndSoulCrackPattern()
 	SoulCrackMontage = nullptr;
 	SoulCrackWindow = FVector2D::ZeroVector;
 	bSoulCrackConsumed = false;
+	bSoulCrackZonesHiddenByVanish = false;
 
 	HideSoulCrackZones();
 	SetSoulCrackWindowVisual(false);
