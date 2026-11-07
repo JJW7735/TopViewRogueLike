@@ -19,8 +19,8 @@
 #include "HAL/IConsoleManager.h"
 
 float URLAudioSubsystem::MasterVolume = 1.0f;
-float URLAudioSubsystem::BGMVolume = 0.45f;
-float URLAudioSubsystem::SFXVolume = 0.68f;
+float URLAudioSubsystem::BGMVolume = 0.25f;
+float URLAudioSubsystem::SFXVolume = 0.25f;
 
 namespace
 {
@@ -34,22 +34,22 @@ namespace
 		switch (Track)
 		{
 		case ERLBGMTrack::Explore_JourneyBegins:   // 09: 메인 메뉴 / 거점 (기준 볼륨)
-			return 0.85f;
+			return 0.65f;
 		case ERLBGMTrack::Explore_Atmospheres1:    // 06: 잔잔한 던전 앰비언스 I
 		case ERLBGMTrack::Explore_Atmospheres2:    // 08: 잔잔한 던전 앰비언스 II
 		case ERLBGMTrack::Explore_Atmospheres3:    // 10: 잔잔한 던전 앰비언스 III
-			return 0.65f;
+			return 0.50f;
 		case ERLBGMTrack::Explore_MistyLands:      // 05: 탐험 트랙 (초반 현악/호른 음압 보정)
 		case ERLBGMTrack::Explore_MountainHalls:   // 07: 지하묘지 탐험 (음압 보정)
-			return 0.36f;
+			return 0.25f;
 		case ERLBGMTrack::Battle_TheAmbush:        // 02: 일반 아레나 전투 (과도한 웅장함/시끄러움 방지)
 		case ERLBGMTrack::Battle_EnemyApproaches:  // 03: 중후반 아레나/중간보스 전투
-			return 0.14f;
+			return 0.11f;
 		case ERLBGMTrack::Battle_SwordsAtMidnight: // 04: 세바로그 보스전
 		case ERLBGMTrack::Battle_HornsOfWar:       // 01: 카이메라 보스전 (음압 대폭 하향)
-			return 0.13f;
+			return 0.10f;
 		default:
-			return 0.35f;
+			return 0.25f;
 		}
 	}
 	static FAutoConsoleCommandWithWorldAndArgs GPlayBGMCmd(
@@ -723,7 +723,7 @@ void URLAudioSubsystem::UpdateCharacterCombatVoices()
 		if (bIsDeadNow && !Tracker.bWasDead)
 		{
 			Tracker.bWasDead = true;
-			PlayRandomVoiceFromPool(DeathPool, Loc, 0.38f, 0.94f, 1.02f);
+			PlayRandomVoiceFromPool(DeathPool, Loc, 0.22f, 0.94f, 1.02f);
 			continue;
 		}
 		if (bIsDeadNow)
@@ -738,20 +738,20 @@ void URLAudioSubsystem::UpdateCharacterCombatVoices()
 			{
 				Tracker.bWasEnraged = true;
 				Tracker.LastVoicePlayRealTime = NowReal;
-				PlayRandomVoiceFromPool(RoarPool, Loc, 0.42f, 0.92f, 1.0f);
+				PlayRandomVoiceFromPool(RoarPool, Loc, 0.26f, 0.92f, 1.0f);
 			}
 
 			if (EnemyChar->bHasShatteredThisFight && !Tracker.bWasShattered)
 			{
 				Tracker.bWasShattered = true;
 				Tracker.LastVoicePlayRealTime = NowReal;
-				PlayRandomVoiceFromPool(PainPool, Loc, 0.40f, 0.88f, 0.96f);
+				PlayRandomVoiceFromPool(PainPool, Loc, 0.24f, 0.88f, 0.96f);
 			}
 			else if (EnemyChar->SoulCrackStackCount > Tracker.LastSoulCrackStack)
 			{
 				Tracker.LastSoulCrackStack = EnemyChar->SoulCrackStackCount;
 				Tracker.LastVoicePlayRealTime = NowReal;
-				PlayRandomVoiceFromPool(PainPool, Loc, 0.32f, 0.95f, 1.04f);
+				PlayRandomVoiceFromPool(PainPool, Loc, 0.18f, 0.95f, 1.04f);
 			}
 		}
 
@@ -761,8 +761,8 @@ void URLAudioSubsystem::UpdateCharacterCombatVoices()
 		{
 			Tracker.LastPlayedMontage = CurrentMontage;
 
-			// 너무 빈번한 기합 도배 방지를 위해 최소 0.85초 쿨타임 적용
-			if (CurrentMontage && (NowReal - Tracker.LastVoicePlayRealTime >= 0.85))
+			// 너무 빈번한 기합 도배 방지를 위해 최소 1.8초 쿨타임 적용
+			if (CurrentMontage && (NowReal - Tracker.LastVoicePlayRealTime >= 1.80))
 			{
 				const FString MontageName = CurrentMontage->GetName().ToLower();
 				if (MontageName.Contains(TEXT("death")) || MontageName.Contains(TEXT("hitreact")) || MontageName.Contains(TEXT("stun")) ||
@@ -777,19 +777,19 @@ void URLAudioSubsystem::UpdateCharacterCombatVoices()
 
 				if (MontageName.Contains(TEXT("howl")) || MontageName.Contains(TEXT("roar")) || MontageName.Contains(TEXT("frenzy")) || MontageName.Contains(TEXT("ultimate")))
 				{
-					PlayRandomVoiceFromPool(RoarPool, Loc, 0.36f, PitchMin, PitchMax);
+					PlayRandomVoiceFromPool(RoarPool, Loc, 0.22f, PitchMin, PitchMax);
 				}
 				else if (MontageName.Contains(TEXT("jump")) || MontageName.Contains(TEXT("leap")) || MontageName.Contains(TEXT("pounce")))
 				{
-					PlayRandomVoiceFromPool(JumpPool, Loc, 0.30f, PitchMin, PitchMax);
+					PlayRandomVoiceFromPool(JumpPool, Loc, 0.18f, PitchMin, PitchMax);
 				}
 				else if (MontageName.Contains(TEXT("swing")) || MontageName.Contains(TEXT("Combo")) || FMath::RandBool())
 				{
-					PlayRandomVoiceFromPool(SwingPool.Num() > 0 ? SwingPool : AttackPool, Loc, 0.25f, PitchMin, PitchMax);
+					PlayRandomVoiceFromPool(SwingPool.Num() > 0 ? SwingPool : AttackPool, Loc, 0.14f, PitchMin, PitchMax);
 				}
 				else
 				{
-					PlayRandomVoiceFromPool(AttackPool.Num() > 0 ? AttackPool : SwingPool, Loc, 0.25f, PitchMin, PitchMax);
+					PlayRandomVoiceFromPool(AttackPool.Num() > 0 ? AttackPool : SwingPool, Loc, 0.14f, PitchMin, PitchMax);
 				}
 			}
 		}
