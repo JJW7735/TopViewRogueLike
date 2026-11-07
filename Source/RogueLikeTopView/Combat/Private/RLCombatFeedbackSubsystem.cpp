@@ -1,4 +1,5 @@
 ﻿#include "RLCombatFeedbackSubsystem.h"
+#include "RLAudioSubsystem.h"
 #include "RLCharacter.h"
 #include "RLHealthComponent.h"
 #include "RLSkillData.h"
@@ -720,7 +721,14 @@ void URLCombatFeedbackSubsystem::NotifyCharacterDamaged(ARLCharacter* Victim, fl
 
 	if (SkillData && SkillData->HitSound)
 	{
-		UGameplayStatics::PlaySoundAtLocation(Victim, SkillData->HitSound, ImpactLoc);
+		if (URLAudioSubsystem* AudioSys = URLAudioSubsystem::Get(Victim))
+		{
+			AudioSys->PlaySFXAtLocation(SkillData->HitSound, ImpactLoc, bIsCritical ? 1.18f : 1.0f, 0.93f, 1.07f);
+		}
+		else
+		{
+			UGameplayStatics::PlaySoundAtLocation(Victim, SkillData->HitSound, ImpactLoc);
+		}
 	}
 
 	// 5. 절제된 카메라 쉐이크 & 줌 펀치
