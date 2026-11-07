@@ -638,27 +638,21 @@ namespace
 	{
 		return BaseCost + (CurrentLevel * Increment);
 	}
-}
 
-TArray<FRLMetaUpgradeInfo> URLSaveSubsystem::GetAllMetaUpgradeInfos() const
-{
-	TArray<FRLMetaUpgradeInfo> Results;
-	const TArray<FRLMetaUpgradeDefinition>& Defs = GetMetaDefinitions();
-
-	for (const FRLMetaUpgradeDefinition& Def : Defs)
+	FRLMetaUpgradeInfo BuildMetaUpgradeInfo(const FRLMetaUpgradeDefinition& Def, int32 CurrentLevel, int32 TotalSouls)
 	{
 		FRLMetaUpgradeInfo Info;
 		Info.UpgradeKey = Def.Key;
 		Info.DisplayName = Def.DisplayName;
 		Info.Description = Def.DescriptionFormat;
 		Info.MaxLevel = Def.MaxLevel;
-		Info.CurrentLevel = FMath::Clamp(GetUpgradeLevel(Def.Key), 0, Def.MaxLevel);
+		Info.CurrentLevel = FMath::Clamp(CurrentLevel, 0, Def.MaxLevel);
 		Info.bIsMaxLevel = (Info.CurrentLevel >= Def.MaxLevel);
 
 		if (!Info.bIsMaxLevel)
 		{
 			Info.NextLevelCost = CalculateUpgradeCost(Info.CurrentLevel, Def.BaseCost, Def.CostIncrement);
-			Info.bCanAfford = (CurrentMetaData.TotalSouls >= Info.NextLevelCost);
+			Info.bCanAfford = (TotalSouls >= Info.NextLevelCost);
 		}
 		else
 		{
@@ -668,8 +662,18 @@ TArray<FRLMetaUpgradeInfo> URLSaveSubsystem::GetAllMetaUpgradeInfos() const
 
 		Info.CurrentBonusValue = Info.CurrentLevel * Def.ValuePerLevel;
 		Info.NextBonusValue = (Info.CurrentLevel + 1) * Def.ValuePerLevel;
+		return Info;
+	}
+}
 
-		Results.Add(Info);
+TArray<FRLMetaUpgradeInfo> URLSaveSubsystem::GetAllMetaUpgradeInfos() const
+{
+	TArray<FRLMetaUpgradeInfo> Results;
+	const TArray<FRLMetaUpgradeDefinition>& Defs = GetMetaDefinitions();
+
+	for (const FRLMetaUpgradeDefinition& Def : Defs)
+	{
+		Results.Add(BuildMetaUpgradeInfo(Def, GetUpgradeLevel(Def.Key), CurrentMetaData.TotalSouls));
 	}
 
 	return Results;
@@ -682,26 +686,7 @@ bool URLSaveSubsystem::GetMetaUpgradeInfo(FName UpgradeKey, FRLMetaUpgradeInfo& 
 	{
 		if (Def.Key == UpgradeKey)
 		{
-			OutInfo.UpgradeKey = Def.Key;
-			OutInfo.DisplayName = Def.DisplayName;
-			OutInfo.Description = Def.DescriptionFormat;
-			OutInfo.MaxLevel = Def.MaxLevel;
-			OutInfo.CurrentLevel = FMath::Clamp(GetUpgradeLevel(Def.Key), 0, Def.MaxLevel);
-			OutInfo.bIsMaxLevel = (OutInfo.CurrentLevel >= Def.MaxLevel);
-
-			if (!OutInfo.bIsMaxLevel)
-			{
-				OutInfo.NextLevelCost = CalculateUpgradeCost(OutInfo.CurrentLevel, Def.BaseCost, Def.CostIncrement);
-				OutInfo.bCanAfford = (CurrentMetaData.TotalSouls >= OutInfo.NextLevelCost);
-			}
-			else
-			{
-				OutInfo.NextLevelCost = 0;
-				OutInfo.bCanAfford = false;
-			}
-
-			OutInfo.CurrentBonusValue = OutInfo.CurrentLevel * Def.ValuePerLevel;
-			OutInfo.NextBonusValue = (OutInfo.CurrentLevel + 1) * Def.ValuePerLevel;
+			OutInfo = BuildMetaUpgradeInfo(Def, GetUpgradeLevel(Def.Key), CurrentMetaData.TotalSouls);
 			return true;
 		}
 	}

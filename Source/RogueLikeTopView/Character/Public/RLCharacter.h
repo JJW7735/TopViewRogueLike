@@ -388,7 +388,6 @@ protected:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Skill|Default")
 	URLSkillData* DefaultSkill_LMB;
 
-	bool bIsHoldingRightClick = false;
 	bool bIsDashing = false;
 	FVector DashStartLocation;
 	FVector DashTargetLocation;
@@ -427,9 +426,6 @@ protected:
 	virtual void HandleDeath();
 
 	UFUNCTION()
-	void HandleStatsChanged();
-
-	UFUNCTION()
 	void HandleLevelUp(int32 NewLevel);
 
 	// ★ SoulsEarnedThisRun: 이번 런에서 모은 영혼(RunSouls). HandleDeath()에서 RunSouls가
@@ -457,6 +453,8 @@ protected:
 	// (URLSkillComponent::DecalIndicator와 같은 지연 스폰 패턴)
 	UPROPERTY()
 	ARLDecalIndicator* AttackIndicator = nullptr;
+
+	ARLDecalIndicator* EnsureAttackIndicator();
 
 	// ★ 텔레그래프(예고 데칼)가 Box 판정용인지 Sector 판정용인지 구분. StartBoxAttackTelegraph /
 	// StartSectorAttackTelegraph가 각각 세팅하고, UpdateAttackTelegraph가 이 값으로 분기해서
@@ -519,6 +517,5 @@ protected:
 
 public:
 	virtual void Tick(float DeltaTime) override;
-	virtual void SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent) override;
 	virtual void AddMovementInput(FVector WorldDirection, float ScaleValue = 1.0f, bool bForce = false) override;
 };

@@ -97,9 +97,9 @@ struct FRLRewardData
 	float SelectionWeight = 1.0f;
 
 	// 희귀도에 맞는 테마 색상 반환 (UI 테두리/빛 연출용)
-	FLinearColor GetRarityColor() const
+	static FLinearColor GetRarityColor(ERLRewardRarity InRarity)
 	{
-		switch (Rarity)
+		switch (InRarity)
 		{
 		case ERLRewardRarity::Common:
 			return FLinearColor(0.85f, 0.85f, 0.85f, 1.0f); // Slate White
@@ -114,10 +114,15 @@ struct FRLRewardData
 		}
 	}
 
-	// 희귀도 표시 문자열
-	FText GetRarityDisplayName() const
+	FLinearColor GetRarityColor() const
 	{
-		switch (Rarity)
+		return GetRarityColor(Rarity);
+	}
+
+	// 희귀도 표시 문자열
+	static FText GetRarityDisplayName(ERLRewardRarity InRarity)
+	{
+		switch (InRarity)
 		{
 		case ERLRewardRarity::Common:
 			return NSLOCTEXT("RLReward", "Common", "일반");
@@ -130,5 +135,10 @@ struct FRLRewardData
 		default:
 			return FText::GetEmpty();
 		}
+	}
+
+	FText GetRarityDisplayName() const
+	{
+		return GetRarityDisplayName(Rarity);
 	}
 };

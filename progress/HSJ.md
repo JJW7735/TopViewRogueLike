@@ -1,7 +1,47 @@
 ﻿# HSJ
-> 최종 갱신: 2026-10-22
+> 최종 갱신: 2026-11-07
 
 ## 완료
+- **코드베이스 리팩토링 및 중복 호출 버그 수정** (`Source/RogueLikeTopView/`):
+  - **피격/사망 연출 2중 호출 버그 수정 (`RLDamageNumberSubsystem.cpp`)**:
+    - `URLDamageNumberListener::HandleHealthChanged`에서 `URLCombatFeedbackSubsystem`의 `NotifyCharacterDamaged` 및 `NotifyCharacterDied`를 중복 호출하던 문제를 제거하고, `URLCombatFeedbackListener`가 전담하도록 일원화
+  - **오디오 서브시스템 불필요 로드 및 미사용 코드 정리 (`RLAudioSubsystem.h / .cpp`)**:
+    - 미사용 함수 `SelectExplorationTrackForMap`, 미사용 사운드 배열(`KhaimeraLandSounds`, `SevarogLandSounds`) 및 실제로 재생되지 않던 BGM 큐 5종 사전 로드 제거
+  - **중복 로직 헬퍼 통합 및 데드 코드 제거 (`RLCharacter`, `RLArenaManager`, `RLSaveSubsystem`, `RLRewardTypes`, `RLShopTypes`, `RLPortal`)**:
+    - `ARLCharacter`: 3곳에 중복되던 `AttackIndicator` 지연 스폰 로직을 `EnsureAttackIndicator()`로 통합, 미사용 변수(`bIsHoldingRightClick`)·빈 오버라이드(`SetupPlayerInputComponent`)·불필요한 `HandleStatsChanged` 제거
+    - `ARLArenaManager`: `CompleteArena`와 `CheckInitialPlayerOverlap`에 중복되던 포탈 활성화/스폰 코드를 `SpawnOrActivateExitPortal()`로 통합
+    - `URLSaveSubsystem`: `GetAllMetaUpgradeInfos`와 `GetMetaUpgradeInfo`의 구조체 생성 로직을 `BuildMetaUpgradeInfo()`로 통합
+    - `FRLRewardData` & `FRLShopItem`: 희귀도별 색상/표시명 switch 문을 `FRLRewardData::GetRarityColor(ERLRarity)` / `GetRarityDisplayName(ERLRarity)` 정적 함수로 일원화
+    - `ARLPortal`: 주석 처리된 레거시 오버랩 텔레포트 코드 정리
+- **오디오/BGM 서브시스템 구축 및 전투 SFX 자동 매칭 시스템 완성** (`Source/RogueLikeTopView/Combat/`, `Content/ARPGMusicPack/`, `Content/RPG_Fantasy_SFX/`):
+  - **전역 오디오 서브시스템 (`URLAudioSubsystem.h / .cpp`)**:
+    - `UGameInstanceSubsystem` 기반 BGM 및 환경/전투/UI 사운드 총괄 매니저
+    - **상황별 BGM 크로스페이드 재생 (`ARPGMusicPack`)**: 메인 메뉴/탐험(`PlayExplorationMusic`), 일반 아레나 전투(`PlayArenaBattleMusic`), 중간보스(`PlayMiniBossMusic`), 최종 보스(`PlayBossMusic`), 승리/사망 징글 자동 전환 및 페이드 인/아웃 지원
+    - **보스 애니메이션 몽타주 SFX 자동 감시 (`TickMontageAudioWatcher`)**: 보스1(Khaimera)·보스2(Sevarog)의 주요 공격/포효/투척/강습 몽타주 재생 구간을 실시간 감지하여 별도 애님 노티파이 없이도 타격·기합·발걸음 사운드 자동 재생
+    - **아레나/보스 자동 연동**: `ARLArenaManager` 전투 시작/클리어 델리게이트 및 보스/중간보스 교전 상태에 맞춰 BGM 자동 전환
+  - **전투 타격음/스킬 시전음 자동 매칭 및 볼륨 밸런싱 (`RLCombatFeedbackSubsystem.h / .cpp`, `RPG_Fantasy_SFX`)**:
+    - 스킬 시전 타입(검기/대시/폭발/원소) 및 타격 속성(물리/화염/빙결/번개/암흑/신성/독)에 따라 `RPG_Fantasy_SFX` 사운드 풀에서 최적의 효과음을 자동 매칭 및 피치/볼륨 랜덤화 재생
+    - 전체 BGM 및 전투/피격/스킬 SFX 간 오디오 볼륨 밸런스 튜닝
+- **전투 타격감(Combat Feedback) 서브시스템 및 스킬/속성별 고유 VFX 자동 연동** (`Source/RogueLikeTopView/Combat/`, `Skill/`):
+  - **전투 타격감 총괄 서브시스템 (`URLCombatFeedbackSubsystem.h / .cpp`)**:
+    - `UWorldSubsystem` 기반으로 월드 내 모든 캐릭터(`ARLCharacter`, `ARLEnemyCharacter`)의 체력 변화(`URLCombatFeedbackListener`)를 자동 감지하여 코드 수정 없이 즉각적인 타격 피드백 제공
+    - **히트스탑(Hit-Stop / Frame Freeze)**: 타격/치명타/처치 시 역동적인 순간 타임 딜레이션 연출
+    - **절차적 카메라 쉐이크(Camera Shake)**: 피해량·치명타·보스 피격 여부에 비례하는 카메라 진동 적용
+    - **피격 머티리얼 플래시 & 넉백/경직 연출**: 피격 시 순간 발광(Emissive Flash) 및 타격 방향 기반 피격 리액션
+    - **치명타 데미지 폰트 연출 연동 (`RLDamageNumberSubsystem.h / .cpp`)**: 치명타 적중 시 데미지 팝업 폰트 크기·색상·강조 연출 차별화
+  - **스킬 시전 및 속성별 고유 타격 이펙트(VFX/광원) 자동 연동 (`RLCombatFeedbackSubsystem`, `RLGameplayAbility_Skill`, `RLSkillAbilities`, `RLSkillData`)**:
+    - 스킬 시전(검기 Slash / 대시 Dash / 폭발 Explosion) 시 이동 궤적·충격파 VFX 및 다이내믹 포인트 라이트(광원) 자동 생성
+    - 공격/스킬의 속성(물리/화염/빙결/번개/비전 등)에 따라 고유 색상 광원 및 타격 파티클/나이아가라 이펙트 자동 스폰
+- **신규 스테이지 맵 3종(`L_WarCrypt`, `L_OuterWard`, `L_VesselsHeart`) 및 신규 몬스터/중간보스 구축** (`Content/Maps/`, `Content/Blueprint/Enemy_Character/`):
+  - **신규 던전/아레나 맵 3종 구축 및 내비게이션 설정**:
+    - `L_WarCrypt` (`Content/Maps/L_WarCrypt.umap`, `Content/WarCrypt/`): 전쟁 납골당 스테이지 에셋, 스태틱 메시/머티리얼 세팅 및 NavMesh 구축
+    - `L_OuterWard` (`Content/Maps/L_OuterWard.umap`, `Content/OuterWard/`): 외곽 성채 스테이지 에셋 배치 및 환경/콜리전 설정
+    - `L_VesselsHeart` (`Content/Maps/L_VesselsHeart.umap`, `Content/VesselsHeart/`): 심장부 스테이지 맵 및 전용 배경/구조물 에셋 구축
+  - **신규 일반 몬스터 돌진병 (`BP_Enemy_Charger`) 추가**:
+    - 전용 데이터 에셋(`DA_Enemy_Charger`), 돌진 몽타주(`AM_Enemy_Charger_Dash`) 및 플레이어 조준 고속 돌진 패턴 구현
+  - **중간보스 (`BP_Enemy_MiniBoss`) 추가 및 적 데미지 채널/체력바 갱신 수정**:
+    - 중간보스 전용 블루프린트(`BP_Enemy_MiniBoss`), 데이터 에셋(`DA_Enemy_MiniBoss`), 전용 머티리얼 인스턴스(`MI_Manny_MiniBoss_01 / 02`) 구성
+    - `DefaultEngine.ini` 콜리전/데미지 트레이스 채널 정비 및 `BP_EnemyBase` 피격 시 체력바 위젯 실시간 갱신 수정
 - **주문력(AP) & 물리(AD) 빌드 아이템/축복/보상 카드 1:1 대칭 확장 및 세이브 복원 안전화** (`Source/RogueLikeTopView/Shop/`, `Reward/`, `Save/`, `Character/`):
   - **상점 패시브 유물 풀(`URLShopSubsystem::BuildDefaultPools`) — AD 3종 + AP 5종 추가 (총 AD 5 : AP 5 균형 완성)**:
     - **[일반]** `용병의 전투 단검` (`Item_MercenaryDagger`, 공격력 +12) / `견습 마도사의 고서` (`Item_ApprenticeTome`, 주문력 +12)

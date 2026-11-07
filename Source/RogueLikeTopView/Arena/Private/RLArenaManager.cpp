@@ -580,49 +580,7 @@ void ARLArenaManager::CompleteArena()
 		}
 
 		// 2. 출구 포탈 활성화 또는 스폰
-		if (ExistingPortalActor)
-		{
-			ExistingPortalActor->SetActorHiddenInGame(false);
-			ExistingPortalActor->SetActorEnableCollision(true);
-			if (ARLPortal* Portal = Cast<ARLPortal>(ExistingPortalActor))
-			{
-				if (SpawnedRewardChest.IsValid())
-				{
-					Portal->SetLinkedChestToClean(SpawnedRewardChest.Get());
-				}
-			}
-		}
-		else if (bSpawnPortalOnClear)
-		{
-			TSubclassOf<ARLPortal> TargetPortalClass = PortalClass;
-			if (!TargetPortalClass || TargetPortalClass == ARLPortal::StaticClass())
-			{
-				TargetPortalClass = LoadClass<ARLPortal>(nullptr, TEXT("/Game/Blueprint/BP_Portal.BP_Portal_C"));
-				if (!TargetPortalClass)
-				{
-					TargetPortalClass = ARLPortal::StaticClass();
-				}
-			}
-
-			if (TargetPortalClass)
-			{
-				const FVector PortalLoc = PortalSpawnPoint ? PortalSpawnPoint->GetComponentLocation() : (GetActorLocation() + FVector(0.0f, 400.0f, 0.0f));
-				const FRotator PortalRot = PortalSpawnPoint ? PortalSpawnPoint->GetComponentRotation() : GetActorRotation();
-
-				FActorSpawnParameters SpawnParams;
-				SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
-
-				ARLPortal* NewPortal = World->SpawnActor<ARLPortal>(TargetPortalClass, PortalLoc, PortalRot, SpawnParams);
-				if (NewPortal)
-				{
-					SpawnedPortal = NewPortal;
-					if (SpawnedRewardChest.IsValid())
-					{
-						NewPortal->SetLinkedChestToClean(SpawnedRewardChest.Get());
-					}
-				}
-			}
-		}
+		SpawnOrActivateExitPortal();
 	}
 
 	OnArenaCleared.Broadcast();
@@ -632,6 +590,59 @@ void ARLArenaManager::CompleteArena()
 	{
 		GEngine->AddOnScreenDebugMessage(-1, 5.0f, FColor::Green,
 			FString::Printf(TEXT("[Arena] ★★★ %s: 아레나 모든 웨이브 완료! 보상 상자 및 포탈 개방! ★★★"), *GetName()));
+	}
+}
+
+void ARLArenaManager::SpawnOrActivateExitPortal()
+{
+	UWorld* World = GetWorld();
+	if (!World)
+	{
+		return;
+	}
+
+	if (ExistingPortalActor)
+	{
+		ExistingPortalActor->SetActorHiddenInGame(false);
+		ExistingPortalActor->SetActorEnableCollision(true);
+		if (ARLPortal* Portal = Cast<ARLPortal>(ExistingPortalActor))
+		{
+			if (SpawnedRewardChest.IsValid())
+			{
+				Portal->SetLinkedChestToClean(SpawnedRewardChest.Get());
+			}
+		}
+	}
+	else if (bSpawnPortalOnClear)
+	{
+		TSubclassOf<ARLPortal> TargetPortalClass = PortalClass;
+		if (!TargetPortalClass || TargetPortalClass == ARLPortal::StaticClass())
+		{
+			TargetPortalClass = LoadClass<ARLPortal>(nullptr, TEXT("/Game/Blueprint/BP_Portal.BP_Portal_C"));
+			if (!TargetPortalClass)
+			{
+				TargetPortalClass = ARLPortal::StaticClass();
+			}
+		}
+
+		if (TargetPortalClass)
+		{
+			const FVector PortalLoc = PortalSpawnPoint ? PortalSpawnPoint->GetComponentLocation() : (GetActorLocation() + FVector(0.0f, 400.0f, 0.0f));
+			const FRotator PortalRot = PortalSpawnPoint ? PortalSpawnPoint->GetComponentRotation() : GetActorRotation();
+
+			FActorSpawnParameters SpawnParams;
+			SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
+
+			ARLPortal* NewPortal = World->SpawnActor<ARLPortal>(TargetPortalClass, PortalLoc, PortalRot, SpawnParams);
+			if (NewPortal)
+			{
+				SpawnedPortal = NewPortal;
+				if (SpawnedRewardChest.IsValid())
+				{
+					NewPortal->SetLinkedChestToClean(SpawnedRewardChest.Get());
+				}
+			}
+		}
 	}
 }
 
@@ -934,41 +945,7 @@ void ARLArenaManager::CheckInitialPlayerOverlap()
 			UnlockBarriers();
 
 			// 포탈만 활성화 또는 스폰 (이미 클리어된 스테이지이므로 보상 상자는 생성하지 않음)
-			if (UWorld* World = GetWorld())
-			{
-				if (ExistingPortalActor)
-				{
-					ExistingPortalActor->SetActorHiddenInGame(false);
-					ExistingPortalActor->SetActorEnableCollision(true);
-				}
-				else if (bSpawnPortalOnClear)
-				{
-					TSubclassOf<ARLPortal> TargetPortalClass = PortalClass;
-					if (!TargetPortalClass || TargetPortalClass == ARLPortal::StaticClass())
-					{
-						TargetPortalClass = LoadClass<ARLPortal>(nullptr, TEXT("/Game/Blueprint/BP_Portal.BP_Portal_C"));
-						if (!TargetPortalClass)
-						{
-							TargetPortalClass = ARLPortal::StaticClass();
-						}
-					}
-
-					if (TargetPortalClass)
-					{
-						const FVector PortalLoc = PortalSpawnPoint ? PortalSpawnPoint->GetComponentLocation() : (GetActorLocation() + FVector(0.0f, 400.0f, 0.0f));
-						const FRotator PortalRot = PortalSpawnPoint ? PortalSpawnPoint->GetComponentRotation() : GetActorRotation();
-
-						FActorSpawnParameters SpawnParams;
-						SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
-
-						ARLPortal* NewPortal = World->SpawnActor<ARLPortal>(TargetPortalClass, PortalLoc, PortalRot, SpawnParams);
-						if (NewPortal)
-						{
-							SpawnedPortal = NewPortal;
-						}
-					}
-				}
-			}
+			SpawnOrActivateExitPortal();
 
 			OnArenaCleared.Broadcast();
 			BP_OnArenaCleared();
