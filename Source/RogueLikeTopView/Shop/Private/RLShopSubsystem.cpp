@@ -6,6 +6,7 @@
 #include "RLHealthComponent.h"
 #include "RLItemDataAsset.h"
 #include "RLItemPoolDataAsset.h"
+#include "RLRewardSubsystem.h"
 #include "RLSaveSubsystem.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "Engine/Engine.h"
@@ -256,6 +257,7 @@ FRLShopItem URLShopSubsystem::RollRandomShopItem(int32 SlotIndex, const TArray<F
 		{
 			const FRLRewardData& SelectedStat = Candidates[FMath::RandRange(0, Candidates.Num() - 1)];
 			OutItem.Category = ERLShopItemCategory::StatUpgrade;
+			OutItem.RewardID = SelectedStat.RewardID;
 			OutItem.ItemName = SelectedStat.RewardName;
 			OutItem.Description = SelectedStat.Description;
 			OutItem.Icon = SelectedStat.Icon;
@@ -356,37 +358,18 @@ bool URLShopSubsystem::BuyShopItem(ARLCharacter* Buyer, int32 SlotIndex, FString
 
 	case ERLShopItemCategory::StatUpgrade:
 	{
-		URLStatComponent* StatComp = Buyer->GetStatComponent();
-		URLHealthComponent* HealthComp = Buyer->FindComponentByClass<URLHealthComponent>();
+		// 축복 적용은 보상 카드와 같은 경로(URLRewardSubsystem::ApplyReward)를 탄다 → 스탯 적용 + 이번 판 획득 기록
+		FRLRewardData Blessing;
+		Blessing.RewardID = TargetItem.RewardID;
+		Blessing.RewardName = TargetItem.ItemName;
+		Blessing.Description = TargetItem.Description;
+		Blessing.Rarity = TargetItem.Rarity;
+		Blessing.StatBonuses = TargetItem.StatBonuses;
+		Blessing.Icon = TargetItem.Icon;
 
-		for (const FRLStatBonus& Bonus : TargetItem.StatBonuses)
+		if (URLRewardSubsystem* RewardSys = GetGameInstance()->GetSubsystem<URLRewardSubsystem>())
 		{
-			// 전투 스탯 8종은 StatComp가 처리 (클램프/이동속도 반영 포함)
-			if (StatComp && StatComp->AddStatBonus(Bonus.TargetStat, Bonus.Value))
-			{
-				continue;
-			}
-
-			switch (Bonus.TargetStat)
-			{
-			case ERLTargetStat::MaxHealth:
-				if (HealthComp) HealthComp->IncreaseMaxHealth(Bonus.Value, true);
-				break;
-			case ERLTargetStat::HealPercent:
-				if (HealthComp)
-				{
-					const float HealAmount = HealthComp->MaxHealth * (Bonus.Value / 100.0f);
-					HealthComp->Heal(HealAmount);
-				}
-				break;
-			default:
-				break;
-			}
-		}
-
-		if (StatComp)
-		{
-			StatComp->NotifyStatsChanged();
+			RewardSys->ApplyReward(Buyer, Blessing, /*bShowPickupMessage=*/false); // 구매 메시지는 아래에서 따로 출력
 		}
 		break;
 	}

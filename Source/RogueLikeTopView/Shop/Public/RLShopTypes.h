@@ -38,6 +38,10 @@ struct FRLShopItem
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Shop")
 	TObjectPtr<URLItemDataAsset> ItemData = nullptr;
 
+	// 원본 축복의 RewardID (StatUpgrade 카테고리일 때 유효). 획득 기록에서 같은 축복을 묶는 데 사용
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Shop")
+	FName RewardID = NAME_None;
+
 	// 스탯 보너스 목록 (StatUpgrade 카테고리일 때 적용)
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Shop")
 	TArray<FRLStatBonus> StatBonuses;
