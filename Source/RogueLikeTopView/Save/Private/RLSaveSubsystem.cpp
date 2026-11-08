@@ -286,6 +286,12 @@ bool URLSaveSubsystem::AutoSaveOnStageTransition(ARLCharacter* PlayerCharacter, 
 	// ★ 새 스테이지로 진입했으므로 아레나 클리어 플래그는 무조건 false로 초기화
 	CurrentRunData.bIsStageCleared = false;
 
+	// ★ 다음 스테이지 진입 시 상점 진열 상품 및 리롤 비용을 새로 갱신 (이전 스테이지에서 산 품절 상태 초기화)
+	if (URLShopSubsystem* ShopSub = URLShopSubsystem::Get(PlayerCharacter))
+	{
+		ShopSub->ResetShop();
+	}
+
 	// 맵이 바뀌면 이전 맵 좌표는 의미가 없으므로 비워둔다 (ApplyPlayerData는 영벡터면 위치 복원을 건너뜀 → PlayerStart 유지)
 	if (bSpawnAtPlayerStart)
 	{

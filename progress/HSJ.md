@@ -11,6 +11,9 @@
     - `RestartRunAfterDeath` 및 `URLGameOverWidget::RestorePlayerInput`에서 탑뷰 기본 입력 모드(`bShowMouseCursor = true`, `FInputModeGameAndUI`)로 복원하도록 통일
   - **보스 승리 시 이번 런 획득 영혼(`RunSouls`) 영구 정산 연동 (`RLPlayerController.cpp`, `RLSaveSubsystem.cpp`)**:
     - `SaveBossVictoryRunProgress`에서 보스 보상 수령/승리 저장 시 누적된 `RunSouls`를 `TotalSouls`로 즉시 입금하고 `RunSouls = 0`으로 비워 승리 후 영혼 누락 및 중복 입금 방지
+  - **스테이지 전환 시 상점 자동 리셋 및 보유 유물 중복 진열 방지 (`RLSaveSubsystem.cpp`, `RLShopSubsystem.cpp`)**:
+    - `AutoSaveOnStageTransition`에서 포탈을 통해 다음 스테이지로 이동할 때 `ShopSubsystem->ResetShop()`을 호출하여 이전 스테이지의 품절 상태와 리롤 비용을 초기화하고 새 상품 진열
+    - `RollRandomShopItem`에서 플레이어가 이미 보유 중인 패시브 유물(`MaxStackSize <= 1`)은 후보에서 제외하여 중복 진열 방지
 - **코드베이스 리팩토링 및 중복 호출 버그 수정** (`Source/RogueLikeTopView/`):
   - **피격/사망 연출 2중 호출 버그 수정 (`RLDamageNumberSubsystem.cpp`)**:
     - `URLDamageNumberListener::HandleHealthChanged`에서 `URLCombatFeedbackSubsystem`의 `NotifyCharacterDamaged` 및 `NotifyCharacterDied`를 중복 호출하던 문제를 제거하고, `URLCombatFeedbackListener`가 전담하도록 일원화

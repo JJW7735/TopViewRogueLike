@@ -6,6 +6,7 @@
 #include "RLHealthComponent.h"
 #include "RLItemDataAsset.h"
 #include "RLItemPoolDataAsset.h"
+#include "RLSaveSubsystem.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "Engine/Engine.h"
 #include "Kismet/GameplayStatics.h"
@@ -135,11 +136,46 @@ FRLShopItem URLShopSubsystem::RollRandomShopItem(int32 SlotIndex, const TArray<F
 	// 2. 카테고리별 상품 선정
 	if (ChosenCategory == ERLShopItemCategory::Item && ItemPool.Num() > 0)
 	{
+		URLInventoryComponent* PlayerInv = nullptr;
+		if (ARLCharacter* PlayerChar = Cast<ARLCharacter>(UGameplayStatics::GetPlayerCharacter(this, 0)))
+		{
+			PlayerInv = PlayerChar->GetInventoryComponent();
+		}
+
+		auto IsAlreadyOwnedPassive = [this, PlayerInv](const URLItemDataAsset* Asset) -> bool
+		{
+			if (!Asset || Asset->MaxStackSize > 1 || Asset->ItemID.IsNone())
+			{
+				return false;
+			}
+			// 1. 현재 월드에 스폰된 플레이어 인벤토리에 이미 있는지 확인
+			if (PlayerInv && PlayerInv->HasItem(Asset->ItemID))
+			{
+				return true;
+			}
+			// 2. 이어하기/맵 전환 중 아직 플레이어가 스폰되기 전이라도 저장된 활성 런 인벤토리에 있으면 중복 진열 제외
+			if (const URLSaveSubsystem* SaveSys = URLSaveSubsystem::Get(this))
+			{
+				if (SaveSys->HasActiveRun())
+				{
+					for (const FRLInventorySlotSaveData& SavedSlot : SaveSys->GetActiveRunData().Inventory.Slots)
+					{
+						if (SavedSlot.ItemID == Asset->ItemID)
+						{
+							return true;
+						}
+					}
+				}
+			}
+			return false;
+		};
+
 		TArray<URLItemDataAsset*> Candidates;
 		for (URLItemDataAsset* ItemAsset : ItemPool)
 		{
 			if (!ItemAsset) continue;
 			if (ExcludedIDs.Contains(FName(*ItemAsset->ItemName.ToString()))) continue;
+			if (IsAlreadyOwnedPassive(ItemAsset)) continue;
 
 			// 슬롯 0은 소비 아이템 우선
 			if (SlotIndex == 0 && ItemAsset->ItemType != ERLItemType::Consumable)
@@ -153,16 +189,17 @@ FRLShopItem URLShopSubsystem::RollRandomShopItem(int32 SlotIndex, const TArray<F
 			}
 		}
 
-		// 해당 희귀도가 없으면 아무 아이템이나 후보에 추가
+		// 해당 희귀도가 없으면 아무 아이템이나 후보에 추가 (단, 슬롯 0 소비 아이템 규칙 및 보유 유물 제외는 유지)
 		if (Candidates.Num() == 0)
 		{
 			for (URLItemDataAsset* ItemAsset : ItemPool)
 			{
 				if (!ItemAsset) continue;
-				if (!ExcludedIDs.Contains(FName(*ItemAsset->ItemName.ToString())))
-				{
-					Candidates.Add(ItemAsset);
-				}
+				if (ExcludedIDs.Contains(FName(*ItemAsset->ItemName.ToString()))) continue;
+				if (IsAlreadyOwnedPassive(ItemAsset)) continue;
+				if (SlotIndex == 0 && ItemAsset->ItemType != ERLItemType::Consumable) continue;
+
+				Candidates.Add(ItemAsset);
 			}
 		}
 
