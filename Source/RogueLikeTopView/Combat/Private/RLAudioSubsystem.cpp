@@ -489,7 +489,56 @@ void URLAudioSubsystem::PlayBGMTrack(ERLBGMTrack Track, float CrossfadeDuration,
 	USoundBase* NewSound = BGMTracks.FindRef(Track);
 	if (!NewSound)
 	{
-		return;
+		// 사전 로드되지 않은 트랙(RL.PlayBGM 콘솔 테스트 또는 블루프린트 수동 호출)은 온디맨드로 로드
+		switch (Track)
+		{
+		case ERLBGMTrack::Battle_TheAmbush:
+			NewSound = LoadLoopingMusicAsset(
+				TEXT("/Game/ARPGMusicPack/wav/02_The_Ambush_BattleTrack.02_The_Ambush_BattleTrack"),
+				TEXT("/Game/ARPGMusicPack/cues/02_The_Ambush_BattleTrack_Cue.02_The_Ambush_BattleTrack_Cue"));
+			break;
+		case ERLBGMTrack::Battle_EnemyApproaches:
+			NewSound = LoadLoopingMusicAsset(
+				TEXT("/Game/ARPGMusicPack/wav/03_Enemy_Approaches_BattleTrack.03_Enemy_Approaches_BattleTrack"),
+				TEXT("/Game/ARPGMusicPack/cues/03_Enemy_Approaches_BattleTrack_Cue.03_Enemy_Approaches_BattleTrack_Cue"));
+			break;
+		case ERLBGMTrack::Explore_MistyLands:
+			NewSound = LoadLoopingMusicAsset(
+				TEXT("/Game/ARPGMusicPack/wav/05_Misty_Lands_ExplorationTrack.05_Misty_Lands_ExplorationTrack"),
+				TEXT("/Game/ARPGMusicPack/cues/05_Misty_Lands_ExplorationTrack_Cue.05_Misty_Lands_ExplorationTrack_Cue"));
+			break;
+		case ERLBGMTrack::Explore_Atmospheres1:
+			NewSound = LoadLoopingMusicAsset(
+				TEXT("/Game/ARPGMusicPack/wav/06_Through_The_Lands_-_Atmospheres_Part_I__ExplorationTrack.06_Through_The_Lands_-_Atmospheres_Part_I__ExplorationTrack"),
+				TEXT("/Game/ARPGMusicPack/cues/06_Through_The_Lands_-_Atmospheres_Part_I__ExplorationTrack_Cue.06_Through_The_Lands_-_Atmospheres_Part_I__ExplorationTrack_Cue"));
+			break;
+		case ERLBGMTrack::Explore_MountainHalls:
+			NewSound = LoadLoopingMusicAsset(
+				TEXT("/Game/ARPGMusicPack/wav/07_Mountain_Halls__ExplorationTrack.07_Mountain_Halls__ExplorationTrack"),
+				TEXT("/Game/ARPGMusicPack/cues/07_Mountain_Halls__ExplorationTrack_Cue.07_Mountain_Halls__ExplorationTrack_Cue"));
+			break;
+		case ERLBGMTrack::Explore_Atmospheres2:
+			NewSound = LoadLoopingMusicAsset(
+				TEXT("/Game/ARPGMusicPack/wav/08_Through_The_Lands_-_Atmospheres_Part_II_ExplorationTrack.08_Through_The_Lands_-_Atmospheres_Part_II_ExplorationTrack"),
+				TEXT("/Game/ARPGMusicPack/cues/08_Through_The_Lands_-_Atmospheres_Part_II_ExplorationTrack_Cue.08_Through_The_Lands_-_Atmospheres_Part_II_ExplorationTrack_Cue"));
+			break;
+		case ERLBGMTrack::Explore_Atmospheres3:
+			NewSound = LoadLoopingMusicAsset(
+				TEXT("/Game/ARPGMusicPack/wav/10_Through_The_Lands_-_Atmospheres_Part_III_ExplorationTrack.10_Through_The_Lands_-_Atmospheres_Part_III_ExplorationTrack"),
+				TEXT("/Game/ARPGMusicPack/cues/10_Through_The_Lands_-_Atmospheres_Part_III_ExplorationTrack_Cue.10_Through_The_Lands_-_Atmospheres_Part_III_ExplorationTrack_Cue"));
+			break;
+		default:
+			break;
+		}
+
+		if (NewSound)
+		{
+			BGMTracks.Add(Track, NewSound);
+		}
+		else
+		{
+			return;
+		}
 	}
 
 	UWorld* World = GetWorld();
@@ -540,6 +589,12 @@ void URLAudioSubsystem::PlayBGMTrack(ERLBGMTrack Track, float CrossfadeDuration,
 
 void URLAudioSubsystem::StopBGM(float FadeOutDuration)
 {
+	// 이미 정지 상태이거나 페이드 아웃 진행 중이면 진행 중인 페이드 아웃을 끊지 않고 그대로 유지
+	if (!ActiveBGMComp && CurrentTrack == ERLBGMTrack::None)
+	{
+		return;
+	}
+
 	if (FadingOutBGMComp)
 	{
 		FadingOutBGMComp->Stop();

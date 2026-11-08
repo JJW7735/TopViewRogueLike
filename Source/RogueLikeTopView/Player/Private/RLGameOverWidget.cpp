@@ -56,8 +56,9 @@ void URLGameOverWidget::RestorePlayerInput()
 {
 	if (APlayerController* PC = GetOwningPlayer())
 	{
-		PC->bShowMouseCursor = false;
-		FInputModeGameOnly InputMode;
+		PC->bShowMouseCursor = true;
+		FInputModeGameAndUI InputMode;
+		InputMode.SetHideCursorDuringCapture(false);
 		PC->SetInputMode(InputMode);
 	}
 

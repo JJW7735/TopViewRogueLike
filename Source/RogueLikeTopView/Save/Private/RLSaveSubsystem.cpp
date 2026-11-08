@@ -416,8 +416,9 @@ void URLSaveSubsystem::RestartRunAfterDeath(FName RestartLevelName)
 
 	if (APlayerController* PC = UGameplayStatics::GetPlayerController(this, 0))
 	{
-		PC->bShowMouseCursor = false;
-		FInputModeGameOnly InputMode;
+		PC->bShowMouseCursor = true;
+		FInputModeGameAndUI InputMode;
+		InputMode.SetHideCursorDuringCapture(false);
 		PC->SetInputMode(InputMode);
 	}
 	UGameplayStatics::SetGamePaused(this, false);
