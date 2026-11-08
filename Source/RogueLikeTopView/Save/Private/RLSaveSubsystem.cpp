@@ -520,8 +520,8 @@ bool URLSaveSubsystem::SpendTotalSouls(int32 Amount)
 
 void URLSaveSubsystem::AddRunSouls(int32 Amount)
 {
-	if (Amount <= 0) return;
-	CurrentRunData.RunSouls += Amount;
+	if (Amount == 0) return;
+	CurrentRunData.RunSouls = FMath::Max(0, CurrentRunData.RunSouls + Amount);
 	OnRunSoulsChanged.Broadcast(CurrentRunData.RunSouls, Amount);
 }
 

@@ -9,6 +9,8 @@
     - 시작 시에는 필수 트랙 3종만 로드하되, `RL.PlayBGM` 콘솔 명령어나 수동 호출로 나머지 트랙(2, 3, 5, 6, 7, 8, 10번) 재생 요청 시 온디맨드로 로드 및 캐싱하도록 보완
   - **사망 후 재시작 시 마우스 커서/입력 모드 일관성 수정 (`RLSaveSubsystem.cpp`, `RLGameOverWidget.cpp`)**:
     - `RestartRunAfterDeath` 및 `URLGameOverWidget::RestorePlayerInput`에서 탑뷰 기본 입력 모드(`bShowMouseCursor = true`, `FInputModeGameAndUI`)로 복원하도록 통일
+  - **보스 승리 시 이번 런 획득 영혼(`RunSouls`) 영구 정산 연동 (`RLPlayerController.cpp`, `RLSaveSubsystem.cpp`)**:
+    - `SaveBossVictoryRunProgress`에서 보스 보상 수령/승리 저장 시 누적된 `RunSouls`를 `TotalSouls`로 즉시 입금하고 `RunSouls = 0`으로 비워 승리 후 영혼 누락 및 중복 입금 방지
 - **코드베이스 리팩토링 및 중복 호출 버그 수정** (`Source/RogueLikeTopView/`):
   - **피격/사망 연출 2중 호출 버그 수정 (`RLDamageNumberSubsystem.cpp`)**:
     - `URLDamageNumberListener::HandleHealthChanged`에서 `URLCombatFeedbackSubsystem`의 `NotifyCharacterDamaged` 및 `NotifyCharacterDied`를 중복 호출하던 문제를 제거하고, `URLCombatFeedbackListener`가 전담하도록 일원화
