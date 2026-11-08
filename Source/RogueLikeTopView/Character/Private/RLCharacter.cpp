@@ -228,6 +228,12 @@ void ARLCharacter::BeginPlay()
             {
                 // ★ 신규 런 시작: 저장된 런 이어하기가 아니라면 영구 메타 강화 스탯을 플레이어에게 적용!
                 SaveSys->ApplyMetaUpgradesToPlayer(this);
+
+                // 이전 판의 버프 획득 기록(GameInstance 서브시스템에 남아 있음)을 비운다
+                if (URLRewardSubsystem* RewardSys = URLRewardSubsystem::GetRewardSubsystem(this))
+                {
+                    RewardSys->ResetAcquiredRewards();
+                }
             }
         }
     }

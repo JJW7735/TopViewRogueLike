@@ -142,3 +142,21 @@ struct FRLRewardData
 		return GetRarityDisplayName(Rarity);
 	}
 };
+
+/**
+ * 이번 판에 획득한 영구 버프(보상 카드/상점 축복) 1종의 기록.
+ * 같은 RewardID를 여러 번 얻으면 항목을 늘리지 않고 Count만 올린다. (인벤토리 "버프" 탭 표시용)
+ */
+USTRUCT(BlueprintType)
+struct FRLAcquiredReward
+{
+	GENERATED_BODY()
+
+	// 획득한 보상 데이터 (아이콘/이름/희귀도/스탯 보너스)
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Reward")
+	FRLRewardData Reward;
+
+	// 이번 판에 획득한 횟수
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Reward")
+	int32 Count = 1;
+};
