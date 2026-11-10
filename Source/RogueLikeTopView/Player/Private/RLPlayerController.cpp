@@ -363,7 +363,13 @@ bool ARLPlayerController::GetGroundHitUnderCursor(FHitResult& OutHit) const
 {
 	FVector RayOrigin;
 	FVector RayDirection;
-	if (!DeprojectMousePositionToWorld(RayOrigin, RayDirection))
+	if (bUseVirtualCursor)
+	{
+		// 자동 테스트 봇: 가상 커서 바로 위에서 아래로 쏜다. 이후 바닥 판정 규칙은 마우스와 동일.
+		RayOrigin = VirtualCursorLocation + FVector(0.0f, 0.0f, 3000.0f);
+		RayDirection = FVector::DownVector;
+	}
+	else if (!DeprojectMousePositionToWorld(RayOrigin, RayDirection))
 	{
 		return false;
 	}
@@ -431,6 +437,74 @@ bool ARLPlayerController::GetGroundHitUnderCursor(FHitResult& OutHit) const
 	}
 
 	return false;
+}
+
+// ==========================================
+// 자동 테스트 / 봇 전용 (DevTools)
+// ==========================================
+void ARLPlayerController::SetVirtualCursor(FVector WorldLocation)
+{
+	bUseVirtualCursor = true;
+	VirtualCursorLocation = WorldLocation;
+}
+
+void ARLPlayerController::ClearVirtualCursor()
+{
+	bUseVirtualCursor = false;
+}
+
+void ARLPlayerController::SimulateInput(ERLSimInput Input, ERLSimInputPhase Phase)
+{
+	const bool bStarted = Phase == ERLSimInputPhase::Started;
+	const bool bTriggered = Phase == ERLSimInputPhase::Triggered;
+
+	switch (Input)
+	{
+	case ERLSimInput::Move:
+		if (bStarted) { OnMoveStarted(); }
+		else if (bTriggered) { OnMoveTriggered(); }
+		break;
+	case ERLSimInput::BasicAttack:
+		if (bStarted) { OnBasicAttack_Started(); }
+		else if (bTriggered) { OnBasicAttack_Triggered(); }
+		else { OnBasicAttack_Completed(); }
+		break;
+	case ERLSimInput::SkillQ:
+		if (bStarted) { OnSkillQ_Started(); }
+		else if (bTriggered) { OnSkillQ_Triggered(); }
+		else { OnSkillQ_Completed(); }
+		break;
+	case ERLSimInput::SkillW:
+		if (bStarted) { OnSkillW_Started(); }
+		else if (bTriggered) { OnSkillW_Triggered(); }
+		else { OnSkillW_Completed(); }
+		break;
+	case ERLSimInput::SkillE:
+		if (bStarted) { OnSkillE_Started(); }
+		else if (bTriggered) { OnSkillE_Triggered(); }
+		else { OnSkillE_Completed(); }
+		break;
+	case ERLSimInput::SkillR:
+		if (bStarted) { OnSkillR_Started(); }
+		else if (bTriggered) { OnSkillR_Triggered(); }
+		else { OnSkillR_Completed(); }
+		break;
+	case ERLSimInput::Dodge:
+		if (bStarted) { OnDodge_Started(); }
+		break;
+	case ERLSimInput::Interact:
+		if (bStarted) { OnInteract_Started(); }
+		break;
+	case ERLSimInput::QuickSlot1:
+		if (bStarted) { UseQuickSlot(0); }
+		break;
+	case ERLSimInput::QuickSlot2:
+		if (bStarted) { UseQuickSlot(1); }
+		break;
+	case ERLSimInput::QuickSlot3:
+		if (bStarted) { UseQuickSlot(2); }
+		break;
+	}
 }
 
 void ARLPlayerController::OnDodge_Started()

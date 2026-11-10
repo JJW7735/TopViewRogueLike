@@ -12,6 +12,32 @@ class UMaterialParameterCollection;
 class UUserWidget;
 class ARLRewardChest;
 
+// ★ 자동 테스트 봇(개인 DevTools 플러그인)이 "플레이어 조작"을 흉내 낼 때 쓰는 입력 종류.
+// 실제 Enhanced Input 핸들러(OnMoveTriggered, OnSkillQ_Started ...)를 그대로 호출하므로 사람 입력과 같은 경로를 탄다.
+UENUM(BlueprintType)
+enum class ERLSimInput : uint8
+{
+	Move,
+	BasicAttack,
+	SkillQ,
+	SkillW,
+	SkillE,
+	SkillR,
+	Dodge,
+	Interact,
+	QuickSlot1,
+	QuickSlot2,
+	QuickSlot3
+};
+
+UENUM(BlueprintType)
+enum class ERLSimInputPhase : uint8
+{
+	Started,
+	Triggered,
+	Completed
+};
+
 UCLASS()
 class ROGUELIKETOPVIEW_API ARLPlayerController : public APlayerController
 {
@@ -78,6 +104,24 @@ public:
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "UI|Victory")
 	FName MainMenuLevelName = FName("L_MainMenu");
+
+	// ==========================================
+	// 자동 테스트 / 봇 전용 (DevTools)
+	// ==========================================
+	// ★ 가상 커서: 켜져 있으면 GetGroundHitUnderCursor가 마우스 대신 이 월드 좌표 바로 위에서 아래로 쏴서 바닥을 찾는다.
+	// 화면이 없는(-nullrhi) 자동 테스트에서도 이동/회피/조준 스킬이 실제 플레이어 코드 경로 그대로 동작하게 하기 위함.
+	UFUNCTION(BlueprintCallable, Category = "DevTools|Bot")
+	void SetVirtualCursor(FVector WorldLocation);
+
+	UFUNCTION(BlueprintCallable, Category = "DevTools|Bot")
+	void ClearVirtualCursor();
+
+	UFUNCTION(BlueprintPure, Category = "DevTools|Bot")
+	bool IsUsingVirtualCursor() const { return bUseVirtualCursor; }
+
+	// ★ 키/마우스 입력 한 번을 흉내 낸다. 바인딩된 입력 핸들러를 그대로 호출 (Move/Dodge/Interact/QuickSlot은 Started·Triggered만 의미 있음)
+	UFUNCTION(BlueprintCallable, Category = "DevTools|Bot")
+	void SimulateInput(ERLSimInput Input, ERLSimInputPhase Phase);
 
 protected:
 	virtual void BeginPlay() override;
@@ -173,4 +217,7 @@ private:
 
 	UPROPERTY()
 	TObjectPtr<UUserWidget> VictoryWidget;
+
+	bool bUseVirtualCursor = false;
+	FVector VirtualCursorLocation = FVector::ZeroVector;
 };
