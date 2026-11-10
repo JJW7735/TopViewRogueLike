@@ -97,9 +97,9 @@ struct FRLRewardData
 	float SelectionWeight = 1.0f;
 
 	// 희귀도에 맞는 테마 색상 반환 (UI 테두리/빛 연출용)
-	FLinearColor GetRarityColor() const
+	static FLinearColor GetRarityColor(ERLRewardRarity InRarity)
 	{
-		switch (Rarity)
+		switch (InRarity)
 		{
 		case ERLRewardRarity::Common:
 			return FLinearColor(0.85f, 0.85f, 0.85f, 1.0f); // Slate White
@@ -114,10 +114,15 @@ struct FRLRewardData
 		}
 	}
 
-	// 희귀도 표시 문자열
-	FText GetRarityDisplayName() const
+	FLinearColor GetRarityColor() const
 	{
-		switch (Rarity)
+		return GetRarityColor(Rarity);
+	}
+
+	// 희귀도 표시 문자열
+	static FText GetRarityDisplayName(ERLRewardRarity InRarity)
+	{
+		switch (InRarity)
 		{
 		case ERLRewardRarity::Common:
 			return NSLOCTEXT("RLReward", "Common", "일반");
@@ -131,4 +136,27 @@ struct FRLRewardData
 			return FText::GetEmpty();
 		}
 	}
+
+	FText GetRarityDisplayName() const
+	{
+		return GetRarityDisplayName(Rarity);
+	}
+};
+
+/**
+ * 이번 판에 획득한 영구 버프(보상 카드/상점 축복) 1종의 기록.
+ * 같은 RewardID를 여러 번 얻으면 항목을 늘리지 않고 Count만 올린다. (인벤토리 "버프" 탭 표시용)
+ */
+USTRUCT(BlueprintType)
+struct FRLAcquiredReward
+{
+	GENERATED_BODY()
+
+	// 획득한 보상 데이터 (아이콘/이름/희귀도/스탯 보너스)
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Reward")
+	FRLRewardData Reward;
+
+	// 이번 판에 획득한 횟수
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Reward")
+	int32 Count = 1;
 };

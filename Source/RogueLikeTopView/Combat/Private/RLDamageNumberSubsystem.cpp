@@ -29,15 +29,6 @@ void URLDamageNumberListener::HandleHealthChanged(float CurrentHealth, float Max
 	if (URLCombatFeedbackSubsystem* FeedbackSub = URLCombatFeedbackSubsystem::Get(Victim.Get()))
 	{
 		bIsCritical = FeedbackSub->IsCurrentHitCritical(nullptr);
-
-		if (ARLCharacter* VictimRL = Cast<ARLCharacter>(Victim.Get()))
-		{
-			FeedbackSub->NotifyCharacterDamaged(VictimRL, HealthDelta, nullptr);
-			if (CurrentHealth <= 0.0f)
-			{
-				FeedbackSub->NotifyCharacterDied(VictimRL);
-			}
-		}
 	}
 
 	OwnerSubsystem->SpawnDamageNumber(HealthDelta, Location, bIsCritical);

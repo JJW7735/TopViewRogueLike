@@ -38,22 +38,6 @@ void ARLPortal::OnOverlapBegin(UPrimitiveComponent* OverlappedComp, AActor* Othe
     ARLCharacter* PlayerChar = Cast<ARLCharacter>(OtherActor);
     if (PlayerChar && HasDestination())
     {
-        // ▼ 기존 로직: 닿자마자 바로 텔레포트했었음. 이제 E키 누를 때(TryInteract → ActivatePortal)만 실행되도록 변경.
-        // // 중복해서 포탈을 타는 버그를 막기 위해, 한 번 닿으면 포탈의 충돌을 바로 꺼버립니다.
-        // PortalCollision->SetCollisionEnabled(ECollisionEnabled::NoCollision);
-        //
-        // OverlappedPlayer = PlayerChar;
-        //
-        // // 4. 새로운 맵(Map_B) 로딩을 시작합니다! (이때 게임이 멈추지 않고 비동기로 로딩됩니다.)
-        // FLatentActionInfo LatentInfo;
-        // LatentInfo.CallbackTarget = this;
-        // LatentInfo.ExecutionFunction = FName("OnLevelLoaded"); // 로딩 끝나면 이 함수를 실행해라!
-        // LatentInfo.Linkage = 0;
-        // LatentInfo.UUID = GetUniqueID(); // 안전한 고유 ID 배정
-        //
-        // UGameplayStatics::LoadStreamLevel(this, LevelToLoad, true, false, LatentInfo);
-
-        // ▼ 새 로직: 포탈 범위에 들어왔다는 것만 캐릭터에게 알려줌
         PlayerChar->SetNearbyPortal(this);
     }
 }

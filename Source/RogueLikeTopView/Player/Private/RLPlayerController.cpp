@@ -225,6 +225,16 @@ namespace
 				const FString RawMapName = PC->GetWorld() ? PC->GetWorld()->GetMapName() : TEXT("L_Soul");
 				const FString CleanMapName = UWorld::RemovePIEPrefix(RawMapName);
 				const int32 StageNum = FMath::Max(1, SaveSys->GetActiveRunData().StageNumber);
+
+				// ★ 보스 승리 시 이번 런에서 모은 임시 영혼(RunSouls)을 영구 영혼(TotalSouls)으로 즉시 정산하고
+				//   RunSouls를 0으로 비운 뒤 저장합니다 (승리 후 영혼 누락 및 중복 입금 방지)
+				const int32 EarnedSouls = SaveSys->GetRunSouls();
+				if (EarnedSouls > 0)
+				{
+					SaveSys->AddTotalSouls(EarnedSouls);
+					SaveSys->AddRunSouls(-EarnedSouls);
+				}
+
 				SaveSys->SaveActiveRun(PlayerChar, FName(*CleanMapName), StageNum, PlayerChar->GetActorLocation());
 				SaveSys->RecordStageClear(StageNum);
 			}

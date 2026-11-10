@@ -8,6 +8,7 @@
 class ARLCharacter;
 class URLSkillData;
 class UFXSystemAsset;
+class USoundBase;
 class UMaterialInterface;
 class USpringArmComponent;
 class UMaterialInstanceDynamic;
@@ -155,6 +156,10 @@ private:
 	UFXSystemAsset* ResolveHitVFXAndColor(const URLSkillData* SkillData, bool bIsCritical, FLinearColor& OutLightColor) const;
 	void SpawnFXAtTransform(UFXSystemAsset* FXAsset, const FVector& Location, const FRotator& Rotation = FRotator::ZeroRotator, const FVector& Scale = FVector::OneVector);
 
+	void PlayAutoSkillCastSFX(ARLCharacter* Caster, const URLSkillData* SkillData, const FVector& TargetLocation);
+	void PlayAutoHitImpactSFX(ARLCharacter* Victim, ARLCharacter* Attacker, const URLSkillData* SkillData, bool bIsCritical, const FVector& ImpactLocation);
+	void PlayRandomSFXFromPool(const TArray<TObjectPtr<USoundBase>>& Pool, const FVector& Location, float VolumeScale, float PitchMin, float PitchMax);
+
 	void TriggerMeshImpactAndFlash(ACharacter* Victim, const FVector& ImpactLocation, bool bIsCritical, const FLinearColor& ElementLightColor);
 	void SpawnImpactFlashLight(const FVector& Location, bool bIsCritical, const FLinearColor& ElementLightColor);
 
@@ -228,6 +233,43 @@ private:
 	/** 피격 순간 메시 위에 잠깐 씌울 발광 오버레이 머티리얼 */
 	UPROPERTY()
 	TObjectPtr<UMaterialInterface> DefaultHitOverlayMaterial = nullptr;
+
+	// ==========================================
+	// RPG_Fantasy_SFX 타격/시전 효과음 풀 캐시
+	// ==========================================
+	UPROPERTY()
+	TArray<TObjectPtr<USoundBase>> BladeHitSFXPool;
+
+	UPROPERTY()
+	TArray<TObjectPtr<USoundBase>> HeavyBluntHitSFXPool;
+
+	UPROPERTY()
+	TArray<TObjectPtr<USoundBase>> FireHitSFXPool;
+
+	UPROPERTY()
+	TArray<TObjectPtr<USoundBase>> LightningHitSFXPool;
+
+	UPROPERTY()
+	TArray<TObjectPtr<USoundBase>> ArcaneHitSFXPool;
+
+	UPROPERTY()
+	TArray<TObjectPtr<USoundBase>> ArmorPlayerHitSFXPool;
+
+	UPROPERTY()
+	TArray<TObjectPtr<USoundBase>> WeaponSwingSFXPool;
+
+	UPROPERTY()
+	TArray<TObjectPtr<USoundBase>> SpellCastSFXPool;
+
+	UPROPERTY()
+	TArray<TObjectPtr<USoundBase>> CritBonusSFXPool;
+
+	UPROPERTY()
+	TArray<TObjectPtr<USoundBase>> EnemyDeathSFXPool;
+
+	double LastHitSFXRealTime = 0.0;
+	double LastCastSFXRealTime = 0.0;
+	double LastDeathSFXRealTime = 0.0;
 
 	bool bTriedLoadingDefaultAssets = false;
 

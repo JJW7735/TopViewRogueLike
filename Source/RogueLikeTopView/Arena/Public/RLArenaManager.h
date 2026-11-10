@@ -339,6 +339,7 @@ protected:
 
 	void CompleteCurrentWave();
 	void CompleteArena();
+	void SpawnOrActivateExitPortal();
 	void CheckInitialPlayerOverlap();
 
 private:

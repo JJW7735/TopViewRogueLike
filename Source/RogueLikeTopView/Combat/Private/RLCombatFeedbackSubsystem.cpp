@@ -4,6 +4,7 @@
 #include "RLHealthComponent.h"
 #include "RLSkillData.h"
 #include "RLGameplayCueNotifies.h"
+#include "Sound/SoundBase.h"
 #include "Particles/ParticleSystem.h"
 #include "NiagaraSystem.h"
 #include "NiagaraFunctionLibrary.h"
@@ -210,6 +211,54 @@ void URLCombatFeedbackSubsystem::EnsureDefaultAssetsLoaded()
 	// 4. 피격 오버레이 머티리얼
 	DefaultHitOverlayMaterial = LoadObject<UMaterialInterface>(nullptr,
 		TEXT("/Game/Effect/Material/M_DropGlow.M_DropGlow"));
+
+	// 5. RPG_Fantasy_SFX 타격/시전 효과음 풀 로드
+	auto LoadSFXGroup = [](const TCHAR* Folder, const TCHAR* Prefix, TArray<TObjectPtr<USoundBase>>& OutPool)
+	{
+		for (int32 i = 1; i <= 4; ++i)
+		{
+			const FString AssetName = FString::Printf(TEXT("%s__%d_"), Prefix, i);
+			const FString FullPath = FString::Printf(TEXT("/Game/RPG_Fantasy_SFX/%s/%s.%s"), Folder, *AssetName, *AssetName);
+			if (USoundBase* LoadedSound = LoadObject<USoundBase>(nullptr, *FullPath))
+			{
+				OutPool.Add(LoadedSound);
+			}
+		}
+	};
+
+	// ① 블레이드 / 참격 타격음 (Sword + Daggers)
+	LoadSFXGroup(TEXT("Sword"), TEXT("12"), BladeHitSFXPool);
+	LoadSFXGroup(TEXT("Daggers"), TEXT("6"), BladeHitSFXPool);
+
+	// ② 디스트로이어 / 보스 둔기 강타 타격음 (Axes + Combat + Weapon)
+	LoadSFXGroup(TEXT("Axes"), TEXT("11"), HeavyBluntHitSFXPool);
+	LoadSFXGroup(TEXT("Combat"), TEXT("5"), HeavyBluntHitSFXPool);
+	LoadSFXGroup(TEXT("Weapon"), TEXT("4"), HeavyBluntHitSFXPool);
+
+	// ③ 화염 마법 폭발/타격음 (Elemental + Spell)
+	LoadSFXGroup(TEXT("Elemental"), TEXT("2"), FireHitSFXPool);
+	LoadSFXGroup(TEXT("Spell"), TEXT("8"), FireHitSFXPool);
+
+	// ④ 번개 마법 감전/타격음 (Magical + Enchantment)
+	LoadSFXGroup(TEXT("Magical"), TEXT("3"), LightningHitSFXPool);
+	LoadSFXGroup(TEXT("Enchantment"), TEXT("1"), LightningHitSFXPool);
+
+	// ⑤ 소서리스 평타 / 비전 마법 / 원거리 차크라 타격음 (Magical + Dark + Arrows)
+	LoadSFXGroup(TEXT("Magical"), TEXT("3"), ArcaneHitSFXPool);
+	LoadSFXGroup(TEXT("Dark"), TEXT("1"), ArcaneHitSFXPool);
+	LoadSFXGroup(TEXT("Arrows"), TEXT("9"), ArcaneHitSFXPool);
+
+	// ⑥ 플레이어 피격 방어구/몸통 타격음 (Shields + Combat)
+	LoadSFXGroup(TEXT("Shields"), TEXT("10"), ArmorPlayerHitSFXPool);
+	LoadSFXGroup(TEXT("Combat"), TEXT("5"), ArmorPlayerHitSFXPool);
+
+	// ⑦ 무기 휘두르기 / 마법 시전 / 치명타 추가 레이어 / 처치 마무리음
+	LoadSFXGroup(TEXT("Swing"), TEXT("1"), WeaponSwingSFXPool);
+	LoadSFXGroup(TEXT("Spell"), TEXT("8"), SpellCastSFXPool);
+	LoadSFXGroup(TEXT("Enchantment"), TEXT("1"), SpellCastSFXPool);
+	LoadSFXGroup(TEXT("Weapon"), TEXT("4"), CritBonusSFXPool);
+	LoadSFXGroup(TEXT("Shields"), TEXT("10"), CritBonusSFXPool);
+	LoadSFXGroup(TEXT("Dark"), TEXT("1"), EnemyDeathSFXPool);
 }
 
 void URLCombatFeedbackSubsystem::SpawnFXAtTransform(UFXSystemAsset* FXAsset, const FVector& Location, const FRotator& Rotation, const FVector& Scale)
@@ -302,14 +351,165 @@ UFXSystemAsset* URLCombatFeedbackSubsystem::ResolveHitVFXAndColor(const URLSkill
 	return bIsCritical ? DefaultCritHitVFX.Get() : DefaultNormalHitVFX.Get();
 }
 
+void URLCombatFeedbackSubsystem::PlayRandomSFXFromPool(const TArray<TObjectPtr<USoundBase>>& Pool, const FVector& Location, float VolumeScale, float PitchMin, float PitchMax)
+{
+	if (Pool.Num() == 0)
+	{
+		return;
+	}
+
+	USoundBase* Chosen = Pool[FMath::RandHelper(Pool.Num())].Get();
+	if (!Chosen)
+	{
+		return;
+	}
+
+	if (URLAudioSubsystem* AudioSys = URLAudioSubsystem::Get(this))
+	{
+		AudioSys->PlaySFXAtLocation(Chosen, Location, VolumeScale, PitchMin, PitchMax);
+	}
+	else if (UWorld* World = GetWorld())
+	{
+		UGameplayStatics::PlaySoundAtLocation(World, Chosen, Location, VolumeScale, FMath::FRandRange(PitchMin, PitchMax));
+	}
+}
+
+void URLCombatFeedbackSubsystem::PlayAutoSkillCastSFX(ARLCharacter* Caster, const URLSkillData* SkillData, const FVector& TargetLocation)
+{
+	if (!Caster || !SkillData)
+	{
+		return;
+	}
+
+	// 스킬 데이터에 이미 CastSound가 지정되어 있으면 중복 재생하지 않음
+	if (SkillData->CastSound)
+	{
+		return;
+	}
+
+	const double NowReal = FPlatformTime::Seconds();
+	const double MinCooldown = (SkillData->CastType == ESkillCastType::Hold) ? 0.16 : 0.06;
+	if (NowReal - LastCastSFXRealTime < MinCooldown)
+	{
+		return;
+	}
+	LastCastSFXRealTime = NowReal;
+
+	const FVector CasterLoc = Caster->GetActorLocation();
+	const FString Combined = (SkillData->GetName() + TEXT(" ") + SkillData->SkillName.ToString()).ToLower();
+
+	// 1. 지면 타겟 화염/폭발 스킬 (메테오/익스플로전 등)
+	if (SkillData->CastType == ESkillCastType::GroundTarget)
+	{
+		const FVector EffectLoc = TargetLocation.IsNearlyZero() ? CasterLoc : TargetLocation;
+		PlayRandomSFXFromPool(FireHitSFXPool, EffectLoc, 0.14f, 0.86f, 0.96f);
+		return;
+	}
+
+	// 2. 화염/번개/비전 마법 시전음
+	if (Combined.Contains(TEXT("fire")) || Combined.Contains(TEXT("inferno")) || Combined.Contains(TEXT("meteor")))
+	{
+		PlayRandomSFXFromPool(FireHitSFXPool, CasterLoc, 0.11f, 0.94f, 1.05f);
+		return;
+	}
+	if (Combined.Contains(TEXT("lightning")) || Combined.Contains(TEXT("thunder")))
+	{
+		PlayRandomSFXFromPool(LightningHitSFXPool, CasterLoc, 0.09f, 1.05f, 1.18f);
+		return;
+	}
+	if (Combined.Contains(TEXT("sorceress")) || SkillData->APScaling > SkillData->ADScaling)
+	{
+		PlayRandomSFXFromPool(SpellCastSFXPool, CasterLoc, 0.10f, 0.96f, 1.08f);
+		return;
+	}
+
+	// 3. 디스트로이어 묵직한 스윙 / 차지 해방음
+	if (Combined.Contains(TEXT("destroyer")) || SkillData->CastType == ESkillCastType::Charge)
+	{
+		PlayRandomSFXFromPool(WeaponSwingSFXPool, CasterLoc, 0.11f, 0.80f, 0.92f);
+		return;
+	}
+
+	// 4. 블레이드 및 기본 근접 무기 휘두르기 사운드
+	PlayRandomSFXFromPool(WeaponSwingSFXPool, CasterLoc, 0.10f, 0.95f, 1.08f);
+}
+
+void URLCombatFeedbackSubsystem::PlayAutoHitImpactSFX(ARLCharacter* Victim, ARLCharacter* Attacker, const URLSkillData* SkillData, bool bIsCritical, const FVector& ImpactLocation)
+{
+	if (!Victim)
+	{
+		return;
+	}
+
+	const double NowReal = FPlatformTime::Seconds();
+	const bool bIsHoldSkill = SkillData && SkillData->CastType == ESkillCastType::Hold;
+	const double MinHitInterval = bIsHoldSkill ? 0.11 : 0.075;
+
+	// 광역기/다단히트로 여러 몬스터를 같은 프레임에 동시에 타격할 때 사운드가 중첩되어 귀가 아픈 현상 방지
+	if (NowReal - LastHitSFXRealTime < MinHitInterval)
+	{
+		return;
+	}
+	LastHitSFXRealTime = NowReal;
+
+	// 1. 플레이어가 적에게 피격당했을 때: 절제된 방어구/몸통 충격음
+	if (Victim->TeamID == ERLTeam::Player)
+	{
+		PlayRandomSFXFromPool(ArmorPlayerHitSFXPool, ImpactLocation, 0.16f, 0.88f, 0.96f);
+		return;
+	}
+
+	const FString SkillCombined = SkillData
+		? (SkillData->GetName() + TEXT(" ") + SkillData->SkillName.ToString()).ToLower()
+		: TEXT("");
+	const FString AttackerName = Attacker
+		? (Attacker->GetClass()->GetName() + TEXT(" ") + Attacker->GetName()).ToLower()
+		: TEXT("");
+	const FString Combined = SkillCombined + TEXT(" ") + AttackerName;
+
+	// 2. 화염 계열 적중 (Fireball, Inferno, Explosion, Meteor)
+	if (Combined.Contains(TEXT("fire")) || Combined.Contains(TEXT("inferno")) || Combined.Contains(TEXT("explosion")) || Combined.Contains(TEXT("meteor")))
+	{
+		PlayRandomSFXFromPool(FireHitSFXPool, ImpactLocation, bIsCritical ? 0.17f : 0.13f, 0.88f, 1.02f);
+	}
+	// 3. 번개/뇌전 계열 적중 (Lightning)
+	else if (Combined.Contains(TEXT("lightning")) || Combined.Contains(TEXT("thunder")) || Combined.Contains(TEXT("shock")))
+	{
+		PlayRandomSFXFromPool(LightningHitSFXPool, ImpactLocation, bIsCritical ? 0.13f : 0.10f, 1.04f, 1.18f);
+	}
+	// 4. 소서리스 평타 / 비전 마법 / 차크라 원거리 적중
+	else if (Combined.Contains(TEXT("sorceress")) || Combined.Contains(TEXT("chakra")) || (SkillData && SkillData->APScaling > SkillData->ADScaling))
+	{
+		PlayRandomSFXFromPool(ArcaneHitSFXPool, ImpactLocation, bIsCritical ? 0.15f : 0.12f, 0.95f, 1.08f);
+	}
+	// 5. 디스트로이어 / 둔기 강타 계열 적중
+	else if (Combined.Contains(TEXT("destroyer")) || (SkillData && (SkillData->CastType == ESkillCastType::Charge || SkillData->CastType == ESkillCastType::ChargeDash)))
+	{
+		PlayRandomSFXFromPool(HeavyBluntHitSFXPool, ImpactLocation, bIsCritical ? 0.18f : 0.14f, 0.84f, 0.96f);
+	}
+	// 6. 블레이드 / 기본 참격 적중
+	else
+	{
+		PlayRandomSFXFromPool(BladeHitSFXPool, ImpactLocation, bIsCritical ? 0.16f : 0.13f, 0.94f, 1.08f);
+	}
+}
+
 void URLCombatFeedbackSubsystem::NotifySkillVFX(ARLCharacter* Caster, const URLSkillData* SkillData, const FVector& TargetLocation, int32 ComboIndex)
 {
-	if (!bEnableAutoSkillVFX || !Caster || !SkillData)
+	if (!Caster || !SkillData)
 	{
 		return;
 	}
 
 	EnsureDefaultAssetsLoaded();
+
+	// 스킬 시전/휘두르기 효과음 자동 재생 (ReleaseVFX 유무와 무관하게 작동)
+	PlayAutoSkillCastSFX(Caster, SkillData, TargetLocation);
+
+	if (!bEnableAutoSkillVFX)
+	{
+		return;
+	}
 
 	// 스킬 데이터에 이미 ReleaseVFX가 지정되어 있으면 중복 스폰하지 않음
 	if (SkillData->ReleaseVFX)
@@ -730,6 +930,10 @@ void URLCombatFeedbackSubsystem::NotifyCharacterDamaged(ARLCharacter* Victim, fl
 			UGameplayStatics::PlaySoundAtLocation(Victim, SkillData->HitSound, ImpactLoc);
 		}
 	}
+	else
+	{
+		PlayAutoHitImpactSFX(Victim, AttackerChar, SkillData, bIsCritical, ImpactLoc);
+	}
 
 	// 5. 절제된 카메라 쉐이크 & 줌 펀치
 	const bool bPlayerInvolved = (Victim->TeamID == ERLTeam::Player) || !AttackerChar || (AttackerChar->TeamID == ERLTeam::Player);
@@ -780,7 +984,7 @@ void URLCombatFeedbackSubsystem::NotifyCharacterDied(ARLCharacter* DeadCharacter
 
 	DeadCharacter->CustomTimeDilation = 1.0f;
 
-	// 적 처치 시 마무리 임팩트 이펙트 및 가벼운 줌 펀치
+	// 적 처치 시 마무리 임팩트 이펙트, 사운드 및 가벼운 줌 펀치
 	if (DeadCharacter->TeamID == ERLTeam::Enemy)
 	{
 		EnsureDefaultAssetsLoaded();
@@ -793,6 +997,14 @@ void URLCombatFeedbackSubsystem::NotifyCharacterDied(ARLCharacter* DeadCharacter
 		{
 			SpawnFXAtTransform(HeavyShockwaveVFX.Get(), DeathLoc, FRotator::ZeroRotator, FVector(0.85f));
 		}
+
+		const double NowReal = FPlatformTime::Seconds();
+		if (NowReal - LastDeathSFXRealTime >= 0.16)
+		{
+			LastDeathSFXRealTime = NowReal;
+			PlayRandomSFXFromPool(EnemyDeathSFXPool, DeathLoc, 0.11f, 0.86f, 0.96f);
+		}
+
 		TriggerCameraFeedback(15.0f * GlobalFeedbackIntensity, 0.12f, 24.0f * GlobalFeedbackIntensity);
 	}
 }

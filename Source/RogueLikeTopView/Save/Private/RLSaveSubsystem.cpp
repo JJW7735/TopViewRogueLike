@@ -286,6 +286,12 @@ bool URLSaveSubsystem::AutoSaveOnStageTransition(ARLCharacter* PlayerCharacter, 
 	// ★ 새 스테이지로 진입했으므로 아레나 클리어 플래그는 무조건 false로 초기화
 	CurrentRunData.bIsStageCleared = false;
 
+	// ★ 다음 스테이지 진입 시 상점 진열 상품 및 리롤 비용을 새로 갱신 (이전 스테이지에서 산 품절 상태 초기화)
+	if (URLShopSubsystem* ShopSub = URLShopSubsystem::Get(PlayerCharacter))
+	{
+		ShopSub->ResetShop();
+	}
+
 	// 맵이 바뀌면 이전 맵 좌표는 의미가 없으므로 비워둔다 (ApplyPlayerData는 영벡터면 위치 복원을 건너뜀 → PlayerStart 유지)
 	if (bSpawnAtPlayerStart)
 	{
@@ -416,8 +422,9 @@ void URLSaveSubsystem::RestartRunAfterDeath(FName RestartLevelName)
 
 	if (APlayerController* PC = UGameplayStatics::GetPlayerController(this, 0))
 	{
-		PC->bShowMouseCursor = false;
-		FInputModeGameOnly InputMode;
+		PC->bShowMouseCursor = true;
+		FInputModeGameAndUI InputMode;
+		InputMode.SetHideCursorDuringCapture(false);
 		PC->SetInputMode(InputMode);
 	}
 	UGameplayStatics::SetGamePaused(this, false);
@@ -519,8 +526,8 @@ bool URLSaveSubsystem::SpendTotalSouls(int32 Amount)
 
 void URLSaveSubsystem::AddRunSouls(int32 Amount)
 {
-	if (Amount <= 0) return;
-	CurrentRunData.RunSouls += Amount;
+	if (Amount == 0) return;
+	CurrentRunData.RunSouls = FMath::Max(0, CurrentRunData.RunSouls + Amount);
 	OnRunSoulsChanged.Broadcast(CurrentRunData.RunSouls, Amount);
 }
 
@@ -638,27 +645,21 @@ namespace
 	{
 		return BaseCost + (CurrentLevel * Increment);
 	}
-}
 
-TArray<FRLMetaUpgradeInfo> URLSaveSubsystem::GetAllMetaUpgradeInfos() const
-{
-	TArray<FRLMetaUpgradeInfo> Results;
-	const TArray<FRLMetaUpgradeDefinition>& Defs = GetMetaDefinitions();
-
-	for (const FRLMetaUpgradeDefinition& Def : Defs)
+	FRLMetaUpgradeInfo BuildMetaUpgradeInfo(const FRLMetaUpgradeDefinition& Def, int32 CurrentLevel, int32 TotalSouls)
 	{
 		FRLMetaUpgradeInfo Info;
 		Info.UpgradeKey = Def.Key;
 		Info.DisplayName = Def.DisplayName;
 		Info.Description = Def.DescriptionFormat;
 		Info.MaxLevel = Def.MaxLevel;
-		Info.CurrentLevel = FMath::Clamp(GetUpgradeLevel(Def.Key), 0, Def.MaxLevel);
+		Info.CurrentLevel = FMath::Clamp(CurrentLevel, 0, Def.MaxLevel);
 		Info.bIsMaxLevel = (Info.CurrentLevel >= Def.MaxLevel);
 
 		if (!Info.bIsMaxLevel)
 		{
 			Info.NextLevelCost = CalculateUpgradeCost(Info.CurrentLevel, Def.BaseCost, Def.CostIncrement);
-			Info.bCanAfford = (CurrentMetaData.TotalSouls >= Info.NextLevelCost);
+			Info.bCanAfford = (TotalSouls >= Info.NextLevelCost);
 		}
 		else
 		{
@@ -668,8 +669,18 @@ TArray<FRLMetaUpgradeInfo> URLSaveSubsystem::GetAllMetaUpgradeInfos() const
 
 		Info.CurrentBonusValue = Info.CurrentLevel * Def.ValuePerLevel;
 		Info.NextBonusValue = (Info.CurrentLevel + 1) * Def.ValuePerLevel;
+		return Info;
+	}
+}
 
-		Results.Add(Info);
+TArray<FRLMetaUpgradeInfo> URLSaveSubsystem::GetAllMetaUpgradeInfos() const
+{
+	TArray<FRLMetaUpgradeInfo> Results;
+	const TArray<FRLMetaUpgradeDefinition>& Defs = GetMetaDefinitions();
+
+	for (const FRLMetaUpgradeDefinition& Def : Defs)
+	{
+		Results.Add(BuildMetaUpgradeInfo(Def, GetUpgradeLevel(Def.Key), CurrentMetaData.TotalSouls));
 	}
 
 	return Results;
@@ -682,26 +693,7 @@ bool URLSaveSubsystem::GetMetaUpgradeInfo(FName UpgradeKey, FRLMetaUpgradeInfo& 
 	{
 		if (Def.Key == UpgradeKey)
 		{
-			OutInfo.UpgradeKey = Def.Key;
-			OutInfo.DisplayName = Def.DisplayName;
-			OutInfo.Description = Def.DescriptionFormat;
-			OutInfo.MaxLevel = Def.MaxLevel;
-			OutInfo.CurrentLevel = FMath::Clamp(GetUpgradeLevel(Def.Key), 0, Def.MaxLevel);
-			OutInfo.bIsMaxLevel = (OutInfo.CurrentLevel >= Def.MaxLevel);
-
-			if (!OutInfo.bIsMaxLevel)
-			{
-				OutInfo.NextLevelCost = CalculateUpgradeCost(OutInfo.CurrentLevel, Def.BaseCost, Def.CostIncrement);
-				OutInfo.bCanAfford = (CurrentMetaData.TotalSouls >= OutInfo.NextLevelCost);
-			}
-			else
-			{
-				OutInfo.NextLevelCost = 0;
-				OutInfo.bCanAfford = false;
-			}
-
-			OutInfo.CurrentBonusValue = OutInfo.CurrentLevel * Def.ValuePerLevel;
-			OutInfo.NextBonusValue = (OutInfo.CurrentLevel + 1) * Def.ValuePerLevel;
+			OutInfo = BuildMetaUpgradeInfo(Def, GetUpgradeLevel(Def.Key), CurrentMetaData.TotalSouls);
 			return true;
 		}
 	}

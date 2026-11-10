@@ -148,7 +148,7 @@ TArray<FRLRewardData> URLRewardSubsystem::RollRewards(int32 Count)
 	return SelectedRewards;
 }
 
-bool URLRewardSubsystem::ApplyReward(ARLCharacter* TargetCharacter, const FRLRewardData& Reward)
+bool URLRewardSubsystem::ApplyReward(ARLCharacter* TargetCharacter, const FRLRewardData& Reward, bool bShowPickupMessage)
 {
 	if (!TargetCharacter)
 	{
@@ -193,15 +193,72 @@ bool URLRewardSubsystem::ApplyReward(ARLCharacter* TargetCharacter, const FRLRew
 		StatComp->NotifyStatsChanged();
 	}
 
-	if (GEngine)
+	if (bShowPickupMessage && GEngine)
 	{
 		const FString Msg = FString::Printf(TEXT("✨ [보상 획득!] [%s] %s"),
 			*Reward.GetRarityDisplayName().ToString(), *Reward.RewardName.ToString());
 		GEngine->AddOnScreenDebugMessage(-1, 3.5f, Reward.GetRarityColor().ToFColor(true), Msg);
 	}
 
+	RecordAcquiredReward(Reward);
+
 	OnRewardApplied.Broadcast(TargetCharacter, Reward);
 	return true;
+}
+
+bool URLRewardSubsystem::IsPersistentReward(const FRLRewardData& Reward)
+{
+	// HealPercent(체력 회복)는 받는 순간 끝나는 효과라, 그것만 있는 보상은 "빌드"에 남지 않는다.
+	for (const FRLStatBonus& Bonus : Reward.StatBonuses)
+	{
+		if (Bonus.TargetStat != ERLTargetStat::HealPercent)
+		{
+			return true;
+		}
+	}
+	return false;
+}
+
+void URLRewardSubsystem::RecordAcquiredReward(const FRLRewardData& Reward)
+{
+	if (!IsPersistentReward(Reward))
+	{
+		return;
+	}
+
+	// RewardID가 없는 보상(옛 데이터 등)은 이름으로 같은 보상인지 판단
+	FRLAcquiredReward* Existing = AcquiredRewards.FindByPredicate([&Reward](const FRLAcquiredReward& Entry)
+	{
+		if (!Reward.RewardID.IsNone())
+		{
+			return Entry.Reward.RewardID == Reward.RewardID;
+		}
+		return Entry.Reward.RewardID.IsNone() && Entry.Reward.RewardName.EqualTo(Reward.RewardName);
+	});
+
+	if (Existing)
+	{
+		++Existing->Count;
+	}
+	else
+	{
+		FRLAcquiredReward& NewEntry = AcquiredRewards.AddDefaulted_GetRef();
+		NewEntry.Reward = Reward;
+		NewEntry.Count = 1;
+	}
+
+	OnAcquiredRewardsChanged.Broadcast();
+}
+
+void URLRewardSubsystem::ResetAcquiredRewards()
+{
+	if (AcquiredRewards.Num() == 0)
+	{
+		return;
+	}
+
+	AcquiredRewards.Reset();
+	OnAcquiredRewardsChanged.Broadcast();
 }
 
 void URLRewardSubsystem::BuildDefaultRewardPool()

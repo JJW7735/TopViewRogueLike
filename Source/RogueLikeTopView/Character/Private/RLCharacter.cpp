@@ -181,12 +181,7 @@ void ARLCharacter::BeginPlay()
 
     if (StatComp)
     {
-        StatComp->OnStatsChanged.AddDynamic(this, &ARLCharacter::HandleStatsChanged);
         StatComp->OnLevelUp.AddDynamic(this, &ARLCharacter::HandleLevelUp);
-        if (GetCharacterMovement())
-        {
-            GetCharacterMovement()->MaxWalkSpeed = StatComp->MoveSpeed;
-        }
     }
 
     // ★ 세이브 시스템 연동: 플레이어 캐릭터이고, 저장된 활성 런이 남아있다면 자동 복원 (이어하기)
@@ -233,6 +228,12 @@ void ARLCharacter::BeginPlay()
             {
                 // ★ 신규 런 시작: 저장된 런 이어하기가 아니라면 영구 메타 강화 스탯을 플레이어에게 적용!
                 SaveSys->ApplyMetaUpgradesToPlayer(this);
+
+                // 이전 판의 버프 획득 기록(GameInstance 서브시스템에 남아 있음)을 비운다
+                if (URLRewardSubsystem* RewardSys = URLRewardSubsystem::GetRewardSubsystem(this))
+                {
+                    RewardSys->ResetAcquiredRewards();
+                }
             }
         }
     }
@@ -376,15 +377,6 @@ void ARLCharacter::HandleDeath()
     }
 
     OnCharacterDeath(SoulsEarnedThisRun);
-}
-
-
-void ARLCharacter::HandleStatsChanged()
-{
-    if (StatComp && GetCharacterMovement())
-    {
-        GetCharacterMovement()->MaxWalkSpeed = StatComp->MoveSpeed;
-    }
 }
 
 void ARLCharacter::HandleLevelUp(int32 NewLevel)
@@ -669,22 +661,6 @@ void ARLCharacter::TestOpenShop()
         }
     }
 
-    TSubclassOf<UUserWidget> FallbackClass = LoadClass<UUserWidget>(
-        nullptr, TEXT("/Game/Blueprint/UI/WBP_ShopTest.WBP_ShopTest_C"));
-    if (FallbackClass)
-    {
-        UUserWidget* FallbackWidget = CreateWidget<UUserWidget>(PC, FallbackClass);
-        if (FallbackWidget)
-        {
-            FallbackWidget->AddToViewport(50);
-            PC->bShowMouseCursor = true;
-            FInputModeGameAndUI InputMode;
-            InputMode.SetWidgetToFocus(FallbackWidget->TakeWidget());
-            PC->SetInputMode(InputMode);
-            return;
-        }
-    }
-
     if (GEngine)
     {
         GEngine->AddOnScreenDebugMessage(-1, 3.0f, FColor::Yellow,
@@ -786,9 +762,9 @@ void ARLCharacter::CreateBoxHitbox(FVector BoxExtent, float ForwardOffset, const
     }
 }
 
-void ARLCharacter::ShowBoxAttackIndicator(FVector BoxExtent, float ForwardOffset, UMaterialInterface* DecalMaterial)
+ARLDecalIndicator* ARLCharacter::EnsureAttackIndicator()
 {
-    if (!AttackIndicator)
+    if (!AttackIndicator && GetWorld())
     {
         FActorSpawnParameters Params;
         Params.Owner = this;
@@ -796,8 +772,12 @@ void ARLCharacter::ShowBoxAttackIndicator(FVector BoxExtent, float ForwardOffset
 
         AttackIndicator = GetWorld()->SpawnActor<ARLDecalIndicator>(ARLDecalIndicator::StaticClass(), FVector::ZeroVector, FRotator::ZeroRotator, Params);
     }
+    return AttackIndicator;
+}
 
-    if (!AttackIndicator)
+void ARLCharacter::ShowBoxAttackIndicator(FVector BoxExtent, float ForwardOffset, UMaterialInterface* DecalMaterial)
+{
+    if (!EnsureAttackIndicator())
     {
         return;
     }
@@ -809,18 +789,7 @@ void ARLCharacter::ShowBoxAttackIndicator(FVector BoxExtent, float ForwardOffset
 
 void ARLCharacter::ShowSectorAttackIndicator(float Radius, float SafeZoneAngleDegrees, UMaterialInterface* DecalMaterial, float InnerSafeRadius)
 {
-    // ShowBoxAttackIndicator와 완전히 같은 지연 스폰(lazy-spawn) 패턴 — AttackIndicator 액터를
-    // Box/Sector 상관없이 하나만 두고 재사용합니다 (한 캐릭터가 한 번에 하나의 예고만 표시하므로 충분).
-    if (!AttackIndicator)
-    {
-        FActorSpawnParameters Params;
-        Params.Owner = this;
-        Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
-
-        AttackIndicator = GetWorld()->SpawnActor<ARLDecalIndicator>(ARLDecalIndicator::StaticClass(), FVector::ZeroVector, FRotator::ZeroRotator, Params);
-    }
-
-    if (!AttackIndicator)
+    if (!EnsureAttackIndicator())
     {
         return;
     }
@@ -850,16 +819,7 @@ void ARLCharacter::HideAttackIndicator()
 // "사거리 링" 기능인데 보스 판정에는 필요 없어서 항상 0(끔)으로 넘깁니다.
 void ARLCharacter::ShowLocationAttackIndicator(FVector Location, float Radius, UMaterialInterface* DecalMaterial)
 {
-    if (!AttackIndicator)
-    {
-        FActorSpawnParameters Params;
-        Params.Owner = this;
-        Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
-
-        AttackIndicator = GetWorld()->SpawnActor<ARLDecalIndicator>(ARLDecalIndicator::StaticClass(), FVector::ZeroVector, FRotator::ZeroRotator, Params);
-    }
-
-    if (!AttackIndicator)
+    if (!EnsureAttackIndicator())
     {
         return;
     }
@@ -1496,11 +1456,6 @@ void ARLCharacter::Tick(float DeltaTime)
             }
         }
     }
-}
-
-void ARLCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
-{
-    Super::SetupPlayerInputComponent(PlayerInputComponent);
 }
 
 void ARLCharacter::CreateLocationHitbox(FVector TargetLocation, float Radius, const FRLDamageData& DamageData, bool bDrawDebug)

@@ -137,7 +137,6 @@ private:
 
 	void EvaluateWorldMusicState();
 	FString ResolveActiveMapContextName() const;
-	ERLBGMTrack SelectExplorationTrackForMap(const FString& MapName, bool bAnyArenaCleared) const;
 	ERLBGMTrack SelectBossTrack(const ARLEnemyCharacter* BossActor) const;
 
 	void UpdateCrossfadeAndDucking(float RealDeltaTime);
@@ -155,8 +154,6 @@ private:
 	UPROPERTY()
 	TArray<TObjectPtr<USoundBase>> KhaimeraJumpSounds;
 	UPROPERTY()
-	TArray<TObjectPtr<USoundBase>> KhaimeraLandSounds;
-	UPROPERTY()
 	TArray<TObjectPtr<USoundBase>> KhaimeraPainSounds;
 	UPROPERTY()
 	TArray<TObjectPtr<USoundBase>> KhaimeraRoarSounds;
@@ -170,8 +167,6 @@ private:
 	TArray<TObjectPtr<USoundBase>> SevarogSwingSounds;
 	UPROPERTY()
 	TArray<TObjectPtr<USoundBase>> SevarogJumpSounds;
-	UPROPERTY()
-	TArray<TObjectPtr<USoundBase>> SevarogLandSounds;
 	UPROPERTY()
 	TArray<TObjectPtr<USoundBase>> SevarogPainSounds;
 	UPROPERTY()

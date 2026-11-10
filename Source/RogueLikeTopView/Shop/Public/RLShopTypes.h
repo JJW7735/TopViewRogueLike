@@ -38,6 +38,10 @@ struct FRLShopItem
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Shop")
 	TObjectPtr<URLItemDataAsset> ItemData = nullptr;
 
+	// 원본 축복의 RewardID (StatUpgrade 카테고리일 때 유효). 획득 기록에서 같은 축복을 묶는 데 사용
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Shop")
+	FName RewardID = NAME_None;
+
 	// 스탯 보너스 목록 (StatUpgrade 카테고리일 때 적용)
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Shop")
 	TArray<FRLStatBonus> StatBonuses;
@@ -83,37 +87,13 @@ struct FRLShopItem
 	// 희귀도 테마 색상 반환
 	FLinearColor GetRarityColor() const
 	{
-		switch (Rarity)
-		{
-		case ERLRewardRarity::Common:
-			return FLinearColor(0.85f, 0.85f, 0.85f, 1.0f); // Slate White
-		case ERLRewardRarity::Rare:
-			return FLinearColor(0.18f, 0.58f, 1.0f, 1.0f);  // Bright Blue
-		case ERLRewardRarity::Epic:
-			return FLinearColor(0.70f, 0.25f, 0.95f, 1.0f); // Royal Violet
-		case ERLRewardRarity::Legendary:
-			return FLinearColor(1.0f, 0.72f, 0.10f, 1.0f);  // Radiant Gold
-		default:
-			return FLinearColor::White;
-		}
+		return FRLRewardData::GetRarityColor(Rarity);
 	}
 
 	// 희귀도 표시 문자열
 	FText GetRarityDisplayName() const
 	{
-		switch (Rarity)
-		{
-		case ERLRewardRarity::Common:
-			return NSLOCTEXT("RLShop", "Common", "일반");
-		case ERLRewardRarity::Rare:
-			return NSLOCTEXT("RLShop", "Rare", "희귀");
-		case ERLRewardRarity::Epic:
-			return NSLOCTEXT("RLShop", "Epic", "영웅");
-		case ERLRewardRarity::Legendary:
-			return NSLOCTEXT("RLShop", "Legendary", "전설");
-		default:
-			return FText::GetEmpty();
-		}
+		return FRLRewardData::GetRarityDisplayName(Rarity);
 	}
 };
 
