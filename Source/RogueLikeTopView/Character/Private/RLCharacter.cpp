@@ -56,6 +56,28 @@ namespace
         return MaxDist;
     }
 
+    // ★ 대시 한 틱 이동: 계단/경사의 높이를 따라가도록 (턱 높이만큼 올라감 → 수평 이동 → 바닥까지 내려 붙임)
+    // 수평으로만 쓸면 계단 턱에 막히고, 높은 곳에서 출발하면 그 높이로 떠서 가다가 도착 후 떨어짐
+    void MoveDashStep(ACharacter* Character, const FVector& TargetLocation)
+    {
+        const UCharacterMovementComponent* Move = Character->GetCharacterMovement();
+        const float StepHeight = Move ? Move->MaxStepHeight : 45.0f;
+        const FVector Start = Character->GetActorLocation();
+
+        Character->SetActorLocation(Start + FVector(0.0f, 0.0f, StepHeight), true);
+        const FVector Raised = Character->GetActorLocation();
+        Character->SetActorLocation(FVector(TargetLocation.X, TargetLocation.Y, Raised.Z), true);
+        const FVector Moved = Character->GetActorLocation();
+
+        FHitResult FloorHit;
+        Character->SetActorLocation(Moved - FVector(0.0f, 0.0f, StepHeight * 2.0f), true, &FloorHit);
+        if (!FloorHit.bBlockingHit)
+        {
+            // 발밑에 바닥이 없으면(턱 높이 이상 낮은 곳) 원래 높이를 유지 → 대시가 끝난 뒤 자연스럽게 떨어짐
+            Character->SetActorLocation(FVector(Moved.X, Moved.Y, Start.Z), true);
+        }
+    }
+
     // ★ 넉백(LaunchCharacter)으로 날아갈 수평 거리를 추정해서, 낭떠러지/강 너머로 날아가지 않게 수평 속도를 줄임
     // 예상 거리 = 공중 비행(위로 UpSpeed만큼 떴다 떨어지는 시간 x 수평 속도) + 착지 후 제동 거리
     // 마찰은 무시해서 실제보다 길게 잡음 (가장자리 근처에서만 줄어들고, 안전한 곳에서는 원래 세기 그대로)
@@ -1418,7 +1440,7 @@ void ARLCharacter::Tick(float DeltaTime)
         DashElapsedTime += DeltaTime;
         float Alpha = FMath::Clamp(DashElapsedTime / DashDuration, 0.0f, 1.0f);
         FVector NewLocation = FMath::Lerp(DashStartLocation, DashTargetLocation, Alpha);
-        SetActorLocation(NewLocation, true);
+        MoveDashStep(this, NewLocation);
 
         // ★ StartDashAttack으로 시작된 돌진이면(bDashDealsDamage), 이동한 새 위치 기준으로 매 틱 충돌 체크
         if (bDashDealsDamage)
