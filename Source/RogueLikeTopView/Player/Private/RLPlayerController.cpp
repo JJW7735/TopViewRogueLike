@@ -485,7 +485,41 @@ void ARLPlayerController::PlayerTick(float DeltaTime)
 	}
 
 	const APawn* ControlledPawn = GetPawn();
-	if (!OcclusionMPC || !ControlledPawn || !PlayerCameraManager)
+	if (!ControlledPawn)
+	{
+		return;
+	}
+
+	// ★ 레벨에 배치된 포탈의 오버랩 설정이 누락되어도 반경 360cm 안에 들어가면 자동으로 상호작용 프롬프트 표시
+	if (ARLCharacter* RLChar = Cast<ARLCharacter>(GetPawn()))
+	{
+		ARLPortal* ClosestPortal = nullptr;
+		float ClosestDistSq = FMath::Square(360.0f);
+		for (TActorIterator<ARLPortal> It(GetWorld()); It; ++It)
+		{
+			ARLPortal* Portal = *It;
+			if (IsValid(Portal) && Portal->CanActivatePortal())
+			{
+				const float DistSq = FVector::DistSquared2D(RLChar->GetActorLocation(), Portal->GetActorLocation());
+				if (DistSq <= ClosestDistSq)
+				{
+					ClosestDistSq = DistSq;
+					ClosestPortal = Portal;
+				}
+			}
+		}
+
+		if (ClosestPortal)
+		{
+			RLChar->SetNearbyPortal(ClosestPortal);
+		}
+		else
+		{
+			RLChar->SetNearbyPortal(nullptr);
+		}
+	}
+
+	if (!OcclusionMPC || !PlayerCameraManager)
 	{
 		return;
 	}

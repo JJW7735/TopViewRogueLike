@@ -418,6 +418,10 @@ void ARLCharacter::HandleLevelUp(int32 NewLevel)
 
 void ARLCharacter::SetNearbyPortal(ARLPortal* Portal)
 {
+    if (NearbyPortal == Portal)
+    {
+        return;
+    }
     NearbyPortal = Portal;
     RefreshInteractPrompt();
 }
@@ -479,6 +483,25 @@ void ARLCharacter::TryInteract()
     {
         NearbyPortal->ActivatePortal(this);
         return;
+    }
+
+    // ★ 오버랩 이벤트가 누락된 경우에도 반경 420cm 이내에 활성화된 포탈이 있으면 즉시 작동
+    if (UWorld* World = GetWorld())
+    {
+        TArray<AActor*> FoundPortals;
+        UGameplayStatics::GetAllActorsOfClass(World, ARLPortal::StaticClass(), FoundPortals);
+        for (AActor* Actor : FoundPortals)
+        {
+            if (ARLPortal* Portal = Cast<ARLPortal>(Actor))
+            {
+                if (Portal->CanActivatePortal() && FVector::Dist2D(GetActorLocation(), Portal->GetActorLocation()) <= 420.0f)
+                {
+                    SetNearbyPortal(Portal);
+                    Portal->ActivatePortal(this);
+                    return;
+                }
+            }
+        }
     }
 
     // 영구 강화소가 근처에 있으면 강화 상점 UI 열기

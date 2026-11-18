@@ -1,9 +1,53 @@
 #include "RLPortal.h"
 #include "Components/BoxComponent.h"
+#include "Components/StaticMeshComponent.h"
+#include "Components/PointLightComponent.h"
+#include "Engine/StaticMesh.h"
+#include "NiagaraFunctionLibrary.h"
+#include "NiagaraSystem.h"
 #include "RLCharacter.h"
 #include "RLSaveSubsystem.h"
 #include "Kismet/GameplayStatics.h"
 #include "Misc/PackageName.h"
+
+namespace
+{
+    void AttachSoulPortalVisuals(ARLPortal* Portal, const FVector& WorldLoc, const FRotator& MeshRot)
+    {
+        if (!Portal || !Portal->GetWorld())
+        {
+            return;
+        }
+
+        if (UStaticMesh* PortalMesh = LoadObject<UStaticMesh>(nullptr, TEXT("/Game/SoulPortal_Standalone/Meshes/SM_SoulPortal.SM_SoulPortal")))
+        {
+            if (UStaticMeshComponent* MeshComp = NewObject<UStaticMeshComponent>(Portal, TEXT("StagePortalVisualMesh")))
+            {
+                MeshComp->SetStaticMesh(PortalMesh);
+                MeshComp->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+                MeshComp->SetupAttachment(Portal->GetRootComponent());
+                MeshComp->RegisterComponent();
+                MeshComp->SetWorldLocationAndRotation(WorldLoc, MeshRot);
+                MeshComp->SetWorldScale3D(FVector(0.2f, 0.2f, 0.2f));
+            }
+        }
+
+        if (UPointLightComponent* LightComp = NewObject<UPointLightComponent>(Portal, TEXT("StagePortalVisualLight")))
+        {
+            LightComp->SetupAttachment(Portal->GetRootComponent());
+            LightComp->SetIntensity(4000.0f);
+            LightComp->SetAttenuationRadius(600.0f);
+            LightComp->SetLightColor(FLinearColor(0.55f, 0.25f, 1.0f));
+            LightComp->RegisterComponent();
+            LightComp->SetWorldLocation(WorldLoc + FVector(0.0f, 0.0f, 70.0f));
+        }
+
+        if (UNiagaraSystem* PortalFX = LoadObject<UNiagaraSystem>(nullptr, TEXT("/Game/Effect/Ambient/NS_Ambient_SoulWisps.NS_Ambient_SoulWisps")))
+        {
+            UNiagaraFunctionLibrary::SpawnSystemAtLocation(Portal->GetWorld(), PortalFX, WorldLoc - FVector(0.0f, 0.0f, 90.0f), FRotator::ZeroRotator, FVector(0.6f, 0.6f, 1.0f));
+        }
+    }
+}
 
 ARLPortal::ARLPortal()
 {
@@ -16,6 +60,7 @@ ARLPortal::ARLPortal()
     // 포탈의 크기를 캐릭터가 충분히 들어갈 만큼 넉넉하게 잡아줍니다.
     PortalCollision->InitBoxExtent(FVector(100.f, 100.f, 150.f));
     PortalCollision->SetCollisionProfileName(TEXT("Trigger")); // 겹침 감지용 프로필
+    PortalCollision->SetGenerateOverlapEvents(true);
 }
 
 void ARLPortal::BeginPlay()
@@ -23,8 +68,9 @@ void ARLPortal::BeginPlay()
     Super::BeginPlay();
 
     // ★ 스테이지 진행 순서 고정 오버라이드:
-    //   2-1_Graveyard -> 2-2_WallPassage 로 이동
-    //   2-2_WallPassage -> 아직 2-3은 연결하지 않음 (포탈 비활성화/숨김)
+    //   2-1_Graveyard   -> 2-2_WallPassage
+    //   2-2_WallPassage -> 2-3_OuterWard
+    //   2-3_OuterWard   -> 2-B_WarCrypt (2스테이지 보스)
     if (UWorld* World = GetWorld())
     {
         const FString CurrentMap = UWorld::RemovePIEPrefix(World->GetMapName());
@@ -32,26 +78,50 @@ void ARLPortal::BeginPlay()
             CurrentMap.Equals(TEXT("L_S2Sub_Graveyard"), ESearchCase::IgnoreCase))
         {
             SetTravelMapByPath(TEXT("/Game/Maps/2-2_WallPassage"));
+            SetActorLocation(FVector(2300.0f, 0.0f, 150.0f));
+            if (PortalCollision)
+            {
+                PortalCollision->SetBoxExtent(FVector(300.f, 250.f, 200.f));
+            }
+            AttachSoulPortalVisuals(this, FVector(2380.0f, 0.0f, 150.0f), FRotator(0.0f, 90.0f, 0.0f));
         }
         else if (CurrentMap.Equals(TEXT("2-2_WallPassage"), ESearchCase::IgnoreCase) ||
                  CurrentMap.Equals(TEXT("L_S2Sub_WallPassage"), ESearchCase::IgnoreCase))
         {
-            ClearDestination();
-            SetActorHiddenInGame(true);
-            SetActorEnableCollision(false);
+            SetTravelMapByPath(TEXT("/Game/Maps/2-3_OuterWard"));
+            // 2-2 출구 복도 안쪽(X=2850, Y=-1600)까지 포탈 트리거가 확실히 닿도록 위치 및 반경 보정
+            SetActorLocation(FVector(2950.0f, -1600.0f, 150.0f));
             if (PortalCollision)
             {
-                PortalCollision->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+                PortalCollision->SetBoxExtent(FVector(350.f, 250.f, 200.f));
             }
-            return;
+            AttachSoulPortalVisuals(this, FVector(3120.0f, -1600.0f, 150.0f), FRotator(0.0f, 90.0f, 0.0f));
+        }
+        else if (CurrentMap.Equals(TEXT("2-3_OuterWard"), ESearchCase::IgnoreCase) ||
+                 CurrentMap.Equals(TEXT("2-4_OuterWard"), ESearchCase::IgnoreCase) ||
+                 CurrentMap.Equals(TEXT("2-2_OuterWard"), ESearchCase::IgnoreCase) ||
+                 CurrentMap.Equals(TEXT("L_OuterWard2_2"), ESearchCase::IgnoreCase) ||
+                 CurrentMap.Equals(TEXT("L_OuterWard"), ESearchCase::IgnoreCase))
+        {
+            SetTravelMapByPath(TEXT("/Game/Maps/2-B_WarCrypt"));
+            SetActorLocation(FVector(1350.0f, 0.0f, 150.0f));
+            if (PortalCollision)
+            {
+                PortalCollision->SetBoxExtent(FVector(300.f, 250.f, 200.f));
+            }
         }
     }
 
     // 2. 게임이 시작되면, 누군가 포탈에 닿았을 때 OnOverlapBegin 함수가 실행되도록 연결(바인딩)합니다.
     if (PortalCollision)
     {
+        PortalCollision->SetCollisionProfileName(TEXT("Trigger"));
+        PortalCollision->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
+        PortalCollision->SetCollisionResponseToChannel(ECC_Pawn, ECR_Overlap);
+        PortalCollision->SetGenerateOverlapEvents(true);
         PortalCollision->OnComponentBeginOverlap.AddUniqueDynamic(this, &ARLPortal::OnOverlapBegin);
         PortalCollision->OnComponentEndOverlap.AddUniqueDynamic(this, &ARLPortal::OnOverlapEnd);
+        PortalCollision->UpdateOverlaps();
     }
 }
 
