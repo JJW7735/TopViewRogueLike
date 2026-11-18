@@ -17,8 +17,12 @@
 #include "Blueprint/UserWidget.h"
 #include "TimerManager.h"
 #include "RLRewardChest.h"
+#include "RLPortal.h"
 #include "RLSaveSubsystem.h"
 #include "Components/Button.h"
+#include "Components/StaticMeshComponent.h"
+#include "Components/PointLightComponent.h"
+#include "Engine/StaticMesh.h"
 #include "Kismet/GameplayStatics.h"
 
 ARLPlayerController::ARLPlayerController()
@@ -214,6 +218,18 @@ void ARLPlayerController::WatchBossRewardChest(ARLRewardChest* Chest)
 
 namespace
 {
+	bool IsStage1BossMap(const UWorld* World)
+	{
+		if (!World)
+		{
+			return false;
+		}
+		const FString CleanMap = UWorld::RemovePIEPrefix(World->GetMapName());
+		return CleanMap.Equals(TEXT("1-B_Soul"), ESearchCase::IgnoreCase) ||
+		       CleanMap.Equals(TEXT("L_Soul1_B"), ESearchCase::IgnoreCase) ||
+		       CleanMap.Equals(TEXT("L_Soul"), ESearchCase::IgnoreCase);
+	}
+
 	void SaveBossVictoryRunProgress(ARLPlayerController* PC)
 	{
 		if (!PC) return;
@@ -222,7 +238,7 @@ namespace
 		{
 			if (ARLCharacter* PlayerChar = Cast<ARLCharacter>(PC->GetPawn()))
 			{
-				const FString RawMapName = PC->GetWorld() ? PC->GetWorld()->GetMapName() : TEXT("L_Soul");
+				const FString RawMapName = PC->GetWorld() ? PC->GetWorld()->GetMapName() : TEXT("1-B_Soul");
 				const FString CleanMapName = UWorld::RemovePIEPrefix(RawMapName);
 				const int32 StageNum = FMath::Max(1, SaveSys->GetActiveRunData().StageNumber);
 
@@ -242,6 +258,108 @@ namespace
 	}
 }
 
+bool ARLPlayerController::ScheduleBossStageTransitionPortal(float DelaySeconds)
+{
+	UWorld* World = GetWorld();
+	if (!IsStage1BossMap(World))
+	{
+		return false;
+	}
+
+	if (SpawnedBossStagePortal.IsValid())
+	{
+		return true;
+	}
+
+	if (DelaySeconds <= 0.0f)
+	{
+		SpawnBossStageTransitionPortal();
+	}
+	else if (!World->GetTimerManager().IsTimerActive(BossPortalSpawnTimerHandle))
+	{
+		World->GetTimerManager().SetTimer(
+			BossPortalSpawnTimerHandle,
+			this,
+			&ARLPlayerController::SpawnBossStageTransitionPortal,
+			DelaySeconds,
+			false);
+	}
+
+	return true;
+}
+
+void ARLPlayerController::SpawnBossStageTransitionPortal()
+{
+	UWorld* World = GetWorld();
+	if (!World || SpawnedBossStagePortal.IsValid())
+	{
+		return;
+	}
+
+	TSubclassOf<ARLPortal> PortalClass = LoadClass<ARLPortal>(nullptr, TEXT("/Game/Blueprint/BP_Portal.BP_Portal_C"));
+	if (!PortalClass)
+	{
+		PortalClass = ARLPortal::StaticClass();
+	}
+
+	// 1-B_Soul 맵 중앙 (0, 0) 위치에 포탈 생성
+	const FVector PortalLoc(0.0f, 0.0f, 150.0f);
+	const FRotator PortalRot = FRotator::ZeroRotator;
+
+	FActorSpawnParameters SpawnParams;
+	SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+
+	ARLPortal* NewPortal = World->SpawnActor<ARLPortal>(PortalClass, PortalLoc, PortalRot, SpawnParams);
+	if (!NewPortal)
+	{
+		return;
+	}
+
+	SpawnedBossStagePortal = NewPortal;
+	NewPortal->SetActorScale3D(FVector(1.0f, 1.8f, 3.2f));
+	NewPortal->SetTravelMapByPath(TEXT("/Game/Maps/2-1_Graveyard"));
+
+	if (WatchedBossChest.IsValid())
+	{
+		NewPortal->SetLinkedChestToClean(WatchedBossChest.Get());
+	}
+
+	// 포탈 외형 메시(SM_SoulPortal) 부착 (1-1, 1-2와 동일하게 Yaw 90도 회전하여 정면을 바라보도록 설정)
+	if (UStaticMesh* PortalMesh = LoadObject<UStaticMesh>(nullptr, TEXT("/Game/SoulPortal_Standalone/Meshes/SM_SoulPortal.SM_SoulPortal")))
+	{
+		if (UStaticMeshComponent* MeshComp = NewObject<UStaticMeshComponent>(NewPortal, TEXT("BossStagePortalMesh")))
+		{
+			MeshComp->SetStaticMesh(PortalMesh);
+			MeshComp->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+			MeshComp->SetupAttachment(NewPortal->GetRootComponent());
+			MeshComp->RegisterComponent();
+			MeshComp->SetWorldLocationAndRotation(FVector(0.0f, 0.0f, 150.0f), FRotator(0.0f, 90.0f, 0.0f));
+			MeshComp->SetWorldScale3D(FVector(0.2f, 0.2f, 0.2f));
+		}
+	}
+
+	// 포탈 주변 영혼 빛(PointLight) 및 파티클(NS_Ambient_SoulWisps) 연출
+	if (UPointLightComponent* LightComp = NewObject<UPointLightComponent>(NewPortal, TEXT("BossStagePortalLight")))
+	{
+		LightComp->SetupAttachment(NewPortal->GetRootComponent());
+		LightComp->SetIntensity(4000.0f);
+		LightComp->SetAttenuationRadius(600.0f);
+		LightComp->SetLightColor(FLinearColor(0.55f, 0.25f, 1.0f));
+		LightComp->RegisterComponent();
+		LightComp->SetWorldLocation(FVector(0.0f, 0.0f, 220.0f));
+	}
+
+	if (UNiagaraSystem* PortalFX = LoadObject<UNiagaraSystem>(nullptr, TEXT("/Game/Effect/Ambient/NS_Ambient_SoulWisps.NS_Ambient_SoulWisps")))
+	{
+		UNiagaraFunctionLibrary::SpawnSystemAtLocation(World, PortalFX, FVector(0.0f, 0.0f, 60.0f), FRotator::ZeroRotator, FVector(0.6f, 0.6f, 1.0f));
+	}
+
+	if (GEngine)
+	{
+		GEngine->AddOnScreenDebugMessage(-1, 5.0f, FColor::Cyan, TEXT("🌀 [포탈 생성] 중앙에 다음 스테이지(2-1)로 이동하는 포탈이 열렸습니다!"));
+	}
+}
+
 void ARLPlayerController::HandleBossChestClaimed(ARLRewardChest* Chest)
 {
 	if (!Chest || Chest != WatchedBossChest.Get())
@@ -254,6 +372,13 @@ void ARLPlayerController::HandleBossChestClaimed(ARLRewardChest* Chest)
 
 	// ★ 보스 보상 획득 시점에 진행 상황 즉시 저장
 	SaveBossVictoryRunProgress(this);
+
+	// 1-B 보스 맵에서는 게임이 끝나지 않고 중앙 포탈을 통해 2-1로 진행하므로 승리(게임 종료) 모달을 띄우지 않음
+	if (IsStage1BossMap(GetWorld()))
+	{
+		ScheduleBossStageTransitionPortal(0.0f);
+		return;
+	}
 
 	ShowVictoryScreen();
 }

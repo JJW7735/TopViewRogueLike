@@ -272,6 +272,7 @@ void ARLEnemyCharacter::HandleDeath()
 		if (ARLPlayerController* PC = Cast<ARLPlayerController>(UGameplayStatics::GetPlayerController(this, 0)))
 		{
 			PC->ShowStageClearScreen();
+			PC->ScheduleBossStageTransitionPortal(3.0f);
 		}
 
 		// 보상 상자 클래스 확보 (MyRLRewardChest 에셋이 있으면 메시/이펙트가 들어간 블루프린트로 스폰)
@@ -288,6 +289,11 @@ void ARLEnemyCharacter::HandleDeath()
 		if (TargetChestClass)
 		{
 			FVector SpawnLoc = MyLoc + ChestSpawnOffset;
+			// 1-B 보스 맵에서는 3초 뒤 중앙(0,0)에 포탈이 생성되므로, 보스가 중앙 근처에서 죽었을 때 상자와 포탈이 겹치지 않도록 오프셋 보정
+			if (FVector::DistSquared2D(SpawnLoc, FVector::ZeroVector) < FMath::Square(250.0f))
+			{
+				SpawnLoc.X -= 280.0f;
+			}
 			if (UCapsuleComponent* Capsule = GetCapsuleComponent())
 			{
 				SpawnLoc.Z -= (Capsule->GetScaledCapsuleHalfHeight() - 10.0f);

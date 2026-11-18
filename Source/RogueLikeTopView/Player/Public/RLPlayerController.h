@@ -94,6 +94,10 @@ public:
 	// (일반 아레나 클리어 상자는 등록되지 않으므로 반응하지 않음)
 	void WatchBossRewardChest(ARLRewardChest* Chest);
 
+	// ★ 1-B 보스 처치 시 3초 후 맵 중앙에 다음 스테이지(2-1_Graveyard)로 이동하는 포탈을 생성합니다.
+	//   true를 반환하면 포탈 진행 스테이지(게임 종료 승리 화면 대신 다음 스테이지 진행)임을 의미합니다.
+	bool ScheduleBossStageTransitionPortal(float DelaySeconds = 3.0f);
+
 	// 승리 화면(WBP_Victory)을 일시정지 + 커서 표시 모달로 띄웁니다
 	UFUNCTION(BlueprintCallable, Category = "UI")
 	void ShowVictoryScreen();
@@ -213,7 +217,11 @@ private:
 	UFUNCTION()
 	void HandleVictoryMainMenuClicked();
 
+	void SpawnBossStageTransitionPortal();
+
 	TWeakObjectPtr<ARLRewardChest> WatchedBossChest;
+	FTimerHandle BossPortalSpawnTimerHandle;
+	TWeakObjectPtr<class ARLPortal> SpawnedBossStagePortal;
 
 	UPROPERTY()
 	TObjectPtr<UUserWidget> VictoryWidget;

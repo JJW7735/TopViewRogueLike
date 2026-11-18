@@ -22,12 +22,60 @@ void ARLPortal::BeginPlay()
 {
     Super::BeginPlay();
 
+    // ★ 스테이지 진행 순서 고정 오버라이드:
+    //   2-1_Graveyard -> 2-2_WallPassage 로 이동
+    //   2-2_WallPassage -> 아직 2-3은 연결하지 않음 (포탈 비활성화/숨김)
+    if (UWorld* World = GetWorld())
+    {
+        const FString CurrentMap = UWorld::RemovePIEPrefix(World->GetMapName());
+        if (CurrentMap.Equals(TEXT("2-1_Graveyard"), ESearchCase::IgnoreCase) ||
+            CurrentMap.Equals(TEXT("L_S2Sub_Graveyard"), ESearchCase::IgnoreCase))
+        {
+            SetTravelMapByPath(TEXT("/Game/Maps/2-2_WallPassage"));
+        }
+        else if (CurrentMap.Equals(TEXT("2-2_WallPassage"), ESearchCase::IgnoreCase) ||
+                 CurrentMap.Equals(TEXT("L_S2Sub_WallPassage"), ESearchCase::IgnoreCase))
+        {
+            ClearDestination();
+            SetActorHiddenInGame(true);
+            SetActorEnableCollision(false);
+            if (PortalCollision)
+            {
+                PortalCollision->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+            }
+            return;
+        }
+    }
+
     // 2. 게임이 시작되면, 누군가 포탈에 닿았을 때 OnOverlapBegin 함수가 실행되도록 연결(바인딩)합니다.
     if (PortalCollision)
     {
         PortalCollision->OnComponentBeginOverlap.AddUniqueDynamic(this, &ARLPortal::OnOverlapBegin);
         PortalCollision->OnComponentEndOverlap.AddUniqueDynamic(this, &ARLPortal::OnOverlapEnd);
     }
+}
+
+void ARLPortal::SetTravelMapByPath(const FString& InMapPackagePath)
+{
+    if (InMapPackagePath.IsEmpty())
+    {
+        TravelMap.Reset();
+        return;
+    }
+
+    const FString ShortName = FPackageName::GetShortName(InMapPackagePath);
+    const FString FullObjectPath = InMapPackagePath.Contains(TEXT("."))
+        ? InMapPackagePath
+        : FString::Printf(TEXT("%s.%s"), *InMapPackagePath, *ShortName);
+
+    TravelMap = TSoftObjectPtr<UWorld>(FSoftObjectPath(FullObjectPath));
+}
+
+void ARLPortal::ClearDestination()
+{
+    TravelMap.Reset();
+    LevelToLoad = NAME_None;
+    LevelToUnload = NAME_None;
 }
 
 void ARLPortal::OnOverlapBegin(UPrimitiveComponent* OverlappedComp, AActor* OtherActor,

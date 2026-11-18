@@ -377,13 +377,13 @@ bool URLSaveSubsystem::IsArenaCleared(const UObject* WorldContextObject) const
 		{
 			if (ARLArenaManager* Arena = Cast<ARLArenaManager>(Actor))
 			{
-				if (Arena->GetArenaState() == ERLArenaState::Cleared)
+				if (Arena->GetArenaState() != ERLArenaState::Cleared)
 				{
-					return true;
+					return false;
 				}
 			}
 		}
-		return false;
+		return true;
 	}
 
 	// 보스 맵 (ARLArenaManager가 없고 ARLBossTrigger가 있는 경우)

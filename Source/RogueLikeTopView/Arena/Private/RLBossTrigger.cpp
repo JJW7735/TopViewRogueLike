@@ -3,6 +3,7 @@
 #include "RLCharacter.h"
 #include "RLFogWall.h"
 #include "RLSaveSubsystem.h"
+#include "RLPlayerController.h"
 #include "Kismet/GameplayStatics.h"
 #include "TimerManager.h"
 #include "Components/BoxComponent.h"
@@ -84,6 +85,10 @@ void ARLBossTrigger::BeginPlay()
 			{
 				MoodController->SetBossPhase(true, true);
 			}
+			if (ARLPlayerController* PC = Cast<ARLPlayerController>(UGameplayStatics::GetPlayerController(this, 0)))
+			{
+				PC->ScheduleBossStageTransitionPortal(0.0f);
+			}
 		}
 	}, 0.2f, false);
 }
@@ -103,6 +108,10 @@ void ARLBossTrigger::OnTriggerBeginOverlap(UPrimitiveComponent* OverlappedComp, 
 			if (MoodController)
 			{
 				MoodController->SetBossPhase(true, true);
+			}
+			if (ARLPlayerController* PC = Cast<ARLPlayerController>(UGameplayStatics::GetPlayerController(this, 0)))
+			{
+				PC->ScheduleBossStageTransitionPortal(0.0f);
 			}
 			return;
 		}
