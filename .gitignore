@@ -74,3 +74,4 @@ Plugins/**/Intermediate/*
 DerivedDataCache/*
 progress/MCP.md
 Claude outputs/2026-11-07-blog-topics.md
+.mcp.json
