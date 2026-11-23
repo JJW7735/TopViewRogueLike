@@ -2,11 +2,14 @@
 #include "RLRewardSubsystem.h"
 #include "RLRewardSelectWidget.h"
 #include "RLCharacter.h"
+#include "RLTypes.h"
 #include "Components/SphereComponent.h"
 #include "Components/StaticMeshComponent.h"
+#include "Components/PrimitiveComponent.h"
 #include "NiagaraComponent.h"
 #include "Blueprint/UserWidget.h"
 #include "GameFramework/PlayerController.h"
+#include "TimerManager.h"
 #include "UObject/ConstructorHelpers.h"
 
 ARLRewardChest::ARLRewardChest()
@@ -19,6 +22,7 @@ ARLRewardChest::ARLRewardChest()
 	ChestBaseMesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("ChestBaseMesh"));
 	ChestBaseMesh->SetupAttachment(RootComponent);
 	ChestBaseMesh->SetCollisionProfileName(TEXT("BlockAllDynamic"));
+	ChestBaseMesh->SetCollisionResponseToChannel(ECC_Ground, ECR_Ignore);
 
 	ChestLidMesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("ChestLidMesh"));
 	ChestLidMesh->SetupAttachment(ChestBaseMesh);
@@ -28,6 +32,7 @@ ARLRewardChest::ARLRewardChest()
 	InteractionSphere->SetupAttachment(RootComponent);
 	InteractionSphere->SetSphereRadius(InteractionRadius);
 	InteractionSphere->SetCollisionProfileName(TEXT("OverlapAllDynamic"));
+	InteractionSphere->SetCollisionResponseToChannel(ECC_Ground, ECR_Ignore);
 	InteractionSphere->SetGenerateOverlapEvents(true);
 
 	ChestFX = CreateDefaultSubobject<UNiagaraComponent>(TEXT("ChestFX"));
@@ -47,12 +52,67 @@ void ARLRewardChest::BeginPlay()
 {
 	Super::BeginPlay();
 
+	// 상자 메시(BP에서 추가/오버라이드한 컴포넌트 포함)가 우클릭 바닥 트레이스(ECC_Ground)를 가로막지 않도록 보장
+	TArray<UPrimitiveComponent*> PrimComps;
+	GetComponents<UPrimitiveComponent>(PrimComps);
+	for (UPrimitiveComponent* PrimComp : PrimComps)
+	{
+		if (PrimComp)
+		{
+			PrimComp->SetCollisionResponseToChannel(ECC_Ground, ECR_Ignore);
+		}
+	}
+
 	if (InteractionSphere)
 	{
 		InteractionSphere->SetSphereRadius(InteractionRadius);
 		InteractionSphere->SetGenerateOverlapEvents(true);
 		InteractionSphere->OnComponentBeginOverlap.AddUniqueDynamic(this, &ARLRewardChest::OnOverlapBegin);
 		InteractionSphere->OnComponentEndOverlap.AddUniqueDynamic(this, &ARLRewardChest::OnOverlapEnd);
+
+		// 스폰 시점에 이미 상호작용 범위 안에 서 있는 플레이어는 BeginOverlap이 바인딩 전에 지나가므로 직접 등록
+		InteractionSphere->UpdateOverlaps();
+		TryRegisterOverlappedPlayer();
+
+		// 레벨 시작 시 배치된 상자 등 HUD/오버랩 초기화 순서 차이를 대비해 다음 틱에 한 번 더 확인
+		GetWorldTimerManager().SetTimerForNextTick(FTimerDelegate::CreateWeakLambda(this, [this]()
+		{
+			TryRegisterOverlappedPlayer();
+		}));
+	}
+}
+
+void ARLRewardChest::EndPlay(const EEndPlayReason::Type EndPlayReason)
+{
+	if (ARLCharacter* PlayerChar = CurrentOverlappedPlayer.Get())
+	{
+		if (PlayerChar->GetNearbyChest() == this)
+		{
+			PlayerChar->SetNearbyChest(nullptr);
+		}
+	}
+	CurrentOverlappedPlayer = nullptr;
+
+	Super::EndPlay(EndPlayReason);
+}
+
+void ARLRewardChest::TryRegisterOverlappedPlayer()
+{
+	if (bIsOpen || !InteractionSphere || CurrentOverlappedPlayer.IsValid())
+	{
+		return;
+	}
+
+	TArray<AActor*> OverlappingActors;
+	InteractionSphere->GetOverlappingActors(OverlappingActors, ARLCharacter::StaticClass());
+	for (AActor* Actor : OverlappingActors)
+	{
+		if (ARLCharacter* PlayerChar = Cast<ARLCharacter>(Actor))
+		{
+			CurrentOverlappedPlayer = PlayerChar;
+			PlayerChar->SetNearbyChest(this);
+			break;
+		}
 	}
 }
 

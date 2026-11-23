@@ -66,6 +66,10 @@ public:
 
 protected:
 	virtual void BeginPlay() override;
+	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
+
+	/** 스폰 시 이미 상호작용 범위 안에 들어와 있는 플레이어를 찾아 등록 */
+	void TryRegisterOverlappedPlayer();
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
 	TObjectPtr<USceneComponent> SceneRoot;

@@ -24,6 +24,7 @@
 #include "Components/PointLightComponent.h"
 #include "Engine/StaticMesh.h"
 #include "Kismet/GameplayStatics.h"
+#include "NavigationSystem.h"
 
 ARLPlayerController::ARLPlayerController()
 {
@@ -573,16 +574,17 @@ bool ARLPlayerController::GetGroundHitUnderCursor(FHitResult& OutHit) const
 		}
 
 		const bool bIsPawn = Hit.GetActor() && Hit.GetActor()->IsA<APawn>();
+		const bool bIsRewardChest = Hit.GetActor() && Hit.GetActor()->IsA<ARLRewardChest>();
 		const bool bFacesUp = Hit.ImpactNormal.Z >= GroundMinNormalZ;
 		const bool bNearFootHeight = Hit.ImpactPoint.Z <= PawnFootZ + GroundMaxHeightAbovePawn;
 
-		if (!bIsPawn && bFacesUp && bNearFootHeight)
+		if (!bIsPawn && !bIsRewardChest && bFacesUp && bNearFootHeight)
 		{
 			OutHit = Hit;
 			return true;
 		}
 
-		if (bIsPawn)
+		if (bIsPawn || bIsRewardChest)
 		{
 			Params.AddIgnoredActor(Hit.GetActor());
 			continue;
@@ -800,7 +802,17 @@ void ARLPlayerController::OnMoveTriggered()
 	FHitResult Hit;
 	if (GetGroundHitUnderCursor(Hit))
 	{
-		UAIBlueprintHelperLibrary::SimpleMoveToLocation(this, Hit.Location);
+		FVector MoveTarget = Hit.Location;
+		// 상자 등 동적 장애물 밑바닥처럼 NavMesh가 파인 지점을 클릭해도 가장 가까운 이동 가능 지점으로 보정
+		if (UNavigationSystemV1* NavSys = FNavigationSystem::GetCurrent<UNavigationSystemV1>(GetWorld()))
+		{
+			FNavLocation ProjectedLoc;
+			if (NavSys->ProjectPointToNavigation(MoveTarget, ProjectedLoc, FVector(300.0f, 300.0f, 300.0f)))
+			{
+				MoveTarget = ProjectedLoc.Location;
+			}
+		}
+		UAIBlueprintHelperLibrary::SimpleMoveToLocation(this, MoveTarget);
 	}
 }
 
