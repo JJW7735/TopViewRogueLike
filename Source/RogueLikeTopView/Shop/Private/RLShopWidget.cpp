@@ -263,7 +263,7 @@ void URLShopWidget::UpdateSlotUIElements(int32 SlotIndex, const FRLShopItem& Ite
 
 			if (CurrentGold >= Item.Price)
 			{
-				TxtPrice->SetColorAndOpacity(FSlateColor(FLinearColor(1.0f, 0.85f, 0.2f, 1.0f))); // Gold
+				TxtPrice->SetColorAndOpacity(FSlateColor(FLinearColor(0.69387f, 0.45079f, 0.10702f, 1.0f))); // gold-500 (#d9b35c, HUD 골드와 동일)
 			}
 			else
 			{
@@ -274,16 +274,21 @@ void URLShopWidget::UpdateSlotUIElements(int32 SlotIndex, const FRLShopItem& Ite
 
 	if (BorderCard)
 	{
+		// WBP에 지정된 기본 브러시(stone-800 배경 + bronze 테두리)에서 시작.
+		// RoundedBox의 테두리(Outline)는 BrushColor 틴트를 받지 않으므로, 희귀도 색은 테두리 색에 직접 넣는다.
+		const UBorder* DefaultCard = Cast<UBorder>(BorderCard->GetArchetype());
+		FSlateBrush CardBrush = DefaultCard ? DefaultCard->Background : BorderCard->Background;
+
 		if (Item.bIsSoldOut)
 		{
+			BorderCard->SetBrush(CardBrush);
 			BorderCard->SetBrushColor(FLinearColor(0.1f, 0.1f, 0.1f, 0.7f));
 		}
 		else
 		{
-			// 희귀도 색상 은은하게 적용
-			FLinearColor BorderCol = Item.GetRarityColor();
-			BorderCol.A = 0.85f;
-			BorderCard->SetBrushColor(BorderCol);
+			CardBrush.OutlineSettings.Color = FSlateColor(Item.GetRarityColor());
+			BorderCard->SetBrush(CardBrush);
+			BorderCard->SetBrushColor(FLinearColor::White);
 		}
 	}
 
