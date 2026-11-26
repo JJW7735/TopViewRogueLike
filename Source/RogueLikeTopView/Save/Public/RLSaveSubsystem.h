@@ -114,6 +114,10 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Save|Run|Souls")
 	void AddRunSouls(int32 Amount);
 
+	/** 배율이 적용된 실수 영혼량을 소수점 잔여분까지 누적해 정수로 지급 (예: 2 × 1.15 = 2.3 → 잔여 0.3 누적) */
+	UFUNCTION(BlueprintCallable, Category = "Save|Run|Souls")
+	int32 AddRunSoulsFloat(float ExactAmount);
+
 	/** 이번 런 임시 소울 반환 */
 	UFUNCTION(BlueprintPure, Category = "Save|Run|Souls")
 	int32 GetRunSouls() const { return CurrentRunData.RunSouls; }

@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "GameFramework/SaveGame.h"
 #include "RLSkillData.h"
+#include "RLRewardTypes.h"
 #include "RLSaveGame.generated.h"
 
 class ARLCharacter;
@@ -133,6 +134,24 @@ struct FRLSkillSaveData
 };
 
 /**
+ * 필드에 남아 있던 미개봉 보상 상자 저장 데이터
+ */
+USTRUCT(BlueprintType)
+struct FRLUnopenedChestSaveData
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Save|Reward")
+	FSoftClassPath ChestClassPath;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Save|Reward")
+	FVector Location = FVector::ZeroVector;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Save|Reward")
+	FRotator Rotation = FRotator::ZeroRotator;
+};
+
+/**
  * [Track 2] 런 세이브 데이터 (진행 중인 런 / 일시중단 이어하기용)
  * 사망 시 즉시 초기화/삭제되는 정통 로그라이크 규칙 적용
  */
@@ -184,6 +203,22 @@ struct FRLRunSaveData
 	// 이번 런에서 획득한 영혼(사망 또는 클리어 시 메타에 합산될 임시 재화)
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Save|Run")
 	int32 RunSouls = 0;
+
+	// 영혼 수확자(+15% 등) 배율 적용 시 버려지지 않도록 누적하는 소수점 잔여분
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Save|Run")
+	float RunSoulsFraction = 0.0f;
+
+	// 저장 시점에 필드에 남아 있던 미개봉 보상 상자 목록
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Save|Reward")
+	TArray<FRLUnopenedChestSaveData> UnopenedChests;
+
+	// 저장 시점에 아직 선택하지 않은 레벨업 보상 카드 수
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Save|Reward")
+	int32 PendingLevelUpRewardCount = 0;
+
+	// 저장 시점에 화면에 떠 있던 레벨업 보상 카드 목록 (이어하기 시 동일 카드 복원용)
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Save|Reward")
+	TArray<FRLRewardData> PendingLevelUpRewards;
 
 	// 저장된 일시
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Save|Run")

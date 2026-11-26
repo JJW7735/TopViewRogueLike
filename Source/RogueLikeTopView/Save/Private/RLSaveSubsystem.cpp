@@ -14,6 +14,7 @@
 #include "RLArenaManager.h"
 #include "RLBossTrigger.h"
 #include "RLShopSubsystem.h"
+#include "RLRewardChest.h"
 
 void URLSaveSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
@@ -93,6 +94,7 @@ void URLSaveSubsystem::FillRunData(ARLCharacter* PlayerCharacter, FName InCurren
 
 		// 3. 전투 중이었으므로 해당 스테이지는 미클리어 상태
 		CurrentRunData.bIsStageCleared = false;
+		CurrentRunData.UnopenedChests.Empty();
 
 		UE_LOG(LogTemp, Log, TEXT("[SaveSubsystem] 몬스터가 존재하는 전투 중 저장되었습니다. 라운드 처음(PlayerStart)부터 시작하도록 위치와 체력이 초기화됩니다."));
 	}
@@ -104,6 +106,28 @@ void URLSaveSubsystem::FillRunData(ARLCharacter* PlayerCharacter, FName InCurren
 		}
 
 		CurrentRunData.bIsStageCleared = IsArenaCleared(World);
+
+		// 필드에 아직 열지 않은 보상 상자 목록 저장 (이어하기 시 그대로 복원)
+		CurrentRunData.UnopenedChests.Empty();
+		if (World)
+		{
+			TArray<AActor*> FoundChests;
+			UGameplayStatics::GetAllActorsOfClass(World, ARLRewardChest::StaticClass(), FoundChests);
+			for (AActor* Actor : FoundChests)
+			{
+				if (ARLRewardChest* Chest = Cast<ARLRewardChest>(Actor))
+				{
+					if (IsValid(Chest) && !Chest->IsOpen())
+					{
+						FRLUnopenedChestSaveData ChestSave;
+						ChestSave.ChestClassPath = FSoftClassPath(Chest->GetClass());
+						ChestSave.Location = Chest->GetActorLocation();
+						ChestSave.Rotation = Chest->GetActorRotation();
+						CurrentRunData.UnopenedChests.Add(ChestSave);
+					}
+				}
+			}
+		}
 	}
 }
 
@@ -196,6 +220,10 @@ void URLSaveSubsystem::ClearActiveRun(bool bBankSoulsToMeta)
 	CurrentRunData.bIsRunActive = false;
 	CurrentRunData.bIsStageCleared = false;
 	CurrentRunData.RunSouls = 0;
+	CurrentRunData.RunSoulsFraction = 0.0f;
+	CurrentRunData.UnopenedChests.Empty();
+	CurrentRunData.PendingLevelUpRewardCount = 0;
+	CurrentRunData.PendingLevelUpRewards.Empty();
 	bPendingRunApply = false;
 	if (LastSettledRunSouls > 0)
 	{
@@ -283,8 +311,9 @@ bool URLSaveSubsystem::AutoSaveOnStageTransition(ARLCharacter* PlayerCharacter, 
 	const int32 NextStageNumber = CurrentStageNumber + 1;
 	FillRunData(PlayerCharacter, NewLevelName, NextStageNumber, PlayerCharacter->GetActorLocation());
 
-	// ★ 새 스테이지로 진입했으므로 아레나 클리어 플래그는 무조건 false로 초기화
+	// ★ 새 스테이지로 진입했으므로 아레나 클리어 플래그 및 이전 스테이지 미개봉 상자 초기화
 	CurrentRunData.bIsStageCleared = false;
+	CurrentRunData.UnopenedChests.Empty();
 
 	// ★ 다음 스테이지 진입 시 상점 진열 상품 및 리롤 비용을 새로 갱신 (이전 스테이지에서 산 품절 상태 초기화)
 	if (URLShopSubsystem* ShopSub = URLShopSubsystem::Get(PlayerCharacter))
@@ -529,6 +558,21 @@ void URLSaveSubsystem::AddRunSouls(int32 Amount)
 	if (Amount == 0) return;
 	CurrentRunData.RunSouls = FMath::Max(0, CurrentRunData.RunSouls + Amount);
 	OnRunSoulsChanged.Broadcast(CurrentRunData.RunSouls, Amount);
+}
+
+int32 URLSaveSubsystem::AddRunSoulsFloat(float ExactAmount)
+{
+	if (ExactAmount <= 0.0f) return 0;
+
+	const float Total = ExactAmount + CurrentRunData.RunSoulsFraction;
+	const int32 WholeSouls = FMath::FloorToInt(Total);
+	CurrentRunData.RunSoulsFraction = FMath::Max(0.0f, Total - static_cast<float>(WholeSouls));
+
+	if (WholeSouls > 0)
+	{
+		AddRunSouls(WholeSouls);
+	}
+	return WholeSouls;
 }
 
 void URLSaveSubsystem::RecordStageClear(int32 StageNumber)
@@ -943,6 +987,10 @@ void URLSaveSubsystem::GatherPlayerData(ARLCharacter* PlayerCharacter, FRLRunSav
 			}
 		}
 	}
+
+	// 5. 미선택 레벨업 보상 카드 수집
+	OutData.PendingLevelUpRewardCount = PlayerCharacter->GetPendingLevelUpRewardCount();
+	OutData.PendingLevelUpRewards = PlayerCharacter->GetActiveLevelUpRewardOptions();
 }
 
 void URLSaveSubsystem::ApplyPlayerData(ARLCharacter* PlayerCharacter, const FRLRunSaveData& InData)
@@ -1075,6 +1123,58 @@ void URLSaveSubsystem::ApplyPlayerData(ARLCharacter* PlayerCharacter, const FRLR
 				{
 					SkillComp->EquipSkill(SkillSlotSave.Slot, LoadedSkill);
 				}
+			}
+		}
+	}
+
+	// 5. 미선택 레벨업 보상 카드 복원
+	if (InData.PendingLevelUpRewardCount > 0)
+	{
+		PlayerCharacter->RestorePendingLevelUpRewards(InData.PendingLevelUpRewardCount, InData.PendingLevelUpRewards);
+	}
+
+	// 6. 미개봉 보상 상자 복원 (이미 같은 위치에 미개봉 상자가 있으면 중복 스폰 방지)
+	if (InData.UnopenedChests.Num() > 0)
+	{
+		if (UWorld* World = PlayerCharacter->GetWorld())
+		{
+			TArray<AActor*> ExistingChests;
+			UGameplayStatics::GetAllActorsOfClass(World, ARLRewardChest::StaticClass(), ExistingChests);
+
+			for (const FRLUnopenedChestSaveData& SavedChest : InData.UnopenedChests)
+			{
+				bool bAlreadyExists = false;
+				for (AActor* ExistingActor : ExistingChests)
+				{
+					if (ARLRewardChest* ExistingChest = Cast<ARLRewardChest>(ExistingActor))
+					{
+						if (IsValid(ExistingChest) && !ExistingChest->IsOpen()
+							&& FVector::DistSquared(ExistingChest->GetActorLocation(), SavedChest.Location) < FMath::Square(50.0f))
+						{
+							bAlreadyExists = true;
+							break;
+						}
+					}
+				}
+
+				if (bAlreadyExists)
+				{
+					continue;
+				}
+
+				TSubclassOf<ARLRewardChest> TargetChestClass = SavedChest.ChestClassPath.TryLoadClass<ARLRewardChest>();
+				if (!TargetChestClass)
+				{
+					TargetChestClass = LoadClass<ARLRewardChest>(nullptr, TEXT("/Game/Blueprint/MyRLRewardChest.MyRLRewardChest_C"));
+				}
+				if (!TargetChestClass)
+				{
+					TargetChestClass = ARLRewardChest::StaticClass();
+				}
+
+				FActorSpawnParameters SpawnParams;
+				SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
+				World->SpawnActor<ARLRewardChest>(TargetChestClass, SavedChest.Location, SavedChest.Rotation, SpawnParams);
 			}
 		}
 	}

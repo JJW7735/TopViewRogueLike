@@ -5,6 +5,7 @@
 #include "GameFramework/Character.h"
 #include "AbilitySystemInterface.h"
 #include "RLTypes.h"
+#include "RLRewardTypes.h"
 #include "RLCharacter.generated.h"
 
 class USpringArmComponent;
@@ -16,6 +17,7 @@ class URLStatComponent;
 class URLInventoryComponent;
 class ARLPortal;
 class ARLRewardChest;
+class URLRewardSelectWidget;
 class ARLMetaUpgradeStation;
 class ARLShopStation;
 class ARLDecalIndicator;
@@ -289,6 +291,12 @@ public:
 	UFUNCTION(BlueprintCallable, Exec, Category = "Reward")
 	void TestOpenRewardUI();
 
+	// 미선택 레벨업 보상 카드 조회/복원/완료 처리 (저장/이어하기 연동)
+	int32 GetPendingLevelUpRewardCount() const { return PendingLevelUpRewardCount; }
+	TArray<FRLRewardData> GetActiveLevelUpRewardOptions() const;
+	void RestorePendingLevelUpRewards(int32 InCount, const TArray<FRLRewardData>& InSavedOptions);
+	void OnLevelUpRewardClaimed();
+
 	// ★ 인벤토리 및 아이템 즉시 테스트용 콘솔 명령어
 	UFUNCTION(BlueprintCallable, Exec, Category = "Cheat|Inventory")
 	void TestGiveTestItems();
@@ -418,6 +426,13 @@ protected:
 
 	// 레벨업 시 보상 선택창을 살짝 지연 팝업시키기 위한 타이머 (처치 연출이 먼저 보이도록)
 	FTimerHandle LevelUpRewardTimerHandle;
+
+	// 아직 선택하지 않은 레벨업 보상 카드 횟수 및 캐시 (저장/이어하기 시 복원용)
+	int32 PendingLevelUpRewardCount = 0;
+	TArray<FRLRewardData> CachedPendingLevelUpRewards;
+	TWeakObjectPtr<URLRewardSelectWidget> ActiveLevelUpRewardWidget;
+
+	void OpenPendingLevelUpRewardUI();
 
 	void ResetDashCooldown();
 	void EndInvincibility();

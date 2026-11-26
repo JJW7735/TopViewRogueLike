@@ -263,15 +263,10 @@ void ARLEnemyCharacter::HandleDeath()
 	{
 		if (URLSaveSubsystem* SaveSys = URLSaveSubsystem::Get(this))
 		{
-			// 영구 특성: 영혼 수확자 (SoulGain_Up) 적용 (레벨당 +15% 증폭)
+			// 영구 특성: 영혼 수확자 (SoulGain_Up) 적용 (레벨당 +15% 증폭, 소수점 누적 처리로 2×1.15=2.3 손실 방지)
 			const int32 SoulGainLevel = SaveSys->GetUpgradeLevel(FName("SoulGain_Up"));
-			if (SoulGainLevel > 0)
-			{
-				const float Multiplier = 1.0f + (SoulGainLevel * 0.15f);
-				GrantedSouls = FMath::Max(GrantedSouls, FMath::RoundToInt(GrantedSouls * Multiplier));
-			}
-
-			SaveSys->AddRunSouls(GrantedSouls);
+			const float Multiplier = 1.0f + (SoulGainLevel * 0.15f);
+			SaveSys->AddRunSoulsFloat(static_cast<float>(GrantedSouls) * Multiplier);
 		}
 	}
 

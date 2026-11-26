@@ -413,7 +413,11 @@ void ARLCharacter::HandleLevelUp(int32 NewLevel)
     OnCharacterLevelUp(NewLevel);
 
     // 3. 3지선다 보상 카드 선택창 자동 팝업 (처치 연출/드롭이 먼저 보이도록 살짝 지연, 게임은 멈추지 않음)
-    GetWorldTimerManager().SetTimer(LevelUpRewardTimerHandle, this, &ARLCharacter::TestOpenRewardUI, 0.4f, false);
+    PendingLevelUpRewardCount++;
+    if (!ActiveLevelUpRewardWidget.IsValid() && !GetWorldTimerManager().IsTimerActive(LevelUpRewardTimerHandle))
+    {
+        GetWorldTimerManager().SetTimer(LevelUpRewardTimerHandle, this, &ARLCharacter::OpenPendingLevelUpRewardUI, 0.4f, false);
+    }
 }
 
 void ARLCharacter::SetNearbyPortal(ARLPortal* Portal)
@@ -526,16 +530,43 @@ void ARLCharacter::TryInteract()
 
 void ARLCharacter::TestOpenRewardUI()
 {
+    if (PendingLevelUpRewardCount <= 0)
+    {
+        PendingLevelUpRewardCount = 1;
+    }
+    OpenPendingLevelUpRewardUI();
+}
+
+void ARLCharacter::OpenPendingLevelUpRewardUI()
+{
+    if (PendingLevelUpRewardCount <= 0 || ActiveLevelUpRewardWidget.IsValid())
+    {
+        return;
+    }
+
     URLRewardSubsystem* Subsystem = URLRewardSubsystem::GetRewardSubsystem(this);
     if (!Subsystem)
     {
         return;
     }
 
-    TArray<FRLRewardData> Rewards = Subsystem->RollRewards(3);
+    TArray<FRLRewardData> Rewards;
+    if (CachedPendingLevelUpRewards.Num() > 0)
+    {
+        Rewards = MoveTemp(CachedPendingLevelUpRewards);
+        CachedPendingLevelUpRewards.Empty();
+    }
+    else
+    {
+        Rewards = Subsystem->RollRewards(3);
+    }
+
     APlayerController* PC = Cast<APlayerController>(GetController());
     if (!PC)
     {
+        // 이어하기 직후 아직 컨트롤러가 준비되지 않았으면 저장된 카드 유지 후 잠시 뒤 재시도
+        CachedPendingLevelUpRewards = MoveTemp(Rewards);
+        GetWorldTimerManager().SetTimer(LevelUpRewardTimerHandle, this, &ARLCharacter::OpenPendingLevelUpRewardUI, 0.25f, false);
         return;
     }
 
@@ -546,6 +577,7 @@ void ARLCharacter::TestOpenRewardUI()
         URLRewardSelectWidget* Widget = CreateWidget<URLRewardSelectWidget>(PC, WidgetClass);
         if (Widget)
         {
+            ActiveLevelUpRewardWidget = Widget;
             Widget->AddToViewport(50);
             Widget->InitializeWidget(this, Rewards, nullptr, ERLRewardTriggerSource::LevelUp);
         }
@@ -554,6 +586,42 @@ void ARLCharacter::TestOpenRewardUI()
     {
         GEngine->AddOnScreenDebugMessage(-1, 3.0f, FColor::Yellow,
             TEXT("⚠️ WBP_RewardSelect 에셋을 찾을 수 없습니다. Content/Blueprint/UI/WBP_RewardSelect를 생성해주세요."));
+    }
+}
+
+TArray<FRLRewardData> ARLCharacter::GetActiveLevelUpRewardOptions() const
+{
+    if (ActiveLevelUpRewardWidget.IsValid() && ActiveLevelUpRewardWidget->RewardOptions.Num() > 0)
+    {
+        return ActiveLevelUpRewardWidget->RewardOptions;
+    }
+    return CachedPendingLevelUpRewards;
+}
+
+void ARLCharacter::RestorePendingLevelUpRewards(int32 InCount, const TArray<FRLRewardData>& InSavedOptions)
+{
+    if (InCount <= 0)
+    {
+        return;
+    }
+
+    PendingLevelUpRewardCount = InCount;
+    CachedPendingLevelUpRewards = InSavedOptions;
+
+    if (!ActiveLevelUpRewardWidget.IsValid())
+    {
+        GetWorldTimerManager().SetTimer(LevelUpRewardTimerHandle, this, &ARLCharacter::OpenPendingLevelUpRewardUI, 0.25f, false);
+    }
+}
+
+void ARLCharacter::OnLevelUpRewardClaimed()
+{
+    ActiveLevelUpRewardWidget.Reset();
+    PendingLevelUpRewardCount = FMath::Max(0, PendingLevelUpRewardCount - 1);
+
+    if (PendingLevelUpRewardCount > 0)
+    {
+        GetWorldTimerManager().SetTimer(LevelUpRewardTimerHandle, this, &ARLCharacter::OpenPendingLevelUpRewardUI, 0.2f, false);
     }
 }
 

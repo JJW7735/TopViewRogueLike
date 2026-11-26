@@ -64,6 +64,8 @@ void URLRewardSelectWidget::SelectReward(int32 OptionIndex)
 	// 상자의 OnRewardClaimed를 받아 새 모달(예: 보스 상자 → 승리 화면)이 게임을 다시 일시정지할 수 있도록,
 	// CloseWidget의 일시정지 해제가 그 뒤에 덮어쓰지 않게 하기 위함.
 	ARLRewardChest* ChestToFinish = SourceChest.Get();
+	const bool bWasLevelUp = (TriggerSource == ERLRewardTriggerSource::LevelUp);
+	ARLCharacter* PlayerToNotify = TargetPlayer.Get();
 
 	CloseWidget();
 
@@ -71,6 +73,12 @@ void URLRewardSelectWidget::SelectReward(int32 OptionIndex)
 	if (ChestToFinish)
 	{
 		ChestToFinish->FinishAndDestroyChest();
+	}
+
+	// 레벨업 보상 완료 알림 (미선택 카운트 차감 및 대기 중인 추가 레벨업 카드 표시)
+	if (bWasLevelUp && PlayerToNotify)
+	{
+		PlayerToNotify->OnLevelUpRewardClaimed();
 	}
 }
 
