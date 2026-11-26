@@ -118,6 +118,10 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Save|Run|Souls")
 	int32 AddRunSoulsFloat(float ExactAmount);
 
+	/** 이번 런 임시 영혼 및 소수점 잔여분을 0으로 초기화 (메타 정산 없이 새 런/다시하기 시작 시 호출) */
+	UFUNCTION(BlueprintCallable, Category = "Save|Run|Souls")
+	void ResetRunSouls();
+
 	/** 이번 런 임시 소울 반환 */
 	UFUNCTION(BlueprintPure, Category = "Save|Run|Souls")
 	int32 GetRunSouls() const { return CurrentRunData.RunSouls; }
@@ -137,6 +141,14 @@ public:
 	/** 최고 도달 스테이지 갱신 */
 	UFUNCTION(BlueprintCallable, Category = "Save|Meta")
 	void RecordStageClear(int32 StageNumber);
+
+	/** 신규 런 도전 횟수(TotalRunsAttempted) +1 기록 및 메타 저장 */
+	UFUNCTION(BlueprintCallable, Category = "Save|Meta")
+	void RecordRunAttempt();
+
+	/** 최종 승리 횟수(TotalVictories) +1 기록, 최고 도달 스테이지 갱신 및 메타 저장 */
+	UFUNCTION(BlueprintCallable, Category = "Save|Meta")
+	void RecordVictory(int32 FinalStageNumber = 0);
 
 	/** 특정 ID(스킬/아이템/특성 등) 해금 */
 	UFUNCTION(BlueprintCallable, Category = "Save|Meta")

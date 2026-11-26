@@ -248,7 +248,17 @@ void ARLCharacter::BeginPlay()
             }
             else
             {
-                // ★ 신규 런 시작: 저장된 런 이어하기가 아니라면 영구 메타 강화 스탯을 플레이어에게 적용!
+                // ★ 신규 런 / 일시정지→다시하기 시작: 이전 런의 임시 영혼이 누적되지 않도록 초기화 (무한 파밍 방지)
+                SaveSys->ResetRunSouls();
+
+                // 신규 런 도전 횟수 기록 (메인 메뉴 맵 제외)
+                const FString CurrentMap = GetWorld() ? UWorld::RemovePIEPrefix(GetWorld()->GetMapName()) : TEXT("");
+                if (!CurrentMap.Contains(TEXT("MainMenu"), ESearchCase::IgnoreCase))
+                {
+                    SaveSys->RecordRunAttempt();
+                }
+
+                // 영구 메타 강화 스탯을 플레이어에게 적용!
                 SaveSys->ApplyMetaUpgradesToPlayer(this);
 
                 // 이전 판의 버프 획득 기록(GameInstance 서브시스템에 남아 있음)을 비운다

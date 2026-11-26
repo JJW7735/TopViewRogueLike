@@ -575,6 +575,18 @@ int32 URLSaveSubsystem::AddRunSoulsFloat(float ExactAmount)
 	return WholeSouls;
 }
 
+void URLSaveSubsystem::ResetRunSouls()
+{
+	const int32 PrevSouls = CurrentRunData.RunSouls;
+	CurrentRunData.RunSouls = 0;
+	CurrentRunData.RunSoulsFraction = 0.0f;
+
+	if (PrevSouls != 0)
+	{
+		OnRunSoulsChanged.Broadcast(0, -PrevSouls);
+	}
+}
+
 void URLSaveSubsystem::RecordStageClear(int32 StageNumber)
 {
 	if (StageNumber > CurrentMetaData.HighestStageCleared)
@@ -582,6 +594,22 @@ void URLSaveSubsystem::RecordStageClear(int32 StageNumber)
 		CurrentMetaData.HighestStageCleared = StageNumber;
 		SaveMetaProgression();
 	}
+}
+
+void URLSaveSubsystem::RecordRunAttempt()
+{
+	CurrentMetaData.TotalRunsAttempted++;
+	SaveMetaProgression();
+}
+
+void URLSaveSubsystem::RecordVictory(int32 FinalStageNumber)
+{
+	CurrentMetaData.TotalVictories++;
+	if (FinalStageNumber > CurrentMetaData.HighestStageCleared)
+	{
+		CurrentMetaData.HighestStageCleared = FinalStageNumber;
+	}
+	SaveMetaProgression();
 }
 
 void URLSaveSubsystem::UnlockID(FName InID)

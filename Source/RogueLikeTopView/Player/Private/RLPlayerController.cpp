@@ -371,14 +371,20 @@ void ARLPlayerController::HandleBossChestClaimed(ARLRewardChest* Chest)
 	Chest->OnRewardClaimed.RemoveDynamic(this, &ARLPlayerController::HandleBossChestClaimed);
 	WatchedBossChest = nullptr;
 
-	// ★ 보스 보상 획득 시점에 진행 상황 즉시 저장
-	SaveBossVictoryRunProgress(this);
-
-	// 1-B 보스 맵에서는 게임이 끝나지 않고 중앙 포탈을 통해 2-1로 진행하므로 승리(게임 종료) 모달을 띄우지 않음
+	// 1-B 보스 맵에서는 게임이 끝나지 않고 중앙 포탈을 통해 2-1로 진행하므로 진행 상황을 저장하고 포탈 생성
 	if (IsStage1BossMap(GetWorld()))
 	{
+		SaveBossVictoryRunProgress(this);
 		ScheduleBossStageTransitionPortal(0.0f);
 		return;
+	}
+
+	// ★ 최종 보스 승리: 승리 횟수/최고 스테이지 기록 + 임시 영혼 영구 정산 + 활성 런 종료 (메인메뉴 영구 강화 잠금 해제)
+	if (URLSaveSubsystem* SaveSys = URLSaveSubsystem::Get(this))
+	{
+		const int32 FinalStage = FMath::Max(1, SaveSys->GetActiveRunData().StageNumber);
+		SaveSys->RecordVictory(FinalStage);
+		SaveSys->ClearActiveRun(true);
 	}
 
 	ShowVictoryScreen();
@@ -456,9 +462,14 @@ void ARLPlayerController::ShowVictoryScreen()
 
 void ARLPlayerController::HandleVictoryMainMenuClicked()
 {
-	// ★ 보스 처치 및 보상 획득 상태를 활성 런에 저장하여, 메인 메뉴에서 이어하기 시
-	//   보스가 이미 쓰러진 상태로 시작하도록 합니다.
-	SaveBossVictoryRunProgress(this);
+	// ★ 최종 승리 후 메인 메뉴로 돌아갈 때는 활성 런이 남아있지 않도록 보장 (영구 강화 잠금 해제)
+	if (URLSaveSubsystem* SaveSys = URLSaveSubsystem::Get(this))
+	{
+		if (SaveSys->HasActiveRun())
+		{
+			SaveSys->ClearActiveRun(true);
+		}
+	}
 
 	if (VictoryWidget)
 	{

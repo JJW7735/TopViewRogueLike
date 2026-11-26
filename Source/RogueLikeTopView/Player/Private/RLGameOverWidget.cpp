@@ -34,6 +34,7 @@ void URLGameOverWidget::SetupGameOver(ARLCharacter* DeadPlayer, int32 InSoulsEar
 	{
 		TotalSouls = SaveSys->GetTotalSouls();
 		SoulsEarnedThisRun = (InSoulsEarned >= 0) ? InSoulsEarned : SaveSys->GetLastSettledRunSouls();
+		StageReached = FMath::Max(1, SaveSys->GetActiveRunData().StageNumber);
 	}
 	else
 	{
