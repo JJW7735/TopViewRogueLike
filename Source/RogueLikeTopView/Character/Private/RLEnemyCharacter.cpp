@@ -101,7 +101,23 @@ void ARLEnemyCharacter::SetSoulCrackShield(float NewDamageReduction)
 
 bool ARLEnemyCharacter::IsBossEnemy() const
 {
-	return bIsBoss || GetClass()->GetName().Contains(TEXT("Boss"), ESearchCase::IgnoreCase) || GetName().Contains(TEXT("Boss"), ESearchCase::IgnoreCase);
+	if (bIsBoss)
+	{
+		return true;
+	}
+
+	const FString ClassName = GetClass()->GetName();
+	const FString ActorName = GetName();
+	// 중간보스(MiniBoss)는 이름에 "Boss"가 들어가더라도 스테이지 보스로 오판하지 않음
+	if (ClassName.Contains(TEXT("MiniBoss"), ESearchCase::IgnoreCase)
+		|| ClassName.Contains(TEXT("Mini_Boss"), ESearchCase::IgnoreCase)
+		|| ActorName.Contains(TEXT("MiniBoss"), ESearchCase::IgnoreCase)
+		|| ActorName.Contains(TEXT("Mini_Boss"), ESearchCase::IgnoreCase))
+	{
+		return false;
+	}
+
+	return ClassName.Contains(TEXT("Boss"), ESearchCase::IgnoreCase) || ActorName.Contains(TEXT("Boss"), ESearchCase::IgnoreCase);
 }
 
 bool ARLEnemyCharacter::CanBeStaggered() const
@@ -337,29 +353,58 @@ void ARLEnemyCharacter::HandleDeath()
 			}
 		}
 	}
-	// 3. 일반 몬스터: 보상 상자 X, 35% 확률로 바닥에 필드 아이템/골드만 드롭
-	else if (ItemDropClass && FMath::FRand() <= ItemDropChance)
+	// 3. 일반/엘리트/중간보스 몬스터: 엘리트(중간보스)만 bDropChestOnDeath 상자 드롭(보스 클리어/승리 연출 없음), 일반 몹은 필드 아이템/골드만 드롭
+	else
 	{
-		FActorSpawnParameters SpawnParams;
-		SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
-
-		if (ARLItemDrop* DropActor = GetWorld()->SpawnActor<ARLItemDrop>(ItemDropClass, MyLoc, FRotator::ZeroRotator, SpawnParams))
+		if (bIsElite && bDropChestOnDeath && FMath::FRand() <= DropChance)
 		{
-			// 아이템 후보 풀이 있고 50% 확률이면 아이템 드롭, 아니면 골드 드롭
-			if (PossibleItemDrops.Num() > 0 && FMath::RandBool())
+			TSubclassOf<ARLRewardChest> TargetChestClass = DropChestClass;
+			if (!TargetChestClass || TargetChestClass == ARLRewardChest::StaticClass())
 			{
-				const int32 RandomIdx = FMath::RandRange(0, PossibleItemDrops.Num() - 1);
-				DropActor->InitializeItemDrop(PossibleItemDrops[RandomIdx], 1);
-			}
-			else
-			{
-				const int32 RolledGold = FMath::RandRange(MinGoldDrop, MaxGoldDrop);
-				DropActor->InitializeGoldDrop(RolledGold);
+				TargetChestClass = LoadClass<ARLRewardChest>(nullptr, TEXT("/Game/Blueprint/MyRLRewardChest.MyRLRewardChest_C"));
+				if (!TargetChestClass)
+				{
+					TargetChestClass = ARLRewardChest::StaticClass();
+				}
 			}
 
-			// 랜덤한 방향으로 퐁 튀어나오는 포물선 발사
-			const FVector RandomDir = FVector(FMath::FRandRange(-1.f, 1.f), FMath::FRandRange(-1.f, 1.f), 0.f).GetSafeNormal();
-			DropActor->LaunchDrop(RandomDir * FMath::FRandRange(100.f, 200.f) + FVector(0.f, 0.f, FMath::FRandRange(280.f, 380.f)));
+			if (TargetChestClass)
+			{
+				FVector SpawnLoc = MyLoc + ChestSpawnOffset;
+				if (UCapsuleComponent* Capsule = GetCapsuleComponent())
+				{
+					SpawnLoc.Z -= (Capsule->GetScaledCapsuleHalfHeight() - 10.0f);
+				}
+
+				FActorSpawnParameters SpawnParams;
+				SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
+				GetWorld()->SpawnActor<ARLRewardChest>(TargetChestClass, SpawnLoc, FRotator::ZeroRotator, SpawnParams);
+			}
+		}
+
+		if (ItemDropClass && FMath::FRand() <= ItemDropChance)
+		{
+			FActorSpawnParameters SpawnParams;
+			SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+
+			if (ARLItemDrop* DropActor = GetWorld()->SpawnActor<ARLItemDrop>(ItemDropClass, MyLoc, FRotator::ZeroRotator, SpawnParams))
+			{
+				// 아이템 후보 풀이 있고 50% 확률이면 아이템 드롭, 아니면 골드 드롭
+				if (PossibleItemDrops.Num() > 0 && FMath::RandBool())
+				{
+					const int32 RandomIdx = FMath::RandRange(0, PossibleItemDrops.Num() - 1);
+					DropActor->InitializeItemDrop(PossibleItemDrops[RandomIdx], 1);
+				}
+				else
+				{
+					const int32 RolledGold = FMath::RandRange(MinGoldDrop, MaxGoldDrop);
+					DropActor->InitializeGoldDrop(RolledGold);
+				}
+
+				// 랜덤한 방향으로 퐁 튀어나오는 포물선 발사
+				const FVector RandomDir = FVector(FMath::FRandRange(-1.f, 1.f), FMath::FRandRange(-1.f, 1.f), 0.f).GetSafeNormal();
+				DropActor->LaunchDrop(RandomDir * FMath::FRandRange(100.f, 200.f) + FVector(0.f, 0.f, FMath::FRandRange(280.f, 380.f)));
+			}
 		}
 	}
 }
